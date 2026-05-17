@@ -111,7 +111,7 @@ This is the entire agentic loop in one paragraph. Building it is most of Phase 1
 
 - vLLM serves OpenAI-compatible endpoints at `http://localhost:8765/v1/...` (per our `.env.example`).
 - We use the **OpenAI Python SDK** as the client. Same interface that talks to OpenAI's servers talks to vLLM unchanged. This is one of the big wins of using vLLM. See [10-vllm-vs-ollama.md](10-vllm-vs-ollama.md).
-- The owner's `.env.example` lists `VLLM_MODEL_NAME=Qwen/Qwen3.6-27B-Instruct`. **NOTE**: the actual published Hugging Face repo is `Qwen/Qwen3.6-27B` (no "-Instruct" suffix); the model supports both "thinking" and "non-thinking / instruct" modes in a single weights checkpoint. Verify what `vllm serve` actually loads. [PARTIALLY VERIFIED — official model card found at https://huggingface.co/Qwen/Qwen3.6-27B; the `-Instruct` suffix returned 401 in our fetch, plausibly because that variant doesn't exist or is restricted].
+- The correct Hugging Face repo for our model is **`Qwen/Qwen3.6-27B`** (no `-Instruct` suffix). The 2026-04-22 release ships a single fused checkpoint that supports both *thinking* and *non-thinking / instruct* modes — no separate `-Instruct` variant exists. The published sibling repos under `Qwen/` for the 3.6-27B family are: the base model `Qwen/Qwen3.6-27B` and the FP8-quantized `Qwen/Qwen3.6-27B-FP8`. The `.env.example` in this project was originally seeded with `Qwen/Qwen3.6-27B-Instruct`; that has been corrected to `Qwen/Qwen3.6-27B`. (Verified 2026-05-17 via web search and HuggingFace search results.)
 - vLLM **prefix caching** (`--enable-prefix-caching`) means resent history is mostly free in compute terms — the KV cache for the unchanged prefix is reused.
 
 ### Example: agent loop in pseudocode (the design)

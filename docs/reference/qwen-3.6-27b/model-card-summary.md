@@ -7,7 +7,7 @@ Released: 2026-04-22 (per coverage of the release; see https://www.marktechpost.
 ## Identity
 
 - Family: Qwen3.6 (Alibaba)
-- Repo: `Qwen/Qwen3.6-27B` (note: **no `-Instruct` suffix** — the model card found at this URL covers the base/instruct fused checkpoint; thinking/non-thinking modes selectable via prompt config)
+- Repo: `Qwen/Qwen3.6-27B` (canonical — **no `-Instruct` suffix exists**; the fused checkpoint covers both thinking and non-thinking modes, selectable via prompt convention). The only Qwen-published sibling is `Qwen/Qwen3.6-27B-FP8` (FP8 quantization). Confirmed via HuggingFace search 2026-05-17.
 - License: Apache 2.0 (per coverage of the series)
 
 ## Architecture
@@ -53,5 +53,5 @@ For our project: we use the upstream BF16 checkpoint via vLLM with `--tensor-par
 
 ## Notes
 
-- The `Qwen/Qwen3.6-27B-Instruct` URL (with `-Instruct` suffix) returned **HTTP 401** on 2026-05-17 from our environment. Either: (a) it does not exist, (b) is access-gated. The fused thinking/non-thinking checkpoint at `Qwen/Qwen3.6-27B` is the canonical source.
+- The `Qwen/Qwen3.6-27B-Instruct` URL (with `-Instruct` suffix) **does not exist as a published repo**. A direct fetch returned HTTP 401 on 2026-05-17; follow-up HuggingFace search lists only `Qwen/Qwen3.6-27B` (base) and `Qwen/Qwen3.6-27B-FP8` (FP8 quant) under the official `Qwen/` namespace for this size. The fused thinking/non-thinking checkpoint at `Qwen/Qwen3.6-27B` is the canonical source for our project.
 - Disk size for BF16 safetensors: **~54 GB** (= 27B × 2 bytes).

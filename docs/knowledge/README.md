@@ -54,13 +54,15 @@ Per `AGENTS.md` Rule A and Rule B:
 - If a vLLM flag, model spec, or API field is referenced, verify it against current docs (re-fetch if the file's "accessed" date is > 30 days old).
 - When introducing a new technology (e.g., adding RAG, fine-tuning, distillation), add a new `NN-topic.md` here, and append a row to `docs/reference/INDEX.md`.
 
-## Unverified / partially-verified claims to revisit
+## Verification status of previously flagged claims
 
-(See individual file "[UNVERIFIED]" or "[PARTIALLY VERIFIED]" markers. Aggregated for visibility.)
+All three claims from the first pass have been resolved (web-verified 2026-05-17):
 
-- [01] Vietnamese tokens-per-word ratio specifically — general non-Latin-script pattern verified, exact Qwen 3.6 fertility for Vietnamese not published.
-- [04] Exact paper Qwen 3.6 cites for its Gated DeltaNet implementation — listed a plausible candidate (Yang et al. 2023) but the model card does not explicitly cite it.
-- [06] Whether `Qwen/Qwen3.6-27B-Instruct` exists as a distinct HF repo. Model card found at `Qwen/Qwen3.6-27B` (no suffix); the `-Instruct` URL returned 401. May be a typo in `.env.example` or a model not yet released. Verify before launching vLLM.
+- [01] **Vietnamese tokens-per-word**: the specific "~1.5–2.0" range was not found in a primary source. The table was rewritten to make a *qualified* claim (Vietnamese sits between English and CJK on Latin-script-with-diacritics tokenizers; Qwen 3.6's 248K vocab is favorable; exact fertility requires direct measurement). Petrov et al. (2023, arxiv 2305.15425) cited for the general cross-language disparity claim.
+- [04] **Gated DeltaNet citation** confirmed: Yang, Kautz, Hatamizadeh, *"Gated Delta Networks: Improving Mamba2 with Delta Rule"*, ICLR 2025 (arxiv 2412.06464). The placeholder citation 2312.06635 was incorrect and has been replaced.
+- [06] **`Qwen/Qwen3.6-27B-Instruct` confirmed not to exist.** The official Qwen namespace for this size publishes `Qwen/Qwen3.6-27B` (base, fused thinking + instruct) and `Qwen/Qwen3.6-27B-FP8` (FP8 quant). The repo name in `.env.example` was corrected from `Qwen/Qwen3.6-27B-Instruct` to `Qwen/Qwen3.6-27B`.
+
+No remaining `[UNVERIFIED]` or `[PARTIALLY VERIFIED]` markers in this knowledge base.
 
 ## Vietnamese annotations [in brackets]
 

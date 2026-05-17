@@ -126,5 +126,5 @@ A: Yes — decoder-only refers to causal (left-to-right) attention. GPT-1 was th
 - Qwen 3.6-27B model card (full architectural specs): https://huggingface.co/Qwen/Qwen3.6-27B (accessed 2026-05-17)
 - Shazeer, "GLU Variants Improve Transformer" (SwiGLU activation): https://arxiv.org/abs/2002.05202
 - Su et al., "RoFormer: Enhanced Transformer with Rotary Position Embedding" (RoPE): https://arxiv.org/abs/2104.09864
-- Yang et al., "Gated Linear Attention Transformers" (Gated DeltaNet family): https://arxiv.org/abs/2312.06635 [UNVERIFIED — owner should confirm the exact paper Qwen 3.6 cites for its Gated DeltaNet implementation]
+- Yang, Kautz, Hatamizadeh, "Gated Delta Networks: Improving Mamba2 with Delta Rule" (ICLR 2025) — the paper introducing the Gated DeltaNet mechanism used in Qwen 3.6: https://arxiv.org/abs/2412.06464 (accessed 2026-05-17). The Qwen 3.6 model card itself does not cite a paper but uses the same name and architecture from this work.
 - Ainslie et al., "GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints" (Grouped-Query Attention, used in Qwen 3.6's Gated Attention layers): https://arxiv.org/abs/2305.13245

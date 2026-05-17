@@ -35,13 +35,13 @@ Compounds like `kubectl`, `dataclass`, or `bộ_xử_lý_ngôn_ngữ` were not f
 
 Training corpora skew heavily toward English. Vietnamese, Thai, Arabic, Hebrew etc. get less of the early "merge budget" so common words remain split:
 
-| Language        | Approx. tokens per word | Note |
-|-----------------|------------------------|------|
-| English         | ~1.3                   | baseline |
-| Spanish         | ~1.6–1.8               | Latin script + diacritics |
-| Vietnamese      | ~1.5–2.0 [PARTIALLY VERIFIED — general "non-Latin / diacritic" pattern confirmed; exact Qwen 3.6 Vietnamese fertility not published in the model card] |
-| Chinese         | ~1 token per character (~2x English per *meaning*) |
-| Thai / Arabic   | up to 2-3x English |
+| Language        | Approx. behavior |
+|-----------------|------------------|
+| English         | ~1.3 tokens / word (baseline) |
+| Spanish         | ~1.6–1.8 tokens / word (Latin + diacritics) |
+| Vietnamese      | Latin script with diacritics + syllable spacing; cost lies *between* English and CJK. Petrov et al. (2023) report cross-language disparities of *up to 15×* across all languages tested. No specific Vietnamese fertility number is published for the Qwen 3.6 tokenizer. Qwen 3.6's 248,320-token vocabulary is ~5× larger than GPT-4's `cl100k_base` (100,256), so Vietnamese should be relatively favorable here vs. older tokenizers. To get the exact figure for our setup, run a representative Vietnamese sample through `tokenizers` and measure. |
+| Chinese         | ~1 token per character → ~2× English per *meaning unit* |
+| Thai / Arabic   | up to 2-3× English (poor subword coverage) |
 
 **Practical heuristic**: `English ≈ 4 characters per token`. For a quick estimate, `tokens ≈ chars / 4`. For Vietnamese text, divide by ~2.5 instead.
 
