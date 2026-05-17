@@ -20,35 +20,47 @@ This file adds project-specific context and three project-specific rules.
 
 ## Project-specific rules (extend `~/AGENTS.md`)
 
-### Rule A — Verify before recommending (extends §2 of `~/AGENTS.md`)
+### Rule A — Verify before recommending or implementing
 
-Before recommending or implementing any of the following, perform a web search of official sources and briefly cite what you found in the response or commit message:
+Trigger: any time you are about to write, recommend, or rely on something that meets ANY of these criteria:
 
-- A library, package, or framework choice
-- A specific version of a dependency
-- A model tag, repo name, or quantization variant
-- A vLLM flag, OpenAI SDK parameter, or API field
-- A CUDA / driver / Python version compatibility claim
-- An architectural pattern claimed to be "standard" or "best practice"
+1. **External / third-party**: it's defined by an outside project (vLLM, OpenAI SDK, HuggingFace, PyTorch, Qwen, CUDA, uv, Docker, etc.) — not the Python standard library and not code we wrote in this repo.
+2. **Versioned**: the correct answer depends on which version is installed (a flag, parameter, API field, behavior, deprecation, etc.).
+3. **Time-sensitive**: it could have changed after Claude's training cutoff — model tags on HuggingFace, package versions on PyPI, recommended practices in fast-moving areas (LLM inference, agent design, etc.).
+4. **Owner uncertainty**: the owner has expressed they don't know how this thing works, even if it's old/stable (e.g. "I've used Node.js but don't understand the event loop"). In this case, Rule B (cache docs) applies so the owner can review later.
 
-Priority of sources:
+If a task touches any of the above → web-search official sources first. Skip the search only when ALL of these are true:
+- It's pure Python standard library or basic language syntax
+- It's logic we wrote in this repo (read the file, don't search)
+- The owner has not flagged it as something they're learning
+
+Source priority:
 1. Official documentation (e.g. docs.vllm.ai, platform.openai.com, huggingface.co model card)
 2. Official GitHub repo (README, releases, maintainer-marked issues)
 3. Peer-reviewed paper or arxiv preprint
 4. Reputable blog post less than 6 months old, marked as such
 
-If you cannot verify within roughly 2 minutes of search, say so explicitly. Do NOT proceed on training-data memory. LLMs are trained to a fixed date; technology evolves; hallucinated versions and flags waste hours of debugging.
+If you cannot verify within ~2 minutes of search, say so explicitly. Do NOT proceed on training-data memory. LLMs are trained to a fixed date; technology evolves; hallucinated versions and flags waste hours of debugging.
 
 ### Rule B — Cache official docs locally (RAG-style reference)
 
-When a non-trivial technology is first used in this project, cache its relevant docs locally:
+Trigger: same as Rule A. Any time Rule A's web search produced useful official material, cache it.
 
-1. Save the relevant section(s) into `docs/reference/<technology>/`. Format: markdown or plain text. Filename should hint at content (e.g. `vllm-serving-flags.md`).
+Specifically, cache when:
+- The search returned official docs or release notes that the project will reference more than once
+- The owner asked to learn this technology (Rule A criterion 4) — cache for their study even if Claude only needs it once
+- The information is liable to drift (versioned APIs, flags, model tags)
+
+Steps:
+1. Save the relevant section(s) into `docs/reference/<technology>/`. Format: markdown or plain text. Filename hints at content (e.g. `vllm-serving-flags.md`, `openai-tool-use-schema.md`).
 2. Append one line to `docs/reference/INDEX.md`:
    `<technology>: <official URL>, downloaded YYYY-MM-DD, covers <topic>`
-3. When implementing or modifying anything that touches that technology, read the cached doc first. Then verify on the live source if the cache is older than 30 days.
+3. When implementing or modifying anything that touches that technology, read the cached doc first. If the cache is older than 30 days, verify against the live source.
 
-This protects against drift between AI memory and current docs, and gives the owner a portable reference.
+Do NOT cache:
+- Python stdlib documentation (use `python -m pydoc` or read source)
+- Things the owner already knows well and didn't ask to study
+- One-off blog posts (cite in commit message instead)
 
 ### Rule C — Verbose by default for the agent runtime
 
