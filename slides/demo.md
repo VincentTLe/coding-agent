@@ -65,28 +65,34 @@ GitHub: github.com/VincentTLe/coding-agent (public)
 Command:
 
 ```
-$ python examples/05_agent_loop.py "Fix the failing test in demo_repo/"
+$ python examples/05_agent_loop.py "Fix all failing tests in demo_repo/"
 ```
 
-Expected trace (what the prof will see in the terminal):
+`demo_repo/` has 11 tests across 2 files; 5 fail until 3 bugs are fixed:
+- `calculator.py`: `add(a, b)` returns `a - b`
+- `algorithms.py`: `is_prime` uses `range(1, n)` (always returns False)
+- `algorithms.py`: `factorial` uses `range(1, n)` (off by one)
+
+Expected trace (colored in the terminal — blue turn, green tool, yellow result):
 
 ```
-=== Turn 1 ===
-[tool] run_bash({"command":"ls"})         -> calculator.py, test_calculator.py
-=== Turn 2 ===
-[tool] run_bash({"command":"pytest -x"})  -> FAIL: add(2,3) == -1, expected 5
-=== Turn 3 ===
-[tool] read_file({"path":"calculator.py"}) -> sees `return a - b`
-=== Turn 4 ===
-[tool] write_file({"path":"calculator.py", "content":"...return a + b..."})
-=== Turn 5 ===
-[tool] run_bash({"command":"pytest"})     -> 3 passed
-=== Turn 6 ===
-[assistant] Bug fixed; all tests pass.
+=== Turn 1 === [tool] run_bash("ls")          algorithms.py, calculator.py, tests
+=== Turn 2 === [tool] run_bash("pytest -x")   5 FAILED across both files
+=== Turn 3 === [tool] read_file("algorithms.py")
+=== Turn 4 === [tool] read_file("calculator.py")
+=== Turn 5 === [tool] write_file("algorithms.py", ...)   # both bugs at once
+              [tool] write_file("calculator.py", ...)
+=== Turn 6 === [tool] run_bash("pytest")      collection error (typo)
+=== Turn 7 === [tool] write_file(...)         # self-correct
+=== Turn 8 === [tool] run_bash("pytest")      11 passed
+=== Turn 9 === [assistant] All bugs fixed.
 Agent finished.
 ```
 
-What this proves: autonomous loop, real file edits, verifiable result.
+What this shows:
+- Multi-file navigation; multi-bug fix in one turn.
+- Self-correction when an edit breaks something.
+- Final verification by re-running the test command.
 
 ---
 
