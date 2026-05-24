@@ -13,10 +13,37 @@ This file adds project-specific context and three project-specific rules.
 ## Stack (verified — change only with owner approval)
 
 - Python 3.12 via `uv` (NOT conda for this project)
-- Inference: vLLM serving Qwen 3.6-27B with tensor-parallel-size=2
-- Endpoint: OpenAI-compatible at `http://localhost:8765/v1` (port may change; always read `.env`)
+- Inference: vLLM serving **Qwen3-14B** (BF16) on a **single GPU (GPU1)**.
+  Key flags in `scripts/start_vllm.sh`: `--max-model-len 32768` (32K context),
+  `--gpu-memory-utilization 0.75`, `--reasoning-parser qwen3`,
+  `--tool-call-parser hermes`, `--port 8765`. Launched in tmux; NOT kept always-on.
+  (No tensor-parallelism — it runs on one card.)
+- Endpoint: OpenAI-compatible at `http://localhost:8765/v1` (port may change; always read `.env`).
+  `.env` keys: `VLLM_BASE_URL`, `VLLM_MODEL_NAME` (`Qwen/Qwen3-14B`).
 - Client: OpenAI Python SDK
 - Dependencies allowed without asking: `openai`, `httpx`, `python-dotenv`. Anything else → ask first.
+
+## What's built (current state — verify against source before relying on it)
+
+- **Tools** live in `src/tools.py`: **10 tools** exposed via the `TOOLS` dict and
+  `TOOL_SCHEMAS` (OpenAI function-calling format), in four groups:
+  - File I/O: `read_file`, `write_file`, `apply_patch`, `multi_edit`
+  - Discovery: `list_dir`, `glob_files`, `grep_files`
+  - Execution: `run_bash`, `run_python`
+  - Delegation: `spawn_subagent`
+  Every file path is routed through `_safe_path()` — the **sandbox**. This is
+  load-bearing safety, not decoration; never weaken or bypass it.
+- **Entry points** in `examples/`:
+  - `01_chat.py` — minimal chat against the model
+  - `05_agent_loop.py` — the core tool-using agent loop
+  - `06_chat.py` — interactive chat with **context compaction** and slash commands
+- **Context compaction** (in `examples/06_chat.py`): auto-summarizes history at
+  `COMPACT_THRESHOLD_TOKENS = 24000` (~75% of the 32K window), keeping the last
+  `KEEP_RECENT_MESSAGES = 10` verbatim. Helpers: `estimate_tokens()`,
+  `compact_messages()`. Slash commands include `/compact` (summarize now) and
+  `/tokens` (show current estimate).
+- **Benchmark** in `eval/`: `python eval/run.py` runs the agent over each task in
+  `eval/tasks/` and scores it by whether `pytest` passes. See `eval/README.md`.
 
 ## Project-specific rules (extend `~/AGENTS.md`)
 
@@ -65,6 +92,24 @@ Do NOT cache:
 ### Rule C — Verbose by default for the agent runtime
 
 The coding agent built in this project must log each step it takes — tool invocations, tool results, model reasoning when available. The owner needs to observe behavior to learn from it. Silent execution defeats the project's purpose. Verbosity overrides any "production polish" impulse, unless the owner explicitly asks to quiet it.
+
+## Coding conventions (non-negotiable)
+
+- **Simple, minimal, readable.** The owner must be able to explain every line.
+  No clever abstractions, no frameworks, no premature generality. Prefer plain
+  functions over classes when a function does the job.
+- **Dense Vietnamese comments.** Source files are commented in Vietnamese,
+  explaining the *why* and the mechanics — written so the owner can study and
+  re-explain the code later. Match the existing comment style (see `src/tools.py`,
+  `examples/06_chat.py`). Keep comments dense but accurate; do not let them drift
+  from the code.
+- **Do NOT add new `src/*.py` files casually.** The source surface is small and
+  deliberate. Adding a module is a structural decision — ask the owner first.
+  Extend an existing file when reasonable.
+- **The sandbox (`_safe_path` in `src/tools.py`) is critical.** Every file
+  operation must go through it. Never bypass, relax, or route around it.
+- **Never commit Claude attribution.** Do NOT write "Co-Authored-By: Claude" or
+  "Generated with Claude Code" (or any equivalent) in commits or PRs.
 
 ## Stay-in-scope reminders
 

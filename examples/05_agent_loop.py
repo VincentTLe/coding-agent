@@ -63,12 +63,17 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    # Pin file ops + bash CWD to the workspace BEFORE calling run_agent.
-    set_workspace(args.workspace)
-
+    # Validate input TRƯỚC khi pin sandbox — không chốt workspace cho 1 lần
+    # gọi sai (vd task rỗng). parser.error() in usage rồi exit(2).
     task_text = " ".join(args.task).strip()
     if not task_text:
         parser.error("task must not be empty")
+
+    # Chốt sandbox (file ops + bash CWD) vào workspace TRƯỚC khi run_agent.
+    # set_workspace() gọi .resolve() bên trong → mọi tool đọc/ghi đều bị
+    # _safe_path() kẹp trong thư mục này, agent không thể leo ra sửa src/
+    # hay /etc. Đây là ranh giới an toàn DUY NHẤT, nên phải set trước tiên.
+    set_workspace(args.workspace)
 
     log = logging.getLogger("agent")
     log.info("=" * 60)

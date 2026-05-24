@@ -3,9 +3,11 @@ agent.py — ReAct-style coding agent that uses tools to complete a task.
 
 WHAT THIS FILE DOES
   Takes a natural-language goal (e.g. "Fix the failing tests in demo_repo/"),
-  calls an LLM that may invoke tools (read_file / write_file / run_bash),
-  keeps looping until the model is satisfied (returns content with no more
-  tool_calls), or we hit `max_iters` and give up.
+  calls an LLM that may invoke any of the 10 tools defined in src/tools.py
+  (read_file, write_file, apply_patch, multi_edit, grep_files, glob_files,
+  list_dir, run_bash, run_python, spawn_subagent), keeps looping until the
+  model is satisfied (returns content with no more tool_calls), or we hit
+  `max_iters` and give up.
 
 KEY DIFFERENCE FROM 01_chat.py
   01_chat.py only had `messages` + `content`. Here we ALSO have:
@@ -39,9 +41,13 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # OpenAI SDK — bao bọc HTTP/JSON, cho phép swap backend bằng cách đổi base_url.
-from openai import OpenAI
+# `OpenAIError` là base class của MỌI lỗi SDK (timeout, 5xx, kết nối rớt, 400 do
+# context tràn). Bắt nó ở vòng lặp để 1 lỗi transient không kill cả run_agent —
+# xem BƯỚC 1 bên dưới để hiểu vì sao việc này quan trọng cho tính đúng đắn.
+from openai import OpenAI, OpenAIError
 
-# Kiểu Pydantic của 1 message trong messages list. Type hint thôi, không bắt buộc.
+# TypedDict cho 1 message — chỉ dùng type hint giúp Pylance không kêu
+# "list[dict] không phải Iterable[ChatCompletionMessageParam]" khi truyền vào create().
 from openai.types.chat import ChatCompletionMessageParam
 
 # Lấy 3 thứ từ tools.py:
@@ -117,6 +123,8 @@ def run_agent(goal: str, max_iters: int = 15) -> None:
     """
     # Khởi tạo "cuốn sổ ký ức" (messages list) — y hệt 01_chat.py, nhưng nay
     # chứa cả system prompt VÀ goal của user (2 message ban đầu).
+    # Dùng OpenAI TypedDict để Pylance pass-through; dict literal vẫn assign được
+    # vì TypedDict là structural typing (chỉ check keys + value types).
     messages: list[ChatCompletionMessageParam] = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": goal},
@@ -136,13 +144,29 @@ def run_agent(goal: str, max_iters: int = 15) -> None:
         # ("required" sẽ ép gọi tool mỗi turn — không phù hợp vì cần model có
         # khả năng "kết thúc" bằng cách trả về content trần)
         # -----------------------------------------------------------------------
-        resp = client.chat.completions.create(
-            model=MODEL,
-            messages=messages,
-            tools=TOOL_SCHEMAS,
-            tool_choice="auto",
-            max_tokens=2048,
-        )
+        # type:ignore: TOOL_SCHEMAS là list[dict] (xem tools.py), không exact
+        # match OpenAI TypedDict ChatCompletionToolUnionParam. Runtime hợp lệ vì
+        # dict shape khớp schema OpenAI mong đợi.
+        #
+        # Bọc try/except quanh CHỈ lời gọi API: nếu vLLM rớt mạng, trả 5xx, hay
+        # context vượt quá window (400), exception sẽ bubble ra ngoài và giết
+        # cả run_agent — eval/run.py sẽ tính nguyên task là crash. Bắt ở đây để
+        # log lỗi (Rule C: verbose) rồi return GỌN GÀNG.
+        # An toàn về tính đúng đắn: tại điểm này messages list đang Ở TRẠNG THÁI
+        # HỢP LỆ (mọi assistant-tool_calls trước đó đã có đủ tool message ghép
+        # cặp). Vì ta return TRƯỚC khi append assistant message mới, list không
+        # bao giờ bị bỏ lại với 1 assistant.tool_calls "mồ côi" không có kết quả.
+        try:
+            resp = client.chat.completions.create(  # type: ignore[arg-type]
+                model=MODEL,
+                messages=messages,
+                tools=TOOL_SCHEMAS,
+                tool_choice="auto",
+                max_tokens=2048,
+            )
+        except OpenAIError as e:
+            cprint(Color.WARN, f"\nAPI error on turn {i}: {e}. Stopping.")
+            return
 
         # -----------------------------------------------------------------------
         # BƯỚC 2: BÓC LẤY MESSAGE (giống 01_chat.py)
@@ -154,12 +178,19 @@ def run_agent(goal: str, max_iters: int = 15) -> None:
         # -----------------------------------------------------------------------
         # BƯỚC 3: APPEND ASSISTANT MESSAGE VÀO SỔ KÝ ỨC
         # KHÁC 01_chat.py: ở đây mình KHÔNG append `{"role":"assistant","content":...}`,
-        # vì làm vậy sẽ MẤT field `tool_calls` — turn sau, API sẽ reject conversation
-        # vì các tool-result messages tham chiếu tool_call_id mà assistant message
-        # trước không có.
+        # vì làm vậy sẽ MẤT field `tool_calls`. Đây là BẤT BIẾN sống còn của
+        # ReAct loop: mỗi assistant message có tool_calls PHẢI được theo sau bởi
+        # đúng 1 tool message cho MỖI tool_call_id. Nếu append thủ công chỉ
+        # content, các tool-result message ở BƯỚC 6 sẽ tham chiếu tool_call_id
+        # không tồn tại trong assistant trước → API trả 400 và cả run hỏng.
         # `model_dump(exclude_none=True)` = convert Pydantic object → dict, bỏ field
-        # null (vd: `audio: None`) để API không khó chịu vì format lạ.
+        # null (vd: `content: None` khi model chỉ gọi tool, `audio: None`). Đã
+        # verify: exclude_none GIỮ NGUYÊN mảng tool_calls + id + function, nên
+        # bất biến ghép cặp vẫn toàn vẹn — chỉ rụng các field thừa làm API khó chịu.
         # -----------------------------------------------------------------------
+        # model_dump trả về dict[str, Any], không exact-match TypedDict
+        # ChatCompletionMessageParam → type:ignore. Runtime hoàn toàn ổn vì
+        # dict shape khớp schema OpenAI; chỉ type checker khó tính.
         messages.append(msg.model_dump(exclude_none=True))  # type: ignore[arg-type]
 
         # -----------------------------------------------------------------------
@@ -180,16 +211,29 @@ def run_agent(goal: str, max_iters: int = 15) -> None:
             return
 
         # -----------------------------------------------------------------------
+        # BƯỚC 5.5: NẾU ĐÂY LÀ TURN CUỐI (i == max_iters) MÀ MODEL VẪN GỌI TOOL,
+        # KHÔNG chạy tool nữa. Lý do: kết quả tool ở turn cuối sẽ KHÔNG bao giờ
+        # được gửi lại cho model (vòng lặp kết thúc ngay sau), nên chạy chúng chỉ
+        # phí công — tệ hơn, có thể là write_file/apply_patch làm thay đổi đĩa mà
+        # model không kịp verify. Dừng tại đây và rơi xuống cảnh báo max_iters.
+        # -----------------------------------------------------------------------
+        if i == max_iters:
+            break
+
+        # -----------------------------------------------------------------------
         # BƯỚC 6: NẾU CÓ TOOL_CALLS, CHẠY TỪNG CÁI VÀ TRẢ KẾT QUẢ VỀ
         # Có thể có >1 tool_call trong 1 turn (model parallel calls).
         # -----------------------------------------------------------------------
         for tc in msg.tool_calls:
+            # type:ignore: msg.tool_calls có thể chứa ChatCompletionMessageCustomToolCall
+            # (không có .function). Hiện model chỉ emit function calls (Hermes parser)
+            # nên runtime ổn — Pylance khó tính.
             # Log tên tool + arguments TRƯỚC khi chạy → debug được tool nào hang.
-            cprint(Color.TOOL, f"[tool] {tc.function.name}({tc.function.arguments})")
+            cprint(Color.TOOL, f"[tool] {tc.function.name}({tc.function.arguments})")  # type: ignore[union-attr]
 
             # execute_tool tự parse JSON args + dispatch theo name. Nó luôn trả
             # về string (kể cả khi có lỗi — string bắt đầu bằng "ERROR:").
-            result = execute_tool(tc.function.name, tc.function.arguments)
+            result = execute_tool(tc.function.name, tc.function.arguments)  # type: ignore[union-attr]
 
             # Cắt bớt khi log để khỏi spam terminal. Model vẫn nhận FULL kết quả
             # qua append messages bên dưới.
@@ -207,7 +251,9 @@ def run_agent(goal: str, max_iters: int = 15) -> None:
             })
         # Hết for — loop sang turn tiếp theo, model sẽ "thấy" tool results vừa append.
 
-    # Nếu rơi xuống đây = chạy hết max_iters mà model vẫn gọi tool → bug? loop vô tận?
+    # Rơi xuống đây = đã dùng hết max_iters turn mà model vẫn còn muốn gọi tool
+    # (chưa chịu trả content trần để báo "xong"). Đây là safety net chống loop
+    # vô tận — không hẳn là bug, nhưng dấu hiệu task quá khó hoặc model bị kẹt.
     cprint(Color.WARN, f"\nAgent hit max_iters={max_iters} without finishing.")
 
 

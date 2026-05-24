@@ -117,7 +117,7 @@ client = OpenAI(
 # Every message is a dict with two keys:
 #     {"role": <"system" | "user" | "assistant">, "content": <str>}
 #
-# Start with ONE message of role "system" that sets the assi    stant's behavior.
+# Start with ONE message of role "system" that sets the assistant's behavior.
 # Example content: "You are a helpful assistant. Keep answers concise."
 #
 # Optional type hint (good documentation):
@@ -195,7 +195,7 @@ def chat_once(user_text: str) -> None:
     )
     # Server trả về 1 hộp quà lớn -> bóc vỏ để lấy gói tin của AI 
     # `resp.choices` là một list (dù chỉ có 1 lựa chọn, vẫn là list). Lấy phần tử đầu tiên, rồi lấy `.message`:
-    msg = resp. choices[0].message
+    msg = resp.choices[0].message
     # Lấy phần "reasoning" (nếu có, nếu không có thì None):
     reasoning = getattr(msg, "reasoning", None)
     # Lấy phần "content" (câu trả lời của assistant). Nếu content là None thì thay bằng "" để tránh lỗi khi in:

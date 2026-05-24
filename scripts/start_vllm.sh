@@ -21,7 +21,7 @@ exec vllm serve "$HOME/models/Qwen3-14B" \
     --served-model-name Qwen/Qwen3-14B \
     --tensor-parallel-size 1 \
     --max-model-len 32768 \
-    --gpu-memory-utilization 0.80 \
+    --gpu-memory-utilization 0.75 \
     --reasoning-parser qwen3 \
     --enable-auto-tool-choice \
     --tool-call-parser hermes \

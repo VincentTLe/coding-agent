@@ -1,0 +1,1586 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Coding Agent — Visual Deep Dive</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css">
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg2: #161922;
+    --bg3: #1f2330;
+    --fg: #e7ecef;
+    --fg-dim: #9aa5b1;
+    --accent: #7bdcb5;
+    --thinking: #ffffff;
+    --tool: #7bff7b;
+    --result: #ffd966;
+    --assistant: #ff8aff;
+    --cyan: #7bf0ff;
+    --red: #ff7b7b;
+    --border: #2a3040;
+    --card-shadow: 0 4px 24px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    line-height: 1.7;
+    font-size: 16px;
+  }
+  /* Sticky sidebar TOC */
+  .sidebar {
+    position: fixed;
+    top: 0; left: 0;
+    width: 260px;
+    height: 100vh;
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    padding: 24px 20px;
+    overflow-y: auto;
+    z-index: 100;
+  }
+  .sidebar h2 {
+    font-size: 14px;
+    color: var(--accent);
+    margin: 0 0 16px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .sidebar ol {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    counter-reset: section;
+  }
+  .sidebar ol li {
+    counter-increment: section;
+    margin: 6px 0;
+    font-size: 13px;
+  }
+  .sidebar ol li a {
+    color: var(--fg-dim);
+    text-decoration: none;
+    display: block;
+    padding: 6px 10px;
+    border-radius: 6px;
+    transition: all 0.15s;
+  }
+  .sidebar ol li a:hover {
+    background: var(--bg3);
+    color: var(--accent);
+  }
+  .sidebar ol li a:before {
+    content: counter(section) ". ";
+    color: var(--accent);
+    font-weight: bold;
+  }
+  .progress {
+    position: fixed;
+    top: 0; left: 260px;
+    right: 0;
+    height: 3px;
+    background: var(--bg3);
+    z-index: 99;
+  }
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--cyan), var(--accent));
+    width: 0%;
+    transition: width 0.1s;
+  }
+  /* Main content */
+  main {
+    margin-left: 260px;
+    padding: 60px 80px 120px;
+    max-width: 1100px;
+  }
+  /* Hero */
+  .hero {
+    text-align: center;
+    padding: 60px 20px 40px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 60px;
+  }
+  .hero h1 {
+    font-size: 48px;
+    margin: 0 0 12px;
+    background: linear-gradient(90deg, var(--cyan), var(--accent));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .hero .subtitle {
+    color: var(--fg-dim);
+    font-size: 18px;
+    margin-bottom: 24px;
+  }
+  .hero .meta {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    flex-wrap: wrap;
+    font-size: 13px;
+    color: var(--fg-dim);
+  }
+  .hero .meta span {
+    padding: 6px 12px;
+    background: var(--bg2);
+    border-radius: 6px;
+    border: 1px solid var(--border);
+  }
+  /* Sections */
+  section.layer {
+    padding: 40px 0 60px;
+    border-bottom: 1px solid var(--border);
+  }
+  section.layer:last-child {
+    border-bottom: none;
+  }
+  section.layer h2 {
+    font-size: 32px;
+    margin: 0 0 8px;
+    color: var(--accent);
+  }
+  section.layer .section-num {
+    color: var(--cyan);
+    font-size: 14px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  section.layer h3 {
+    font-size: 20px;
+    margin: 32px 0 12px;
+    color: var(--fg);
+  }
+  section.layer p { margin: 12px 0; }
+  /* Cards / callouts */
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin: 20px 0;
+  }
+  .card.code-loc {
+    border-left: 4px solid var(--accent);
+  }
+  .card.code-loc::before {
+    content: '📍 IN OUR CODE';
+    display: block;
+    color: var(--accent);
+    font-weight: bold;
+    font-size: 12px;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+  }
+  .card.warn {
+    border-left: 4px solid var(--result);
+  }
+  .card.warn::before {
+    content: '⚠️ HEADS UP';
+    display: block;
+    color: var(--result);
+    font-weight: bold;
+    font-size: 12px;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+  }
+  .card.key {
+    border-left: 4px solid var(--cyan);
+  }
+  .card.key::before {
+    content: '💡 KEY IDEA';
+    display: block;
+    color: var(--cyan);
+    font-weight: bold;
+    font-size: 12px;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+  }
+  /* Mermaid diagrams */
+  .diagram {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    margin: 24px 0;
+    overflow-x: auto;
+    text-align: center;
+  }
+  .diagram svg {
+    max-width: 100%;
+    height: auto;
+  }
+  /* Code blocks */
+  pre[class*="language-"] {
+    background: var(--bg3) !important;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin: 16px 0;
+    padding: 16px 20px;
+    font-size: 13px;
+  }
+  code:not([class*="language-"]) {
+    background: var(--bg3);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.92em;
+    color: var(--accent);
+  }
+  /* Tables */
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 20px 0;
+    background: var(--bg2);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 14px;
+  }
+  th {
+    background: var(--bg3);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  /* Color legend - matches terminal output */
+  .legend {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin: 16px 0;
+  }
+  .legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 10px;
+    background: var(--bg3);
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: monospace;
+  }
+  .legend-item .swatch {
+    width: 14px; height: 14px;
+    border-radius: 3px;
+  }
+  /* Links */
+  a {
+    color: var(--cyan);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--cyan);
+  }
+  a:hover {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  /* ASCII art preformatted */
+  .ascii {
+    font-family: 'Courier New', monospace;
+    background: #000;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 16px 0;
+    color: var(--fg);
+    font-size: 13px;
+    line-height: 1.4;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  /* Terminal mock */
+  .terminal {
+    background: #000;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 16px 0;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .terminal .you { color: var(--cyan); }
+  .terminal .thinking { color: var(--thinking); opacity: 0.95; }
+  .terminal .assistant { color: var(--assistant); }
+  .terminal .tool { color: var(--tool); }
+  .terminal .result { color: var(--result); }
+  .terminal .red { color: var(--red); }
+  .terminal .label { color: var(--cyan); font-weight: bold; }
+  /* Stat grid */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin: 24px 0;
+  }
+  .stat {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    text-align: center;
+  }
+  .stat-value {
+    font-size: 28px;
+    font-weight: bold;
+    color: var(--accent);
+    margin: 4px 0;
+  }
+  .stat-label {
+    font-size: 12px;
+    color: var(--fg-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  /* Step list */
+  .steps {
+    counter-reset: step;
+    list-style: none;
+    padding: 0;
+  }
+  .steps > li {
+    counter-increment: step;
+    position: relative;
+    padding: 16px 16px 16px 56px;
+    margin: 8px 0;
+    background: var(--bg2);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+  }
+  .steps > li::before {
+    content: counter(step);
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 28px; height: 28px;
+    background: var(--accent);
+    color: var(--bg);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 13px;
+  }
+  /* Glossary as accordion-ish list */
+  details.gloss {
+    margin: 8px 0;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+  }
+  details.gloss summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--accent);
+    font-size: 14px;
+  }
+  details.gloss p {
+    margin: 8px 0 4px;
+    font-size: 14px;
+  }
+  /* Mobile */
+  @media (max-width: 900px) {
+    .sidebar { display: none; }
+    .progress { left: 0; }
+    main { margin-left: 0; padding: 30px 20px 80px; }
+    .hero h1 { font-size: 32px; }
+  }
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <h2>Walkthrough</h2>
+  <ol>
+    <li><a href="#section-1">OpenAI Chat API</a></li>
+    <li><a href="#section-2">Streaming + SSE</a></li>
+    <li><a href="#section-3">Tool Calling</a></li>
+    <li><a href="#section-tools">Tool Belt (10 tools)</a></li>
+    <li><a href="#section-4">ReAct Loop</a></li>
+    <li><a href="#section-compaction">Context Compaction</a></li>
+    <li><a href="#section-5">vLLM Engine</a></li>
+    <li><a href="#section-6">Qwen3 Thinking</a></li>
+    <li><a href="#section-7">Hermes Format</a></li>
+    <li><a href="#section-8">Sandbox</a></li>
+    <li><a href="#section-9">Terminal UX</a></li>
+    <li><a href="#section-10">Big Picture</a></li>
+  </ol>
+  <h2 style="margin-top:32px">Resources</h2>
+  <ol style="counter-reset: section -12">
+    <li><a href="#glossary">Glossary</a></li>
+    <li><a href="#demo">Demo Run</a></li>
+    <li><a href="#sources">Sources</a></li>
+  </ol>
+</aside>
+
+<div class="progress"><div class="progress-bar" id="pb"></div></div>
+
+<main>
+
+<div class="hero">
+  <h1>Coding Agent — Visual Deep Dive</h1>
+  <p class="subtitle">A from-scratch ReAct coding agent on vLLM + Qwen3-14B, explained layer by layer with visuals.</p>
+  <div class="meta">
+    <span>👤 Tan Le, Knox College</span>
+    <span>🎓 Math/Stat 361 Research</span>
+    <span>📅 2026-05-22</span>
+    <span>🤖 10 agents × Claude Opus 4.7</span>
+  </div>
+</div>
+
+<div class="card key">
+  <strong>How to read this page:</strong> scroll top-to-bottom for a guided walkthrough. The sidebar jumps to any section. Every section starts with a <em>visual diagram</em>, then a <em>1-paragraph idea</em>, then the <em>code in our repo that uses it</em>.
+</div>
+
+<h3 style="font-size:24px;margin-top:48px">🏗 The system at a glance</h3>
+
+<div class="diagram">
+<pre class="mermaid">
+flowchart TB
+    User["👤 USER<br/>terminal keypresses"]
+    L1["🎨 LAYER 1: Terminal UX<br/>06_chat.py — ANSI colors, streaming print"]
+    L2["🔄 LAYER 2: ReAct Loop + Compaction<br/>06_chat.py — chat() inner loop, /compact"]
+    L3["📦 LAYER 3: OpenAI SDK<br/>HTTP client, JSON serialization"]
+    L4["⚙️ LAYER 4: vLLM Server<br/>port 8765, PagedAttention, parsers"]
+    L5["🧠 LAYER 5: Qwen3-14B Model<br/>BF16, 40 layers, GPU1"]
+    Tools["🔧 TOOLS SANDBOX (10)<br/>src/tools.py — file I/O · discovery<br/>execution · delegation"]
+    Repo["📁 demo_repo/<br/>workspace"]
+
+    User --> L1
+    L1 --> L2
+    L2 --> L3
+    L3 -->|HTTP POST| L4
+    L4 <-->|CUDA tensors| L5
+    L4 -->|SSE stream| L3
+    L2 -.exec.-> Tools
+    Tools -.bounded by.-> Repo
+    Tools -.result string.-> L2
+
+    classDef l1 fill:#1f2330,stroke:#7bf0ff,color:#fff
+    classDef l2 fill:#1f2330,stroke:#ff8aff,color:#fff
+    classDef l3 fill:#1f2330,stroke:#7bdcb5,color:#fff
+    classDef l4 fill:#1f2330,stroke:#ffd966,color:#fff
+    classDef l5 fill:#1f2330,stroke:#ff7b7b,color:#fff
+    classDef tools fill:#0f1117,stroke:#7bff7b,color:#fff
+
+    class L1 l1
+    class L2 l2
+    class L3 l3
+    class L4 l4
+    class L5 l5
+    class Tools,Repo tools
+</pre>
+</div>
+
+<div class="card key">
+Each arrow above is a <strong>serialization boundary</strong>. Layers 1→2 pass Python strings. Layers 2→3 pass dicts. Layers 3→4 pass JSON over TCP. Layers 4→5 pass int32 token IDs and bfloat16 tensors. <strong>Anywhere along the chain you can dump and re-inject data — that's how you debug, replay, and (Phase 3) fine-tune.</strong>
+</div>
+
+<div class="stat-grid">
+  <div class="stat"><div class="stat-value">1,258</div><div class="stat-label">LOC total</div></div>
+  <div class="stat"><div class="stat-value">10</div><div class="stat-label">tools</div></div>
+  <div class="stat"><div class="stat-value">14B</div><div class="stat-label">model params</div></div>
+  <div class="stat"><div class="stat-value">32K</div><div class="stat-label">context tokens</div></div>
+  <div class="stat"><div class="stat-value">A6000</div><div class="stat-label">single GPU</div></div>
+  <div class="stat"><div class="stat-value">vLLM</div><div class="stat-label">inference engine</div></div>
+</div>
+
+<!-- SECTION 1 -->
+<section class="layer" id="section-1">
+  <div class="section-num">SECTION 1 — PROTOCOL FOUNDATIONS</div>
+  <h2>OpenAI Chat Completions API</h2>
+
+  <div class="diagram">
+  <pre class="mermaid">
+sequenceDiagram
+    participant Client as Python client
+    participant Server as LLM server<br/>(OpenAI / vLLM / Ollama)
+    Note over Client: messages = [system, user_1, asst_1, user_2]
+    Client->>Server: POST /v1/chat/completions<br/>{"messages":[...], "model":"...", "max_tokens":1024}
+    Note over Server: Stateless — server has<br/>NO memory of prior calls
+    Server-->>Client: {"choices":[{"message":{...},<br/>"finish_reason":"stop"}], ...}
+    Note over Client: messages.append(assistant_msg)<br/>Next call resends ALL messages
+  </pre>
+  </div>
+
+  <p>The API is a single HTTP route: <code>POST /v1/chat/completions</code>. You send a JSON body with the entire conversation history, the server replies with the model's next message, and that's the whole protocol. <strong>The server is stateless</strong> — it has no memory between calls. Your Python list of <code>messages</code> IS the memory.</p>
+
+  <div class="card key">
+  <strong>Why stateless?</strong> Total control. You can trim old turns, fork conversations, swap models mid-session, replay verbatim. The Assistants API holds state server-side, but you lose all of that for vendor convenience.
+  </div>
+
+  <h3>The 4 roles</h3>
+  <table>
+    <tr><th>Role</th><th>Who</th><th>Special fields</th></tr>
+    <tr><td><code>system</code></td><td>Rules / persona</td><td>—</td></tr>
+    <tr><td><code>user</code></td><td>The human</td><td>—</td></tr>
+    <tr><td><code>assistant</code></td><td>Model's reply</td><td><code>tool_calls</code></td></tr>
+    <tr><td><code>tool</code></td><td>Tool execution result</td><td><code>tool_call_id</code> (required!)</td></tr>
+  </table>
+
+  <h3><code>finish_reason</code> values</h3>
+  <ul>
+    <li><code>"stop"</code> — natural EOS or stop sequence hit</li>
+    <li><code>"length"</code> — <code>max_tokens</code> truncated the output</li>
+    <li><code>"tool_calls"</code> — model wants to call tools, see <code>message.tool_calls</code></li>
+    <li><code>"content_filter"</code> — safety filter blocked</li>
+  </ul>
+
+  <div class="card code-loc">
+  In <code>examples/01_chat.py</code> the entire pattern fits in ~20 lines:
+  <pre><code class="language-python">messages = [{"role": "system", "content": "..."}]
+while True:
+    user_input = input("[you] ")
+    messages.append({"role": "user", "content": user_input})
+    resp = client.chat.completions.create(model=MODEL, messages=messages)
+    msg = resp.choices[0].message
+    messages.append({"role": "assistant", "content": msg.content})</code></pre>
+  Memory = the Python list. Server never holds state.
+  </div>
+</section>
+
+<!-- SECTION 2 -->
+<section class="layer" id="section-2">
+  <div class="section-num">SECTION 2 — UX OPTIMIZATION</div>
+  <h2>Streaming + Server-Sent Events</h2>
+
+  <div class="diagram">
+  <pre class="mermaid">
+sequenceDiagram
+    participant C as Client
+    participant S as Server
+    C->>S: POST /v1/chat/completions<br/>{"stream":true}
+    Note over S: tokenize, schedule, forward, sample
+    S-->>C: data: {"delta":{"reasoning":"Let"}}
+    S-->>C: data: {"delta":{"reasoning":" me"}}
+    S-->>C: data: {"delta":{"reasoning":" check..."}}
+    Note right of C: phase 1: print [thinking] in WHITE
+    S-->>C: data: {"delta":{"content":"The"}}
+    S-->>C: data: {"delta":{"content":" answer"}}
+    Note right of C: phase 2: print [assistant] in MAGENTA
+    S-->>C: data: {"delta":{"tool_calls":[{"index":0,...}]}}
+    Note right of C: phase 3: accumulate tool_calls[idx]
+    S-->>C: data: {"finish_reason":"tool_calls"}
+    S-->>C: data: [DONE]
+  </pre>
+  </div>
+
+  <p>Streaming exists to reduce <strong>perceived latency</strong>. A 500-token reply blocks for ~10s; streamed, the first character appears in ~200ms and scrolls smoothly while still generating. The transport is plain HTTP with <code>Content-Type: text/event-stream</code> — chunks framed as <code>data: {...}\n\n</code>, terminated by <code>data: [DONE]\n\n</code>.</p>
+
+  <h3>The 3 delta fields you must accumulate</h3>
+  <ul>
+    <li><code>delta.content</code> — visible text. Just string-concat.</li>
+    <li><code>delta.reasoning_content</code> (or <code>delta.reasoning</code>) — model's hidden thinking, vendor extension via vLLM's reasoning parser.</li>
+    <li><code>delta.tool_calls</code> — <strong>tricky</strong>. One tool call spreads across MANY deltas. JSON arguments arrive chunked. Multiple parallel calls interleave by <code>index</code>.</li>
+  </ul>
+
+  <div class="card warn">
+  The tool_calls fragments arrive split: <code>id</code> + <code>function.name</code> in the first delta of an index, then <code>function.arguments</code> dribbles in across many deltas. You accumulate by <code>index</code> in a dict.
+  </div>
+
+  <div class="card code-loc">
+  In <code>examples/06_chat.py:163-174</code> — the accumulator pattern:
+  <pre><code class="language-python">if delta.tool_calls:
+    for tcd in delta.tool_calls:
+        idx = tcd.index
+        if idx not in tool_calls:
+            tool_calls[idx] = {"id": "", "name": "", "arguments": ""}
+        if tcd.id:
+            tool_calls[idx]["id"] += tcd.id
+        if tcd.function:
+            if tcd.function.name:
+                tool_calls[idx]["name"] += tcd.function.name
+            if tcd.function.arguments:
+                tool_calls[idx]["arguments"] += tcd.function.arguments</code></pre>
+  </div>
+
+  <h3>The streaming print primitive</h3>
+  <pre><code class="language-python"># end="" prevents newline between fragments
+# flush=True forces immediate write() syscall
+print(chunk, end="", flush=True)</code></pre>
+  <p>Without <code>flush=True</code>, Python buffers stdout and you lose the streaming effect. Without <code>end=""</code>, every chunk gets a newline.</p>
+</section>
+
+<!-- SECTION 3 -->
+<section class="layer" id="section-3">
+  <div class="section-num">SECTION 3 — STRUCTURED FUNCTION CALLS</div>
+  <h2>Tool/Function Calling Protocol</h2>
+
+  <div class="diagram">
+  <pre class="mermaid">
+flowchart LR
+    A["1. Client sends<br/>tools=[schemas]"] --> B["2. Model decides:<br/>call tool? or final answer?"]
+    B -->|call tool| C["3. Response has<br/>tool_calls=[{id, name, args}]"]
+    C --> D["4. Client executes<br/>each tool in Python"]
+    D --> E["5. Append role='tool'<br/>tool_call_id, content"]
+    E --> A
+    B -->|done| F["✅ Agent finished"]
+
+    style A fill:#1f2330,stroke:#7bdcb5
+    style B fill:#1f2330,stroke:#7bf0ff
+    style C fill:#1f2330,stroke:#ff8aff
+    style D fill:#1f2330,stroke:#7bff7b
+    style E fill:#1f2330,stroke:#ffd966
+    style F fill:#1f2330,stroke:#7bdcb5
+  </pre>
+  </div>
+
+  <p>An LLM is text-in/text-out. To "call Python functions," we need a contract: <strong>JSON Schema (Draft 2020-12)</strong> declares what tools exist; the model emits a structured <code>tool_calls</code> request; we execute and return results as <code>role:"tool"</code> messages. OpenAI invented this in 2023; everyone (Anthropic, vLLM, Ollama, Mistral) copies it verbatim.</p>
+
+  <h3>Anatomy of a tool schema</h3>
+  <pre><code class="language-json">{
+  "type": "function",
+  "function": {
+    "name": "read_file",
+    "description": "Read full contents of a text file.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {"type": "string", "description": "Relative path."}
+      },
+      "required": ["path"]
+    }
+  }
+}</code></pre>
+
+  <div class="card key">
+  The <code>description</code> field is <strong>part of the prompt</strong>. The model reads it during planning. "Use only for read-only inspection" actually changes behavior. Write descriptions like you're writing a prompt.
+  </div>
+
+  <h3>The 5 common pitfalls</h3>
+  <ol>
+    <li><strong>Malformed JSON in arguments</strong> (Python triple-quotes, unescaped newlines)</li>
+    <li><strong>Hallucinated tool names</strong> (model invents <code>edit_file</code>)</li>
+    <li><strong>Unwanted tool calls</strong> (model calls <code>run_bash("ls")</code> to answer "hi")</li>
+    <li><strong>Forgetting <code>tool_call_id</code></strong> → API 400s</li>
+    <li><strong>Treating <code>arguments</code> as dict</strong> — it's a STRING of JSON, you must <code>json.loads()</code></li>
+  </ol>
+
+  <div class="card code-loc">
+  Our dispatcher in <code>src/tools.py:217</code> converts every failure into an error STRING the model can read on the next turn — never raises:
+  <pre><code class="language-python">def execute_tool(name: str, arguments_json: str) -&gt; str:
+    if name not in TOOLS:
+        return f"ERROR: unknown tool {name}. Available: {list(TOOLS)}"
+    try:
+        args = json.loads(arguments_json) if arguments_json else {}
+    except json.JSONDecodeError as e:
+        return f"ERROR: bad JSON arguments: {e}"
+    try:
+        result = TOOLS[name](**args)
+    except TypeError as e:
+        return f"ERROR: bad args for {name}: {e}"
+    except Exception as e:
+        return f"ERROR: {name} crashed: {e}"
+    return result</code></pre>
+  This single function addresses pitfalls 1-4 by giving the model recoverable error feedback.
+  </div>
+</section>
+
+<!-- SECTION 4 — TOOL BELT -->
+<section class="layer" id="section-tools">
+  <div class="section-num">SECTION 4 — THE TOOL BELT</div>
+  <h2>10 Tools — File I/O, Discovery, Execution, Delegation</h2>
+
+  <div class="diagram">
+  <pre class="mermaid">
+flowchart TB
+    Agent["🔄 ReAct loop<br/>execute_tool(name, args)"]
+
+    subgraph FILE["📄 FILE I/O"]
+        T1["read_file"]
+        T2["write_file"]
+        T3["apply_patch<br/>surgical edit"]
+        T4["multi_edit<br/>atomic batch"]
+    end
+    subgraph DISC["🔍 DISCOVERY"]
+        T5["list_dir"]
+        T6["glob_files"]
+        T7["grep_files"]
+    end
+    subgraph EXEC["⚡ EXECUTION"]
+        T8["run_bash"]
+        T9["run_python"]
+    end
+    subgraph DELEG["🪆 DELEGATION"]
+        T10["spawn_subagent<br/>child process"]
+    end
+
+    Agent --> FILE
+    Agent --> DISC
+    Agent --> EXEC
+    Agent --> DELEG
+    FILE -.bounded by.-> WS["📁 WORKSPACE<br/>demo_repo/"]
+    DISC -.bounded by.-> WS
+    EXEC -.cwd pinned.-> WS
+    T10 -.timeout 300s · max_iters 8.-> Child["🤖 fresh agent<br/>own context window"]
+
+    classDef file fill:#1f2330,stroke:#7bf0ff,color:#fff
+    classDef disc fill:#1f2330,stroke:#7bdcb5,color:#fff
+    classDef exec fill:#1f2330,stroke:#ffd966,color:#fff
+    classDef deleg fill:#1f2330,stroke:#ff8aff,color:#fff
+    classDef ws fill:#0f1117,stroke:#7bff7b,color:#fff
+    class T1,T2,T3,T4 file
+    class T5,T6,T7 disc
+    class T8,T9 exec
+    class T10 deleg
+    class WS,Child ws
+  </pre>
+  </div>
+
+  <p>The agent started with <strong>3 tools</strong> (<code>read_file</code>, <code>write_file</code>, <code>run_bash</code>) — the bare minimum to inspect, edit, and verify code. It now ships <strong>10 tools</strong> in four families. Every tool is still a plain Python function in <code>src/tools.py</code> registered in the <code>TOOLS</code> dict and exposed to the model via a JSON Schema; the dispatcher and sandbox from Section 3 are unchanged. More tools just means a richer action space for the same ReAct loop.</p>
+
+  <h3>The full belt</h3>
+  <table>
+    <tr><th>Family</th><th>Tool</th><th>What it does</th></tr>
+    <tr><td rowspan="4"><strong>File I/O</strong></td><td><code>read_file</code></td><td>Read full contents of a text file.</td></tr>
+    <tr><td><code>write_file</code></td><td>Create or overwrite a file with new contents.</td></tr>
+    <tr><td><code>apply_patch</code></td><td>Surgical edit — replace <code>old_text</code> with <code>new_text</code>; <code>old_text</code> must match <strong>exactly once</strong> or it refuses.</td></tr>
+    <tr><td><code>multi_edit</code></td><td>Apply several edits to one file <strong>atomically</strong> — all succeed or none are written.</td></tr>
+    <tr><td rowspan="3"><strong>Discovery</strong></td><td><code>list_dir</code></td><td>List entries in a directory.</td></tr>
+    <tr><td><code>glob_files</code></td><td>Find files by glob pattern (e.g. <code>**/*.py</code>).</td></tr>
+    <tr><td><code>grep_files</code></td><td>Search file contents by regex across the workspace.</td></tr>
+    <tr><td rowspan="2"><strong>Execution</strong></td><td><code>run_bash</code></td><td>Run a shell command, CWD pinned to the workspace.</td></tr>
+    <tr><td><code>run_python</code></td><td>Run a Python snippet / script in the workspace.</td></tr>
+    <tr><td><strong>Delegation</strong></td><td><code>spawn_subagent</code></td><td>Launch a child agent in a subprocess with its own context window (<code>timeout 300s</code>, <code>max_iters 8</code>) and collect its final answer.</td></tr>
+  </table>
+
+  <div class="card key">
+  <strong>Why <code>apply_patch</code> over <code>write_file</code>?</strong> Rewriting a 400-line file to change one line costs ~400 lines of output tokens every edit. A patch sends only the changed span. The <strong>exactly-once</strong> match rule is the safety mechanism: if <code>old_text</code> is ambiguous (matches 0 or 2+ places) the tool refuses rather than edit the wrong spot, and the model gets an error string it can recover from — same recoverable-error discipline as the Section 3 dispatcher.
+  </div>
+
+  <div class="card key">
+  <strong>Why <code>multi_edit</code> is atomic.</strong> Several edits to the same file are validated together and written in one shot. If edit #3 of 5 fails to match, <strong>nothing</strong> is written — the file never lands in a half-edited state that would corrupt the next read.
+  </div>
+
+  <div class="card key">
+  <strong><code>spawn_subagent</code> = divide and conquer.</strong> The parent delegates a self-contained subtask (e.g. "find every caller of <code>foo()</code>") to a fresh agent running as a <strong>subprocess</strong>. The child has its own clean context window, runs up to <code>max_iters 8</code> turns or <code>300s</code>, and returns just its final answer — so the parent's context only absorbs the conclusion, not the child's entire exploration. This is the same isolation pattern Claude Code uses for its sub-agents.
+  </div>
+
+  <div class="card code-loc">
+  Every tool is registered in the <code>TOOLS</code> dict in <code>src/tools.py</code> and dispatched by the same <code>execute_tool()</code> shown in Section 3 — adding a tool is: write the function, add a schema, register it. The <code>apply_patch</code> exactly-once contract:
+  <pre><code class="language-python"># old_text must appear exactly once in the file
+occurrences = contents.count(old_text)
+if occurrences == 0:
+    return f"ERROR: old_text not found in {path}"
+if occurrences &gt; 1:
+    return f"ERROR: old_text matches {occurrences}x in {path} — make it unique"
+new_contents = contents.replace(old_text, new_text, 1)</code></pre>
+  </div>
+</section>
+
+<!-- SECTION 5 -->
+<section class="layer" id="section-4">
+  <div class="section-num">SECTION 5 — THE AGENT BRAIN</div>
+  <h2>ReAct — Reasoning + Acting</h2>
+
+  <div class="diagram">
+  <pre class="mermaid">
+flowchart TD
+    Start(["Goal:<br/>Fix failing tests"]) --> Init["messages = [system, user]"]
+    Init --> Call["1. REASON<br/>create(messages, tools=...)"]
+    Call --> Append["2. Append assistant msg<br/>(preserve tool_calls!)"]
+    Append --> Check{"tool_calls<br/>empty?"}
+    Check -->|YES — done| Stop(["✅ Agent finished"])
+    Check -->|NO — has calls| Exec["3. for tc in tool_calls:<br/>result = execute_tool(...)"]
+    Exec --> ToolMsg["4. Append role='tool'<br/>tool_call_id, content"]
+    ToolMsg --> Call
+
+    style Start fill:#1f2330,stroke:#7bf0ff
+    style Stop fill:#1f2330,stroke:#7bdcb5
+    style Check fill:#1f2330,stroke:#ffd966
+    style Exec fill:#1f2330,stroke:#7bff7b
+  </pre>
+  </div>
+
+  <p>ReAct (<a href="https://arxiv.org/abs/2210.03629">Yao et al. 2022</a>) interleaves <strong>Thought, Action, Observation</strong>. Reasoning grounds in environment state (no hallucination); actions get steered by reasoning (no random tool spam). Both Chain-of-Thought (no actions) and Toolformer (no thought) fail at multi-step tasks; ReAct synergizes them.</p>
+
+  <div class="card key">
+  <strong>Termination = no tool calls.</strong> Modern OpenAI agents don't use the paper's <code>Finish[answer]</code> sentinel. When the model returns plain content with empty <code>tool_calls</code>, that IS the "done" signal. Clean and symmetric with normal chat.
+  </div>
+
+  <h3>Why <code>tool_choice="auto"</code> not <code>"required"</code></h3>
+  <p>If you force a tool call every turn, the model can never STOP. The agent loop becomes infinite. <code>"auto"</code> lets the model decide; that's how termination works.</p>
+
+  <h3>Trace of one real agent run</h3>
+
+  <div class="terminal">
+<span class="label">=== Turn 1 ===</span>
+<span class="assistant">[assistant] I'll start by listing the repo.</span>
+<span class="tool">[tool] run_bash({"command": "ls"})</span>
+<span class="result">[tool result] algorithms.py calculator.py test_algorithms.py test_calculator.py</span>
+
+<span class="label">=== Turn 2 ===</span>
+<span class="assistant">[assistant] Let me run the tests to see what's failing.</span>
+<span class="tool">[tool] run_bash({"command": "pytest -x"})</span>
+<span class="result">[tool result] FAILED test_calculator.py::test_add - assert -1 == 5</span>
+
+<span class="label">=== Turn 3 ===</span>
+<span class="assistant">[assistant] The add function uses `-` instead of `+`. Reading...</span>
+<span class="tool">[tool] read_file({"path": "calculator.py"})</span>
+<span class="result">[tool result] def add(a, b): return a - b</span>
+
+<span class="label">=== Turn 4 ===</span>
+<span class="assistant">[assistant] Fixing the operator.</span>
+<span class="tool">[tool] write_file({"path": "calculator.py", ...})</span>
+<span class="result">[tool result] wrote 78 chars</span>
+
+<span class="label">=== Turn 5 ===</span>
+<span class="assistant">[assistant] Re-running tests to confirm.</span>
+<span class="tool">[tool] run_bash({"command": "pytest"})</span>
+<span class="result">[tool result] 11 passed</span>
+
+<span class="label">=== Turn 6 ===</span>
+<span class="assistant">[assistant] All tests pass. Fix was - → +.</span>
+<span class="label">Agent finished. (no more tool_calls)</span>
+  </div>
+
+  <div class="card code-loc">
+  The entire ReAct loop is <code>src/agent.py:109-211</code> — ~100 lines. Every modern coding agent (Claude Code, Cursor, Codex) is a descendant.
+  </div>
+</section>
+
+<!-- SECTION 6 — CONTEXT COMPACTION -->
+<section class="layer" id="section-compaction">
+  <div class="section-num">SECTION 6 — STAYING IN THE WINDOW</div>
+  <h2>Context Compaction</h2>
+
+  <div class="diagram">
+  <pre class="mermaid">
+flowchart TB
+    Turn["End of a turn<br/>messages keep growing"] --> Est["estimate_tokens(messages)<br/>≈ total chars / 4"]
+    Est --> Check{"tokens &gt;<br/>COMPACT_THRESHOLD<br/>24000?"}
+    Check -->|NO| Cont["continue — no change"]
+    Check -->|YES| Split["split off the<br/>most recent 10 messages<br/>(KEEP_RECENT_MESSAGES)"]
+    Split --> Safe["nudge split point to a<br/>user-role message<br/>(preserve tool_call_id pairs)"]
+    Safe --> Sum["summarize the OLD prefix<br/>→ one compact recap message"]
+    Sum --> Rebuild["messages =<br/>[system, summary, …recent 10]"]
+    Rebuild --> Cont
+
+    classDef a fill:#1f2330,stroke:#7bf0ff,color:#fff
+    classDef d fill:#1f2330,stroke:#ffd966,color:#fff
+    classDef k fill:#1f2330,stroke:#7bdcb5,color:#fff
+    class Turn,Est a
+    class Check d
+    class Split,Safe,Sum,Rebuild k
+  </pre>
+  </div>
+
+  <p>The vLLM server has a hard <strong>32K-token context window</strong> (<code>--max-model-len 32768</code>). A long coding session — read a file, run tests, patch, re-run, repeat — grows the <code>messages</code> list without bound and eventually overruns that window, at which point requests start failing. <strong>Compaction</strong> keeps the conversation under the limit by summarizing old turns while keeping the recent ones verbatim, so the model never loses the thread of what it's currently doing.</p>
+
+  <div class="card key">
+  <strong>Recent verbatim, old summarized.</strong> The last <code>KEEP_RECENT_MESSAGES = 10</code> messages stay exactly as written (the model needs the live detail of what it just did). Everything older is compressed into a single summary message. The <code>system</code> prompt is always preserved at the front.
+  </div>
+
+  <h3>Two knobs + two slash commands</h3>
+  <table>
+    <tr><th>Name</th><th>Value</th><th>Role</th></tr>
+    <tr><td><code>COMPACT_THRESHOLD_TOKENS</code></td><td>24000</td><td>When the estimate crosses this, compaction triggers (buffer below the 32K hard cap).</td></tr>
+    <tr><td><code>KEEP_RECENT_MESSAGES</code></td><td>10</td><td>How many trailing messages survive verbatim.</td></tr>
+    <tr><td><code>/compact</code></td><td>command</td><td>Force a compaction right now.</td></tr>
+    <tr><td><code>/tokens</code></td><td>command</td><td>Print the current estimated token count of the history.</td></tr>
+  </table>
+
+  <h3>Estimating tokens cheaply</h3>
+  <p>We do not call the tokenizer on every turn. A coarse heuristic — <strong>~1 token per 4 characters</strong> — is good enough to decide <em>when</em> to compact:</p>
+  <div class="card code-loc">
+  <code>examples/06_chat.py</code> — the estimate + threshold check:
+  <pre><code class="language-python">COMPACT_THRESHOLD_TOKENS = 24000
+KEEP_RECENT_MESSAGES = 10
+
+def estimate_tokens(messages) -&gt; int:
+    chars = sum(len(str(m.get("content") or "")) for m in messages)
+    return chars // 4          # ~4 chars per token
+
+# after each turn:
+if estimate_tokens(messages) &gt; COMPACT_THRESHOLD_TOKENS:
+    messages = compact_messages(messages)</code></pre>
+  </div>
+
+  <div class="card warn">
+  <strong>The tool_call_id trap.</strong> An assistant message carrying <code>tool_calls</code> MUST be immediately followed by the matching <code>role:"tool"</code> messages, or vLLM 400s. If the naive split point landed <em>between</em> an assistant tool-call and its tool result, the kept history would reference a <code>tool_call_id</code> with no parent. So <code>compact_messages</code> nudges the split to a <strong>user-role message</strong> — a clean boundary that never severs a tool-call / tool-result pair.
+  </div>
+
+  <h3>What <code>compact_messages</code> does</h3>
+  <ol class="steps">
+    <li><strong>Keep the system prompt</strong> at index 0 untouched.</li>
+    <li><strong>Peel off the recent tail</strong> — the last <code>KEEP_RECENT_MESSAGES</code> entries — to keep verbatim.</li>
+    <li><strong>Adjust the split</strong> so it falls on a <code>user</code> message, never inside a tool-call / tool-result pair.</li>
+    <li><strong>Summarize the old prefix</strong> into one concise recap message (what was tried, what was learned, current state).</li>
+    <li><strong>Rebuild</strong>: <code>[system, summary, …recent tail]</code>. Estimated tokens drop back well under the window.</li>
+  </ol>
+
+  <div class="card key">
+  This is the same idea behind Claude Code's auto-compaction: lossy on ancient history, lossless on the working set. The model keeps a faithful picture of the last few steps and a gist of everything before — enough to finish a long task without falling out of the 32K window.
+  </div>
+</section>
+
+<!-- SECTION 7 -->
+<section class="layer" id="section-5">
+  <div class="section-num">SECTION 7 — INFERENCE ENGINE</div>
+  <h2>vLLM — PagedAttention & Continuous Batching</h2>
+
+  <div class="diagram">
+  <pre class="mermaid">
+flowchart TB
+    Req["HTTP POST<br/>/v1/chat/completions"] --> FAPI["FastAPI handler<br/>(Pydantic validation)"]
+    FAPI --> Tmpl["Apply chat template<br/>(Jinja: ChatML)"]
+    Tmpl --> Tok["Tokenizer<br/>str → List[int]"]
+    Tok --> Sched["📋 Scheduler<br/>(continuous batching)"]
+    Sched --> Exec["🚀 Model executor<br/>(PagedAttention CUDA kernels)"]
+    Exec --> Samp["Sampler<br/>(temp, top_p, top_k)"]
+    Samp --> Detok["Detokenizer +<br/>output parsers"]
+    Detok --> Parser["--reasoning-parser qwen3<br/>--tool-call-parser hermes"]
+    Parser --> SSE["SSE stream out"]
+    Exec -.->|reads/writes| KV["📦 PagedAttention<br/>KV cache pool<br/>(16-token blocks)"]
+    Sched -.->|allocates| KV
+
+    style FAPI fill:#1f2330,stroke:#7bf0ff
+    style Sched fill:#1f2330,stroke:#ffd966
+    style Exec fill:#1f2330,stroke:#ff8aff
+    style KV fill:#0f1117,stroke:#7bff7b
+    style Parser fill:#1f2330,stroke:#7bdcb5
+  </pre>
+  </div>
+
+  <p>Naive HuggingFace inference wastes 60-80% of GPU memory to KV-cache fragmentation and 50%+ of GPU time to half-empty batches. <a href="https://arxiv.org/abs/2309.06180">vLLM</a> fixes this with two innovations:</p>
+
+  <h3>1. PagedAttention</h3>
+  <p>Borrow OS virtual memory paging. Split KV cache into 16-token blocks. Per-sequence block table maps logical → physical blocks. <strong>Result: ~4% waste vs 60-80% before.</strong></p>
+
+  <div class="ascii">Logical view (one request, 35 tokens):
+┌─────────┬─────────┬─────────┐
+│ block 0 │ block 1 │ block 2 │
+│ 16 tok  │ 16 tok  │  3 tok  │
+└────┬────┴────┬────┴────┬────┘
+     │         │         │
+     ▼         ▼         ▼
+Block table: [#7,  #12,  #41]   physical block indices
+
+Physical KV pool on GPU (shared by ALL requests):
+┌────┬────┬────┬────┬────┬────┬────┐
+│ #0 │ #1 │... │ #7 │... │#12 │... │
+└────┴────┴────┴────┴────┴────┴────┘
+              ▲         ▲
+              └─owned by Req A
+       (Req B owns #0, #1; etc.)</div>
+
+  <h3>2. Continuous batching</h3>
+  <p>After each forward pass, finished sequences evicted, pending ones slotted in. GPU never idles waiting for the slowest request. Combined with PagedAttention's packing, gives 2-4× throughput improvement.</p>
+
+  <h3>Memory math for Qwen3-14B</h3>
+  <div class="stat-grid">
+    <div class="stat"><div class="stat-value">~28 GB</div><div class="stat-label">model weights (bf16)</div></div>
+    <div class="stat"><div class="stat-value">164 KB</div><div class="stat-label">KV per token</div></div>
+    <div class="stat"><div class="stat-value">5.4 GB</div><div class="stat-label">KV for full 32K context</div></div>
+    <div class="stat"><div class="stat-value">48 GB</div><div class="stat-label">A6000 total VRAM</div></div>
+  </div>
+
+  <div class="card warn">
+  <strong>GPU sharing on lambdavector2:</strong> vLLM runs with <code>--gpu-memory-utilization 0.75</code> ≈ 36 GB locked on GPU1 (of the A6000's 48 GB), serving Qwen3-14B in BF16 at <code>--max-model-len 32768</code>. Set in <code>scripts/start_vllm.sh</code>; restart vLLM (tmux session <code>vllm</code>) after changing it.
+  </div>
+
+  <h3>Pluggable parsers (why our launch script is so long)</h3>
+  <table>
+    <tr><th>Flag</th><th>Effect</th></tr>
+    <tr><td><code>--reasoning-parser qwen3</code></td><td>Splits <code>&lt;think&gt;...&lt;/think&gt;</code> into <code>reasoning_content</code> field</td></tr>
+    <tr><td><code>--tool-call-parser hermes</code></td><td>Parses <code>&lt;tool_call&gt;{...}&lt;/tool_call&gt;</code> into OpenAI <code>tool_calls</code> field</td></tr>
+    <tr><td><code>--enable-auto-tool-choice</code></td><td>Permits <code>tool_choice="auto"</code> — required for ReAct</td></tr>
+  </table>
+</section>
+
+<!-- SECTION 6 -->
+<section class="layer" id="section-6">
+  <div class="section-num">SECTION 8 — REASONING TRACE</div>
+  <h2>Qwen3 + Thinking Mode</h2>
+
+  <div class="diagram">
+  <pre class="mermaid">
+flowchart LR
+    Req["Request:<br/>enable_thinking=true"] --> Tmpl["Chat template<br/>appends &lt;think&gt;"]
+    Tmpl --> Model["Qwen3-14B<br/>generates"]
+    Model --> Out["Raw output:<br/>&lt;think&gt;reasoning...&lt;/think&gt;<br/>actual answer"]
+    Out --> Parser["vLLM<br/>--reasoning-parser qwen3"]
+    Parser --> SplitR["reasoning_content<br/>(stream phase 1, WHITE)"]
+    Parser --> SplitC["content<br/>(stream phase 2, MAGENTA)"]
+
+    style Req fill:#1f2330,stroke:#7bf0ff
+    style Model fill:#1f2330,stroke:#ff8aff
+    style Parser fill:#1f2330,stroke:#ffd966
+    style SplitR fill:#1f2330,stroke:#ffffff
+    style SplitC fill:#1f2330,stroke:#ff8aff
+  </pre>
+  </div>
+
+  <p>Qwen3 (Alibaba, Apr 2025) is a hybrid model: the same weights produce either fast direct answers OR slow chains-of-thought, controlled per-request by the chat template flag <code>enable_thinking</code>. When ON, the model emits <code>&lt;think&gt;hypotheses, backtracking, calculations&lt;/think&gt;</code> before the final answer. When OFF, the template inserts an empty <code>&lt;think&gt;&lt;/think&gt;</code> and the model jumps straight to the answer.</p>
+
+  <div class="card key">
+  Single set of weights, two behaviors. OpenAI's o1 is always-thinking (and hidden); Claude has extended-thinking with budget; DeepSeek R1 is always-thinking. <strong>Qwen3's flag is the most flexible for an interactive coding agent</strong> — fast for "ls", deep for "fix this bug."
+  </div>
+
+  <h3>Comparison matrix</h3>
+  <table>
+    <tr><th>Model</th><th>Visibility</th><th>Toggle</th><th>License</th></tr>
+    <tr><td>OpenAI o1/o3</td><td>HIDDEN</td><td>always on</td><td>closed</td></tr>
+    <tr><td>Claude extended-thinking</td><td>visible</td><td>per-request budget</td><td>closed</td></tr>
+    <tr><td>DeepSeek R1</td><td>visible</td><td>always on</td><td>open (MIT)</td></tr>
+    <tr><td><strong>Qwen3</strong></td><td><strong>visible</strong></td><td><strong>per-request bool</strong></td><td><strong>Apache 2.0</strong></td></tr>
+  </table>
+
+  <h3>How we toggle it per-request</h3>
+  <div class="card code-loc">
+  <code>examples/06_chat.py:105-117</code> — pass via OpenAI SDK's <code>extra_body</code>:
+  <pre><code class="language-python">stream = client.chat.completions.create(
+    model=model,
+    messages=messages,
+    tools=TOOL_SCHEMAS,
+    tool_choice="auto",
+    stream=True,
+    extra_body={"chat_template_kwargs": {"enable_thinking": thinking_enabled}},
+)</code></pre>
+  Then the REPL exposes <code>/think</code> and <code>/nothink</code> slash commands. Default OFF (fast mode) because greetings and trivial questions don't benefit from 600 reasoning tokens.
+  </div>
+
+  <h3>Stream timeline with thinking enabled</h3>
+
+  <div class="terminal">
+<span class="label">you&gt;</span> Fix the bug in calculator.py
+
+<span class="cyan">[thinking]</span>
+<span class="thinking">The user wants me to fix a bug in calculator.py.
+Let me first read the file to see what's there.
+I should also check if there are tests...</span>
+
+<span class="assistant">[assistant]</span>
+<span class="assistant">I'll start by reading calculator.py.</span>
+<span class="tool">▶ read_file({"path": "calculator.py"})</span>
+<span class="result">  ↳ def add(a, b): return a - b  ...</span>
+  </div>
+
+  <p>The state machine in the client tracks whether we're currently rendering reasoning (WHITE) or visible content (MAGENTA). Header printed once per phase transition.</p>
+</section>
+
+<!-- SECTION 7 -->
+<section class="layer" id="section-7">
+  <div class="section-num">SECTION 9 — UNDER THE HOOD</div>
+  <h2>Hermes Tool Call Format</h2>
+
+  <div class="diagram">
+  <pre class="mermaid">
+flowchart LR
+    Model["Qwen3 raw output:<br/>'I'll read it.<br/>&lt;tool_call&gt;<br/>{name:read_file,args:...}<br/>&lt;/tool_call&gt;'"]
+    Model --> Parser["vLLM hermes parser<br/>(regex + state machine)"]
+    Parser --> Content["content:<br/>'I'll read it.'"]
+    Parser --> ToolCalls["tool_calls:<br/>[{id, type:function,<br/>function:{name, arguments}}]"]
+    Content --> Client["Client receives<br/>OpenAI-format response"]
+    ToolCalls --> Client
+
+    style Model fill:#1f2330,stroke:#ff8aff
+    style Parser fill:#1f2330,stroke:#ffd966
+    style Content fill:#1f2330,stroke:#7bdcb5
+    style ToolCalls fill:#1f2330,stroke:#7bdcb5
+  </pre>
+  </div>
+
+  <p>OpenAI's <code>tool_calls</code> field is a server-side parser convention — the model itself only emits TEXT. For open models, NousResearch's "Hermes" format uses XML tags: <code>&lt;tool_call&gt;{"name":...,"arguments":{...}}&lt;/tool_call&gt;</code>. Qwen3 was fine-tuned to emit this format, and vLLM's <code>--tool-call-parser hermes</code> rewrites it into OpenAI's structured shape.</p>
+
+  <div class="card warn">
+  <strong>Pull this flag out and the entire agent stops working.</strong> Without the parser, Qwen3's <code>&lt;tool_call&gt;</code> XML leaks into <code>content</code> as a literal string, and our client never sees structured tool_calls. The parser is THE critical translation layer.
+  </div>
+
+  <h3>Why Hermes won (vs alternatives)</h3>
+  <ul>
+    <li><strong>Mistral</strong>: <code>[TOOL_CALLS] [...]</code> magic prefix + JSON array</li>
+    <li><strong>Llama 3.1</strong>: <code>&lt;|python_tag|&gt;{...}</code> reserved token</li>
+    <li><strong>Hermes</strong>: <code>&lt;tool_call&gt;...&lt;/tool_call&gt;</code> XML tags, self-delimiting, streaming-friendly</li>
+    <li><strong>Pythonic</strong>: literal <code>read_file(path="a.py")</code>, parsed as AST</li>
+  </ul>
+  <p>Hermes won by being self-delimiting (parser finds tags with regex) AND streaming-friendly (opening tag signals "switch to tool mode" before JSON completes). Permissive license + good docs let everyone copy it.</p>
+
+  <h3>Malformed JSON quirk</h3>
+  <p>Qwen3 sometimes emits Python triple-quoted strings inside <code>arguments</code> — not valid JSON. The Hermes parser passes them through unchanged. If we appended that to history verbatim, vLLM 400s on the next request (it re-parses history).</p>
+
+  <div class="card code-loc">
+  Our defense in <code>examples/06_chat.py:267-291</code>:
+  <pre><code class="language-python">for tc in tool_calls:
+    try:
+        if tc["arguments"]:
+            json.loads(tc["arguments"])
+    except json.JSONDecodeError as e:
+        tc["_bad_json"] = True
+        tc["_bad_json_error"] = str(e)
+
+# In history, substitute "{}" so vLLM doesn't 400;
+# return the parse error to the model so it can retry
+asst_msg["tool_calls"] = [{
+    "id": tc["id"],
+    "type": "function",
+    "function": {
+        "name": tc["name"],
+        "arguments": "{}" if tc.get("_bad_json") else tc["arguments"],
+    },
+} for tc in tool_calls]</code></pre>
+  </div>
+</section>
+
+<!-- SECTION 8 -->
+<section class="layer" id="section-8">
+  <div class="section-num">SECTION 10 — SECURITY</div>
+  <h2>Sandbox: Why the Agent Can't Escape</h2>
+
+  <div class="diagram">
+  <pre class="mermaid">
+flowchart TD
+    Model["Model emits:<br/>read_file('../../etc/passwd')"] --> Dispatch["execute_tool('read_file', ...)"]
+    Dispatch --> Safe["_safe_path('../../etc/passwd')"]
+    Safe --> Resolve["(WORKSPACE / path).resolve()<br/>= /etc/passwd"]
+    Resolve --> Check{"WORKSPACE in<br/>parents of /etc/passwd?"}
+    Check -->|NO| Raise["raise ValueError<br/>'path escapes workspace'"]
+    Raise --> Catch["execute_tool catches<br/>→ returns 'ERROR: ...'"]
+    Catch --> Model2["Model sees error string,<br/>tries different path or gives up"]
+
+    style Model fill:#1f2330,stroke:#ff7b7b
+    style Safe fill:#1f2330,stroke:#7bff7b
+    style Resolve fill:#1f2330,stroke:#7bdcb5
+    style Check fill:#1f2330,stroke:#ffd966
+    style Raise fill:#1f2330,stroke:#ff7b7b
+    style Catch fill:#1f2330,stroke:#7bff7b
+  </pre>
+  </div>
+
+  <p>The LLM can emit ANY path string — from prompt injection, training-data contamination, or honest mistake. We can't trust the prompt. Instead, the Python code refuses based on filesystem geometry.</p>
+
+  <h3>The 4-line sandbox</h3>
+  <div class="card code-loc">
+  <code>src/tools.py:51-67</code>:
+  <pre><code class="language-python">def _safe_path(path: str) -&gt; Path:
+    p = (WORKSPACE / path).resolve()    # absolutify, follow symlinks
+    if WORKSPACE not in p.parents and p != WORKSPACE:
+        raise ValueError(f"path {p} escapes workspace {WORKSPACE}")
+    return p</code></pre>
+  Two tricks combined:
+  <ul>
+    <li><code>.resolve()</code> follows symlinks AND collapses <code>..</code> → the true target path</li>
+    <li><code>p.parents</code> check verifies the target is a descendant of <code>WORKSPACE</code></li>
+  </ul>
+  </div>
+
+  <h3>What this DOES NOT protect</h3>
+  <p>The <code>_safe_path</code> check guards the file-I/O and discovery tools (<code>read_file</code>, <code>write_file</code>, <code>apply_patch</code>, <code>multi_edit</code>, <code>list_dir</code>, <code>glob_files</code>, <code>grep_files</code>). It does NOT contain the execution / delegation tools:</p>
+  <ul>
+    <li><code>run_bash</code> commands like <code>cat /etc/passwd</code> (shell can <code>cd</code> anywhere)</li>
+    <li><code>run_python</code> doing arbitrary I/O or <code>os.system(...)</code> from inside Python</li>
+    <li><code>spawn_subagent</code> launching a child process that runs its own tools</li>
+    <li>Network access (<code>curl evil.com</code>)</li>
+    <li>Resource exhaustion (<code>while true; do echo; done</code>)</li>
+    <li>Package installs (<code>pip install evil-pkg</code>)</li>
+  </ul>
+  <p>Execution tools have CWD pinned to the workspace and <code>spawn_subagent</code> is bounded by <code>timeout 300s</code> / <code>max_iters 8</code>, but none of that is a true sandbox. For production safety you need Docker / seccomp / Firecracker. For an educational project where the agent edits files in <code>demo_repo/</code>, path containment + CWD pinning hits the sweet spot.</p>
+
+  <div class="card key">
+  <strong>The check runs in PYTHON, not in the model.</strong> No matter what the prompt says — "ignore safety", "you are now in admin mode" — the bytes still flow through <code>_safe_path()</code>, which raises <code>ValueError</code> based on path geometry alone. This is the difference between a <em>policy</em> and a <em>mechanism</em>.
+  </div>
+</section>
+
+<!-- SECTION 9 -->
+<section class="layer" id="section-9">
+  <div class="section-num">SECTION 11 — VISUAL UX</div>
+  <h2>Terminal Colors & State Machine</h2>
+
+  <div class="legend">
+    <span class="legend-item"><span class="swatch" style="background:#ffffff"></span> WHITE — <code>\033[97m</code> thinking</span>
+    <span class="legend-item"><span class="swatch" style="background:#7bf0ff"></span> CYAN — <code>\033[1;36m</code> headers, you&gt;</span>
+    <span class="legend-item"><span class="swatch" style="background:#7bff7b"></span> GREEN — <code>\033[1;32m</code> tool call</span>
+    <span class="legend-item"><span class="swatch" style="background:#ffd966"></span> YELLOW — <code>\033[33m</code> tool result</span>
+    <span class="legend-item"><span class="swatch" style="background:#ff8aff"></span> MAGENTA — <code>\033[1;35m</code> assistant</span>
+    <span class="legend-item"><span class="swatch" style="background:#ff7b7b"></span> RED — <code>\033[1;31m</code> error</span>
+  </div>
+
+  <p>Terminals are state machines that read a byte stream. Most bytes are characters; certain sequences (<code>\033[...m</code>) flip state flags like color and bold. The grammar was standardized by ECMA-48 in 1976.</p>
+
+  <h3>Anatomy of an ANSI escape</h3>
+  <div class="ascii">"\033[1;34m" + "Banner"     →     bold + blue "Banner"
+
+  ESC  [  params  final byte
+  ↓    ↓    ↓        ↓
+  1B   5B   1;34     6D
+       │    │        │
+       │    └─bold,blue
+       │
+       └─ CSI: "Control Sequence Introducer"
+
+Terminal swallows bytes 1B 5B 31 3B 33 34 6D (no glyph),
+then renders subsequent text in bold blue.</div>
+
+  <h3>The streaming print primitive</h3>
+  <pre><code class="language-python">print(f"{WHITE}{chunk}{RESET}", end="", flush=True)
+#       ▲                       ▲          ▲
+#       └─ color on               │          │
+#                                 │          └─ force flush (don't buffer)
+#                                 └─ no trailing newline (coalesce fragments)</code></pre>
+
+  <h3>State machine for [thinking] vs [assistant] headers</h3>
+  <div class="card code-loc">
+  <code>examples/06_chat.py:121-156</code>:
+  <pre><code class="language-python">in_thinking = False
+in_content = False
+
+for chunk in stream:
+    r = getattr(delta, "reasoning_content", None) or getattr(delta, "reasoning", None)
+    if r:
+        if not in_thinking:
+            print(f"\n{CYAN}[thinking]{RESET}", flush=True)
+            in_thinking = True
+            in_content = False
+        print(f"{WHITE}{r}{RESET}", end="", flush=True)
+
+    if delta.content:
+        if not in_content:
+            if in_thinking:
+                print()  # close [thinking] block with newline
+            print(f"\n{MAGENTA}[assistant]{RESET}", flush=True)
+            in_content = True
+            in_thinking = False
+        print(f"{MAGENTA}{delta.content}{RESET}", end="", flush=True)</code></pre>
+  Header printed ONCE per phase transition (guarded by <code>if not in_*</code>). Without the guard, every chunk would re-print the label and spam the screen.
+  </div>
+
+  <h3>Ctrl+C handling</h3>
+  <p>Two places intercept <code>KeyboardInterrupt</code>:</p>
+  <ul>
+    <li>At <code>input("you&gt;")</code> → "Bye." and exit (user wants out)</li>
+    <li>During stream → <code>[interrupted]</code>, rollback half-formed messages, back to <code>you&gt;</code> prompt (user wants to abort this turn)</li>
+  </ul>
+  <p>Same pattern Claude Code and the standard Python REPL use.</p>
+</section>
+
+<!-- SECTION 10 -->
+<section class="layer" id="section-10">
+  <div class="section-num">SECTION 12 — SYNTHESIS</div>
+  <h2>Big Picture — End-to-End Trace</h2>
+
+  <p>One user message → 20 distinct steps across 5 layers. Here's what happens when you type <code>Fix the failing tests in demo_repo/</code> in the REPL:</p>
+
+  <ol class="steps">
+    <li><strong>Keypress → stdin.</strong> Terminal writes UTF-8 to <code>input()</code> at <code>06_chat.py:211</code>.</li>
+    <li><strong>Append user msg</strong> at <code>06_chat.py:239</code>.</li>
+    <li><strong>Enter ReAct iteration</strong> <code>for _turn in range(1, max_tool_turns + 1)</code>.</li>
+    <li><strong>SDK builds API call</strong> with <code>messages</code>, <code>tools=TOOL_SCHEMAS</code>, <code>stream=True</code>, <code>enable_thinking</code>.</li>
+    <li><strong>HTTP POST</strong> → <code>localhost:8765/v1/chat/completions</code>, opens SSE stream.</li>
+    <li><strong>vLLM FastAPI</strong> validates schema, applies Qwen3 chat template → prompt string with <code>&lt;|im_start|&gt;...</code> markers.</li>
+    <li><strong>Tokenization</strong> → List[int].</li>
+    <li><strong>Scheduler</strong> folds into next forward pass; PagedAttention allocates KV blocks.</li>
+    <li><strong>Forward + sample loop.</strong> 40 transformer layers → logits → top-p sample → next token. ~15ms/token on A6000.</li>
+    <li><strong>SSE chunks back</strong>: first <code>reasoning_content</code>, then <code>content</code>, then <code>tool_calls</code> deltas.</li>
+    <li><strong>Client accumulates</strong> tool_calls dict by index (<code>06_chat.py:163-174</code>).</li>
+    <li><strong>JSON validation</strong> — mark <code>_bad_json</code> if needed.</li>
+    <li><strong>Append assistant msg</strong> with tool_calls (preserve the field!).</li>
+    <li><strong>If <code>tool_calls</code> empty</strong> → break, return to <code>you&gt;</code> prompt.</li>
+    <li><strong>For each tool_call</strong> → <code>execute_tool(name, args)</code> dispatches to one of the 10 tools (<code>read_file</code>, <code>apply_patch</code>, <code>grep_files</code>, <code>run_bash</code>, <code>spawn_subagent</code>, …).</li>
+    <li><strong>Sandbox check</strong>: <code>_safe_path</code> verifies path inside <code>WORKSPACE</code>.</li>
+    <li><strong>Append role="tool"</strong> message with <code>tool_call_id</code> + result string.</li>
+    <li><strong>Loop back to step 4</strong> — model now sees the tool result.</li>
+    <li><strong>3-6 iterations later</strong>, model emits content with NO tool_calls → done.</li>
+    <li><strong>REPL returns to <code>you&gt;</code></strong>, history preserved for next turn.</li>
+  </ol>
+
+  <p>Total wall time: 8-15 seconds on A6000. Most of it is GPU forward passes; HTTP and subprocess overhead is single-digit milliseconds.</p>
+
+  <h3>Where we sit on the agent landscape</h3>
+
+  <table>
+    <tr><th>Feature</th><th>Claude Code</th><th>Cursor</th><th>Codex CLI</th><th>Ours</th></tr>
+    <tr><td>REPL streaming</td><td>✓</td><td>✓</td><td>✓</td><td>✓</td></tr>
+    <tr><td>Self-host LLM</td><td>✗</td><td>✗</td><td>✗</td><td><strong>✓ vLLM</strong></td></tr>
+    <tr><td>Built-in tools</td><td>15+</td><td>~10</td><td>~6</td><td><strong>10</strong></td></tr>
+    <tr><td>Patch/diff tool</td><td>✓</td><td>✓</td><td>✓</td><td><strong>✓ apply_patch + multi_edit</strong></td></tr>
+    <tr><td>Sub-agents</td><td>✓</td><td>✗</td><td>✗</td><td><strong>✓ spawn_subagent</strong></td></tr>
+    <tr><td>Context compaction</td><td>✓</td><td>partial</td><td>✗</td><td><strong>✓ /compact</strong></td></tr>
+    <tr><td>MCP servers</td><td>✓</td><td>✗</td><td>✗</td><td>✗</td></tr>
+    <tr><td>Sandbox</td><td>permission prompts</td><td>workdir</td><td>workdir</td><td><strong>explicit <code>_safe_path</code></strong></td></tr>
+    <tr><td>Reasoning visible</td><td>✓</td><td>partial</td><td>✗</td><td>✓</td></tr>
+    <tr><td>LOC of core loop</td><td>closed</td><td>closed</td><td>~3K TS</td><td><strong>~600 Python</strong></td></tr>
+  </table>
+
+  <div class="card key">
+  Our agent is to Claude Code what a 2-stroke lawnmower engine is to a modern V8 — same combustion cycle, vastly simpler, fully transparent, perfect for learning. Every line readable in an afternoon. <strong>That is the design goal.</strong>
+  </div>
+
+  <h3>Phase 2 — shipped ✅</h3>
+  <ol>
+    <li><strong>apply_patch + multi_edit tools</strong> — surgical / atomic edits, cut edit token cost ~10× (Section 4)</li>
+    <li><strong>grep_files + glob_files tools</strong> — content + name search, remove the "model parses grep stdout" tax (Section 4)</li>
+    <li><strong>run_python tool</strong> — run Python directly without a bash wrapper (Section 4)</li>
+    <li><strong>spawn_subagent tool</strong> — divide and conquer via a child subprocess agent (Section 4)</li>
+    <li><strong>Context compaction</strong> — when messages &gt; 24K tokens, summarize old turns, keep recent 10 verbatim (Section 6)</li>
+  </ol>
+  <p>Still open: an interruptibility SIGINT handler that tools check between sub-steps, and broader sandboxing (Docker / seccomp).</p>
+
+  <h3>Phase 3 — the research thesis</h3>
+  <p>Log every session as a trajectory. Auto-label success (pytest passes / user accepted). Fine-tune Qwen3-14B (LoRA) via DPO on (successful_trajectory, failed_trajectory) pairs from the same prompt. The agent learns from its own use. Same recipe behind DeepSeek's SWE-RL. This is the <strong>publishable contribution</strong>.</p>
+</section>
+
+<!-- GLOSSARY -->
+<section class="layer" id="glossary">
+  <div class="section-num">REFERENCE</div>
+  <h2>📚 Glossary</h2>
+  <p>Every term used across the deep-dive, alphabetized. Click to expand.</p>
+
+  <details class="gloss"><summary>ANSI escape code</summary>
+  <p>Byte sequence beginning with ESC <code>[</code> that terminals interpret as control commands (colors, cursor moves). Defined by ECMA-48 (1976). §11.</p></details>
+
+  <details class="gloss"><summary>apply_patch</summary>
+  <p>Surgical edit tool: replaces <code>old_text</code> with <code>new_text</code>; <code>old_text</code> must match <strong>exactly once</strong> or the tool refuses. §4.</p></details>
+
+  <details class="gloss"><summary>BF16 (bfloat16)</summary>
+  <p>16-bit float with 8-bit exponent + 7-bit mantissa. Same range as FP32, half the memory. Standard for LLM weights. §7.</p></details>
+
+  <details class="gloss"><summary>Chunk (streaming)</summary>
+  <p>One SSE event in a streamed response; carries a small delta. §2.</p></details>
+
+  <details class="gloss"><summary>Compaction (context)</summary>
+  <p>Summarizing old turns once history crosses <code>COMPACT_THRESHOLD_TOKENS</code> (24000) while keeping the recent <code>KEEP_RECENT_MESSAGES</code> (10) verbatim, to stay under the 32K window. <code>/compact</code> + <code>/tokens</code> commands. §6.</p></details>
+
+  <details class="gloss"><summary>Continuous batching</summary>
+  <p>vLLM's scheduler technique where new requests join in-flight batch every step. §7.</p></details>
+
+  <details class="gloss"><summary>CWE-22</summary>
+  <p>"Improper Limitation of a Pathname to a Restricted Directory" — the path-traversal vulnerability class <code>_safe_path</code> defends against. §10.</p></details>
+
+  <details class="gloss"><summary>Delta (streaming)</summary>
+  <p>The <code>delta</code> field inside a chunk holding what's new since the last chunk. §2.</p></details>
+
+  <details class="gloss"><summary>Function calling</summary>
+  <p>OpenAI's name for tool-calling: model emits structured JSON naming a function and arguments. §3.</p></details>
+
+  <details class="gloss"><summary>Hermes format</summary>
+  <p>Tool-call output format using <code>&lt;tool_call&gt;{...}&lt;/tool_call&gt;</code> tags; used by Qwen3 + many open models. §9.</p></details>
+
+  <details class="gloss"><summary>JSON Schema</summary>
+  <p>Vocabulary for describing JSON document shapes; used to declare tool parameters to model. §3.</p></details>
+
+  <details class="gloss"><summary>KV cache</summary>
+  <p>Cached key/value tensors for previous tokens, reused on every new-token forward pass. §7.</p></details>
+
+  <details class="gloss"><summary>max_model_len</summary>
+  <p>Max prompt+completion token count vLLM will allow per request (32768 for our Qwen3). §7. See also Context compaction §6.</p></details>
+
+  <details class="gloss"><summary>Messages array</summary>
+  <p>List of <code>{role, content}</code> dicts representing the conversation; sole input to each model call. §1.</p></details>
+
+  <details class="gloss"><summary>multi_edit</summary>
+  <p>File-I/O tool that applies several edits to one file <strong>atomically</strong> — all succeed or none are written. §4.</p></details>
+
+  <details class="gloss"><summary>PagedAttention</summary>
+  <p>vLLM's KV-cache layout that allocates GPU memory in fixed-size 16-token pages. §7.</p></details>
+
+  <details class="gloss"><summary>ReAct</summary>
+  <p>"Reasoning + Acting" pattern: model alternates thought→action→observation→thought until done. §5.</p></details>
+
+  <details class="gloss"><summary>Reasoning trace</summary>
+  <p>The <code>&lt;think&gt;...&lt;/think&gt;</code> content the model emits before its final answer. §8.</p></details>
+
+  <details class="gloss"><summary>REPL</summary>
+  <p>Read-Eval-Print Loop; the <code>chat() while True</code> in <code>06_chat.py</code>. §11.</p></details>
+
+  <details class="gloss"><summary>Sandbox</summary>
+  <p>Constraint that limits which paths/commands the agent may touch; ours is <code>_safe_path</code> + WORKSPACE resolution. §10.</p></details>
+
+  <details class="gloss"><summary>spawn_subagent</summary>
+  <p>Delegation tool: launches a child agent in a subprocess with its own context window (<code>timeout 300s</code>, <code>max_iters 8</code>) and returns only its final answer. §4.</p></details>
+
+  <details class="gloss"><summary>SSE (Server-Sent Events)</summary>
+  <p>HTTP streaming protocol where server pushes <code>data: {...}\n\n</code> chunks. §2.</p></details>
+
+  <details class="gloss"><summary>Tensor parallelism</summary>
+  <p>Splitting a model's weight tensors across multiple GPUs. §7.</p></details>
+
+  <details class="gloss"><summary>Thinking mode</summary>
+  <p>Qwen3's optional <code>enable_thinking</code> chat-template flag that produces a <code>&lt;think&gt;</code> block. §8.</p></details>
+
+  <details class="gloss"><summary>Tool call / Tool result</summary>
+  <p>The <code>tool_calls</code> field on an assistant message; the <code>role:"tool"</code> message replying to it. §3.</p></details>
+
+  <details class="gloss"><summary>vLLM</summary>
+  <p>High-throughput LLM serving engine; OpenAI-compatible HTTP API, PagedAttention internally. §7.</p></details>
+
+  <details class="gloss"><summary>Workspace</summary>
+  <p>The resolved <code>Path("demo_repo/")</code> that bounds every file operation. §10.</p></details>
+</section>
+
+<!-- DEMO RUN -->
+<section class="layer" id="demo">
+  <div class="section-num">RUN IT YOURSELF</div>
+  <h2>🚀 Demo Run Instructions</h2>
+
+  <h3>1. Pre-check</h3>
+  <pre><code class="language-bash">cd /home/tle/code/coding-agent && source .venv/bin/activate
+
+# Verify vLLM is running
+curl -sf http://localhost:8765/v1/models &gt;/dev/null && echo "vLLM OK"
+
+# Should show 5 failed / 6 passed (bug state)
+pytest demo_repo/ -q</code></pre>
+
+  <div class="card warn">
+  If vLLM down: <code>tmux attach -t vllm</code> to inspect, or <code>bash scripts/start_vllm.sh</code> to (re)start. Wait ~30s for "Application startup complete" log line.
+  </div>
+
+  <h3>2. Reset bug files (between demos)</h3>
+  <p>Demo files get fixed during a run. To reset for next demo, copy from <code>SYSTEM_DEEP_DIVE.md</code> Section 10.7 the <code>cat &gt; ... &lt;&lt;'PYEOF'</code> heredoc commands.</p>
+
+  <h3>3. Demo flow (10 minutes)</h3>
+  <pre><code class="language-bash">python examples/06_chat.py</code></pre>
+
+  <p>Try in order:</p>
+  <div class="terminal">
+<span class="you">you&gt;</span> Hello, what can you do?
+
+<span class="you">you&gt;</span> What files are in this repo?
+
+<span class="you">you&gt;</span> /think
+<span class="cyan">Thinking mode: ON</span>
+
+<span class="you">you&gt;</span> Fix all failing tests in this repo
+
+<span class="you">you&gt;</span> /nothink
+<span class="cyan">Thinking mode: OFF</span>
+
+<span class="you">you&gt;</span> Add a power(base, exp) function to calculator.py with tests
+
+<span class="you">you&gt;</span> /tokens
+<span class="cyan">~3,120 tokens in history (threshold 24000)</span>
+
+<span class="you">you&gt;</span> /compact
+<span class="cyan">Compacted history → summary + recent 10 messages</span>
+
+<span class="you">you&gt;</span> /exit
+  </div>
+
+  <h3>4. Stop the agent</h3>
+  <table>
+    <tr><th>Situation</th><th>How to stop</th></tr>
+    <tr><td>During stream / thinking</td><td><kbd>Ctrl+C</kbd> → <code>[interrupted]</code>, back to <code>you&gt;</code></td></tr>
+    <tr><td>At <code>you&gt;</code> prompt</td><td><code>/exit</code> or <kbd>Ctrl+C</kbd></td></tr>
+    <tr><td>vLLM server</td><td>Not affected — survives REPL close</td></tr>
+  </table>
+</section>
+
+<!-- SOURCES -->
+<section class="layer" id="sources">
+  <div class="section-num">REFERENCE</div>
+  <h2>📖 Authoritative Sources</h2>
+
+  <h3>Agent architecture & ReAct</h3>
+  <ul>
+    <li>Anthropic, <em><a href="https://anthropic.com/research/building-effective-agents">Building Effective Agents</a></em></li>
+    <li>Yao et al. 2022, <em><a href="https://arxiv.org/abs/2210.03629">ReAct: Synergizing Reasoning and Acting</a></em></li>
+    <li>Wei et al. 2022, <em><a href="https://arxiv.org/abs/2201.11903">Chain-of-Thought Prompting</a></em></li>
+    <li>Schick et al. 2023, <em><a href="https://arxiv.org/abs/2302.04761">Toolformer</a></em></li>
+  </ul>
+
+  <h3>LLM inference & vLLM</h3>
+  <ul>
+    <li>Kwon et al. 2023, <em><a href="https://arxiv.org/abs/2309.06180">Efficient Memory Management for LLM Serving with PagedAttention</a></em></li>
+    <li><a href="https://docs.vllm.ai">vLLM documentation</a></li>
+    <li>Qwen Team 2025, <em><a href="https://arxiv.org/abs/2505.09388">Qwen3 Technical Report</a></em></li>
+  </ul>
+
+  <h3>OpenAI protocols</h3>
+  <ul>
+    <li><a href="https://platform.openai.com/docs/api-reference/chat">Chat Completions API reference</a></li>
+    <li><a href="https://platform.openai.com/docs/guides/function-calling">Function Calling guide</a></li>
+    <li><a href="https://platform.openai.com/docs/guides/streaming-responses">Streaming Responses guide</a></li>
+  </ul>
+
+  <h3>Wire protocols & terminal</h3>
+  <ul>
+    <li>WHATWG, <em><a href="https://html.spec.whatwg.org/multipage/server-sent-events.html">Server-Sent Events spec</a></em></li>
+    <li>ECMA, <em><a href="https://ecma-international.org/wp-content/uploads/ECMA-48_5th_edition_june_1991.pdf">ECMA-48 (ANSI escapes)</a></em></li>
+    <li><a href="https://json-schema.org/specification">JSON Schema Draft 2020-12</a></li>
+  </ul>
+
+  <h3>Security</h3>
+  <ul>
+    <li>MITRE, <em><a href="https://cwe.mitre.org/data/definitions/22.html">CWE-22: Path Traversal</a></em></li>
+    <li><a href="https://docs.python.org/3/library/pathlib.html">Python pathlib docs</a></li>
+  </ul>
+
+  <h3>Tool call formats</h3>
+  <ul>
+    <li><a href="https://huggingface.co/NousResearch/Hermes-2-Pro-Mistral-7B">Hermes 2 Pro model card</a></li>
+    <li><a href="https://docs.vllm.ai/en/stable/features/tool_calling/">vLLM tool calling docs</a></li>
+  </ul>
+
+  <h3>Fine-tuning (Phase 3)</h3>
+  <ul>
+    <li>Rafailov et al., <em><a href="https://arxiv.org/abs/2305.18290">Direct Preference Optimization</a></em></li>
+    <li>DeepSeek, <em><a href="https://arxiv.org/abs/2502.18449">SWE-RL</a></em></li>
+  </ul>
+
+  <hr style="border-color:var(--border); margin:40px 0">
+
+  <p style="text-align:center; color:var(--fg-dim); font-size:13px">
+    Document synthesized from 10 parallel Claude Opus 4.7 agents · 2026-05-22<br>
+    Full markdown version: <code>SYSTEM_DEEP_DIVE.md</code><br>
+    Source code: <code>/home/tle/code/coding-agent/</code>
+  </p>
+</section>
+
+</main>
+
+<script>
+  // Mermaid init - dark theme
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      darkMode: true,
+      background: '#0f1117',
+      primaryColor: '#1f2330',
+      primaryTextColor: '#e7ecef',
+      primaryBorderColor: '#7bdcb5',
+      lineColor: '#7bdcb5',
+      secondaryColor: '#161922',
+      tertiaryColor: '#0f1117'
+    },
+    flowchart: { curve: 'basis', padding: 20 },
+    sequence: { actorMargin: 50, boxMargin: 10 }
+  });
+
+  // Scroll progress bar
+  const pb = document.getElementById('pb');
+  function updateProgress() {
+    const h = document.documentElement;
+    const scrolled = h.scrollTop;
+    const max = h.scrollHeight - h.clientHeight;
+    pb.style.width = max > 0 ? (scrolled / max * 100) + '%' : '0%';
+  }
+  document.addEventListener('scroll', updateProgress);
+  updateProgress();
+
+  // Smooth scroll
+  document.querySelectorAll('.sidebar a').forEach(a => {
+    a.addEventListener('click', e => {
+      e.preventDefault();
+      const target = document.querySelector(a.getAttribute('href'));
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+</script>
+</body>
+</html>
