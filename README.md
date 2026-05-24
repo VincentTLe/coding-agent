@@ -139,7 +139,8 @@ coding-agent/
 │   ├── algorithms.py          is_prime + factorial + fibonacci
 │   ├── test_algorithms.py     pytest cases cho ở trên (8 tests)
 │   ├── calculator.py          add + multiply
-│   └── test_calculator.py     pytest cases cho ở trên (3 tests)
+│   ├── test_calculator.py     pytest cases cho ở trên (3 tests)
+│   └── fibonacci.py           artifact do chính agent tự sinh ra (bằng chứng write_file)
 │
 ├── .env                       Biến môi trường runtime (gitignored)
 ├── .env.example               Template
