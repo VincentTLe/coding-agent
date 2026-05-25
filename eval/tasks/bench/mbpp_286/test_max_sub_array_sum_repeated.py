@@ -1,0 +1,7 @@
+from max_sub_array_sum_repeated import *
+
+
+def test_mbpp():
+    assert max_sub_array_sum_repeated([10, 20, -30, -1], 4, 3) == 30
+    assert max_sub_array_sum_repeated([-1, 10, 20], 3, 2) == 59
+    assert max_sub_array_sum_repeated([-1, -2, -3], 3, 3) == -1

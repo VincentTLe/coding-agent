@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Coding Agent — 15-min Talk</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/theme/black.css" id="theme">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/highlight/monokai.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg: #0f1117; --bg2: #161922; --bg3: #1f2330;
+      --fg: #e7ecef; --fg-dim: #9aa5b1;
+      --accent: #7bdcb5; --cyan: #7bf0ff; --magenta: #ff8aff;
+      --tool: #7bff7b; --result: #ffd966; --red: #ff7b7b;
+      --thinking: #ffffff; --border: #2a2f3d;
+    }
+    html, body { background: var(--bg); }
+    .reveal { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-weight: 400; color: var(--fg); font-size: 30px; }
+    .reveal .slides { text-align: left; }
+    .reveal h1, .reveal h2, .reveal h3, .reveal h4, .reveal h5, .reveal h6 { font-family: 'Inter', sans-serif; color: var(--fg); letter-spacing: -0.02em; text-transform: none; margin: 0 0 0.4em 0; line-height: 1.15; font-weight: 700; }
+    .reveal h1 { font-size: 2.4em; }
+    .reveal h2 { font-size: 1.6em; color: var(--accent); }
+    .reveal h3 { font-size: 1.2em; color: var(--cyan); font-weight: 600; }
+    .reveal p { margin: 0 0 0.5em 0; }
+    .reveal ul, .reveal ol { display: block; margin: 0 0 0.6em 1.4em; }
+    .reveal li { margin-bottom: 0.2em; }
+    .reveal strong { color: var(--fg); font-weight: 700; }
+    .reveal em { color: var(--cyan); font-style: normal; }
+    .reveal a { color: var(--accent); text-decoration: none; border-bottom: 1px dotted var(--accent); }
+    .reveal a:hover { color: var(--cyan); border-color: var(--cyan); }
+    .reveal code { font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace; background: var(--bg3); color: var(--cyan); padding: 0.08em 0.35em; border-radius: 4px; font-size: 0.85em; }
+    .reveal pre { width: 100%; box-shadow: none; margin: 0.5em 0; font-size: 0.5em; line-height: 1.4; }
+    .reveal pre code { background: var(--bg3); color: var(--fg); padding: 1em 1.2em; border-radius: 8px; border: 1px solid var(--border); max-height: 560px; font-size: inherit; display: block; }
+    .reveal pre code .token.comment { color: var(--fg-dim); font-style: italic; }
+    .reveal pre code .token.punctuation { color: var(--fg); }
+    .reveal pre code .token.property, .reveal pre code .token.tag, .reveal pre code .token.boolean, .reveal pre code .token.number, .reveal pre code .token.constant, .reveal pre code .token.symbol { color: var(--magenta); }
+    .reveal pre code .token.selector, .reveal pre code .token.attr-name, .reveal pre code .token.string, .reveal pre code .token.char, .reveal pre code .token.builtin { color: var(--result); }
+    .reveal pre code .token.operator, .reveal pre code .token.entity, .reveal pre code .token.url, .reveal pre code .token.variable { color: var(--cyan); }
+    .reveal pre code .token.atrule, .reveal pre code .token.attr-value, .reveal pre code .token.function, .reveal pre code .token.class-name { color: var(--accent); }
+    .reveal pre code .token.keyword { color: var(--magenta); font-weight: 600; }
+    .reveal pre code .token.regex, .reveal pre code .token.important { color: var(--red); }
+    .reveal table { margin: 0.5em 0; width: 100%; border-collapse: collapse; font-size: 0.72em; }
+    .reveal table th { background: var(--bg2); color: var(--accent); font-weight: 600; text-align: left; padding: 0.45em 0.7em; border-bottom: 2px solid var(--border); }
+    .reveal table td { padding: 0.4em 0.7em; border-bottom: 1px solid var(--border); color: var(--fg); }
+    .reveal table tr.highlight td { background: rgba(123, 240, 255, 0.06); }
+    .reveal .fragment { transition: opacity 0.4s ease-out, transform 0.4s ease-out; }
+
+    .title-slide { text-align: center; display: flex !important; flex-direction: column; justify-content: center; align-items: center; gap: 0.4em; }
+    .title-slide h1 { font-size: 3em; font-weight: 800; letter-spacing: -0.03em; background: linear-gradient(90deg, var(--accent) 0%, var(--cyan) 35%, var(--magenta) 70%, var(--accent) 100%); background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; animation: gradientFlow 8s ease-in-out infinite; margin: 0; }
+    .title-slide .subtitle, .title-slide h3 { font-size: 1.1em; color: var(--fg-dim); font-weight: 400; margin-top: -0.1em; }
+    @keyframes gradientFlow { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+
+    .section-title { background: radial-gradient(circle at 20% 30%, rgba(123, 220, 181, 0.08), transparent 50%), radial-gradient(circle at 80% 70%, rgba(255, 138, 255, 0.05), transparent 50%); }
+    .section-title h1 { font-size: 2.6em; color: var(--accent); animation: numberPulse 3.2s ease-in-out infinite; }
+    .section-title .subtitle, .section-title h3 { color: var(--fg-dim); font-size: 1em; font-weight: 400; margin-top: 0.2em; }
+    @keyframes numberPulse { 0%, 100% { opacity: 0.92; } 50% { opacity: 1; } }
+
+    .card { background: var(--bg2); border-radius: 10px; padding: 0.7em 1em; margin: 0.5em 0; border-left: 4px solid var(--border); font-size: 0.78em; line-height: 1.45; }
+    .card.key { border-left-color: var(--cyan); background: linear-gradient(90deg, rgba(123,240,255,0.08), var(--bg2) 30%); }
+    .card.warn { border-left-color: var(--result); background: linear-gradient(90deg, rgba(255,217,102,0.08), var(--bg2) 30%); }
+    .card.code-loc { border-left-color: var(--accent); background: linear-gradient(90deg, rgba(123,220,181,0.08), var(--bg2) 30%); font-family: 'JetBrains Mono', monospace; font-size: 0.72em; }
+
+    .terminal { background: #000; color: var(--fg); font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.55em; line-height: 1.55; padding: 0.9em 1.1em; border-radius: 8px; border: 1px solid var(--border); box-shadow: 0 8px 24px rgba(0,0,0,0.4); white-space: pre-wrap; overflow-x: auto; margin: 0.5em 0; max-height: 580px; }
+    .terminal::before { content: "● ● ●"; display: block; color: #555; letter-spacing: 0.3em; margin-bottom: 0.5em; font-size: 0.7em; }
+    .terminal .you { color: var(--cyan); }
+    .terminal .thinking { color: var(--thinking); opacity: 0.75; font-style: italic; }
+    .terminal .assistant { color: var(--magenta); }
+    .terminal .tool { color: var(--tool); }
+    .terminal .result { color: var(--result); }
+    .terminal .red { color: var(--red); }
+    .terminal .cyan { color: var(--cyan); }
+    .terminal .label { color: var(--cyan); font-weight: 700; }
+    .terminal .dim { color: var(--fg-dim); }
+
+    .ascii { background: #000; color: var(--accent); font-family: 'JetBrains Mono', monospace; font-size: 0.5em; line-height: 1.25; padding: 1em 1.2em; border-radius: 8px; border: 1px solid var(--border); white-space: pre; overflow-x: auto; margin: 0.5em 0; text-align: left; }
+
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.9em; margin: 0.7em 0; }
+    .stat { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 0.9em 0.8em; text-align: center; transition: transform 0.2s, border-color 0.2s; }
+    .stat:hover { transform: translateY(-2px); border-color: var(--accent); }
+    .stat-value { font-family: 'JetBrains Mono', monospace; font-size: 1.9em; font-weight: 700; color: var(--accent); line-height: 1; letter-spacing: -0.02em; }
+    .stat-label { font-size: 0.55em; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.12em; margin-top: 0.5em; font-weight: 500; }
+
+    .legend { display: flex; flex-wrap: wrap; gap: 0.7em 1.3em; margin: 0.6em 0; font-size: 0.7em; }
+    .legend-item { display: inline-flex; align-items: center; gap: 0.4em; color: var(--fg-dim); }
+    .swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; box-shadow: 0 0 0 1px rgba(255,255,255,0.08) inset; }
+
+    .steps { list-style: none; counter-reset: step; margin: 0.5em 0; padding: 0; font-size: 0.75em; }
+    .steps li { counter-increment: step; position: relative; padding: 0.3em 0 0.3em 2.4em; margin-bottom: 0.3em; line-height: 1.5; }
+    .steps li::before { content: counter(step); position: absolute; left: 0; top: 0.3em; width: 1.7em; height: 1.7em; border-radius: 50%; background: var(--accent); color: var(--bg); font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 0.8em; display: flex; align-items: center; justify-content: center; }
+
+    .center { text-align: center; } .left { text-align: left; } .right { text-align: right; }
+    .dim { color: var(--fg-dim); } .accent { color: var(--accent); } .cyan { color: var(--cyan); }
+    .magenta { color: var(--magenta); } .red { color: var(--red); }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1em; align-items: start; }
+    .three-col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1em; align-items: start; }
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 1em; align-items: start; }
+    .side-notes > * { margin-bottom: 0.5em; }
+
+    .mermaid { background: transparent !important; text-align: center; margin: 0.3em 0; font-size: 14px; }
+    .mermaid svg { max-width: 100%; height: auto; }
+
+    .reveal .progress { height: 4px; color: var(--accent); background: rgba(123, 220, 181, 0.12); }
+    .reveal .progress span { background: var(--accent); }
+    .reveal .slide-number { background: rgba(15, 17, 23, 0.7); color: var(--fg-dim); font-family: 'JetBrains Mono', monospace; font-size: 14px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); right: 16px; bottom: 16px; }
+    .reveal .slide-number a { color: var(--fg-dim); }
+    .reveal .controls { color: var(--accent); }
+    .reveal .controls button { opacity: 0.4; }
+    .reveal .controls button:hover { opacity: 1; }
+
+    .kbd-hint { position: fixed; left: 16px; bottom: 16px; z-index: 50; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--fg-dim); background: rgba(15, 17, 23, 0.7); border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; letter-spacing: 0.04em; pointer-events: none; }
+    .kbd-hint kbd { background: var(--bg3); color: var(--accent); padding: 1px 6px; border-radius: 3px; border: 1px solid var(--border); font-family: inherit; font-size: 10px; margin: 0 2px; }
+
+    .role-table tr td:first-child { font-family: 'JetBrains Mono', monospace; color: var(--cyan); }
+    .role-table .muted { color: var(--fg-dim); }
+  </style>
+
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+<section class="title-slide">
+  <h1>Coding Agent from Scratch</h1>
+  <p>Turning a local LLM into a reliable coding agent — built from first principles, no frameworks.</p>
+  <p style="font-size: 0.6em; opacity: 0.75; margin-top: 1.2em;">Vincent Le · Knox College · Math/Stat 361 Research · Advisor: Prof. Andrew Leahy</p>
+  <aside class="notes">WHAT TO SAY (≈25s): Hi everyone — I'm Vincent. For my Math/Stat 361 research, advised by Professor Leahy, I built a coding agent completely from scratch. The goal in one line: take a local, open-weight language model and turn it into something that can actually <em>do</em> software work — reliably — without leaning on any framework. Let me show you the gap that makes that hard.</aside>
+</section>
+
+<section>
+  <h2>A great writer is not a reliable agent</h2>
+  <table>
+    <thead>
+      <tr><th>LLM as text generator</th><th>What an agent must do</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Writes plausible code in one shot</td><td><strong>Use tools</strong> against a real filesystem</td></tr>
+      <tr><td>No memory of what it just did</td><td><strong>Track state</strong> across many steps</td></tr>
+      <tr><td>Declares broken work "done"</td><td><strong>Verify</strong> its own output</td></tr>
+      <tr><td>Stalls or loops on an error</td><td><strong>Recover</strong> from failure</td></tr>
+    </tbody>
+  </table>
+  <p style="margin-top: 0.8em;"><strong>Research question:</strong> can a <em>local</em> open-weight model become a <em>reliable</em> coding agent — and what does it take to get there?</p>
+  <p class="fragment"><strong>Why from scratch?</strong> No LangChain, no LangGraph — so I control and understand every piece: the <em>loop</em>, the <em>tools</em>, the <em>sandbox</em>, the <em>memory</em>.</p>
+  <aside class="notes">WHAT TO SAY (≈75s): Here's the core tension. A modern LLM is a fantastic <em>writer</em> — ask it for a function and it'll hand you clean, plausible code instantly. But being a good writer is not the same as being a good <em>agent</em>. Left to run on its own against a real codebase, it falls apart in predictable ways. It hallucinates tool calls — invents functions or arguments that don't exist. It loses track of state, forgetting what it already changed. Worst of all, it'll confidently declare broken work "done" — and when it hits an error, it tends to stall or spin instead of fixing it. So the research question is on the right: can a <em>local</em>, open-weight model — not a giant hosted API — actually become a <em>reliable</em> coding agent, and what engineering does that take? And why build it from scratch? Because the interesting part isn't gluing libraries together — it's understanding and controlling every piece myself: the reasoning loop, the tools, the sandbox, and the memory. If a framework hides it, I can't study it.</aside>
+</section>
+
+<section>
+  <h2>What It Does</h2>
+  <p>Hand it a repo with <strong>failing tests</strong>. It runs the suite, reads the failures, edits the source, and re-runs — <em>until green</em>, then stops.</p>
+  <pre><code class="language-python">$ agent "fix the failing tests in this repo"
+
+→ run_bash("pytest -q")        # FAILED  3/11  (8 failing)
+→ read_file("src/calc.py")     # inspect the bug
+→ apply_patch("src/calc.py")   # off-by-one + None guard
+→ run_bash("pytest -q")        # 11/11 passing
+done — stopped on its own
+</code></pre>
+  <p class="fragment"><strong>Verified end-to-end</strong> — fixed a buggy demo repo to <em>11/11 passing</em>.</p>
+  <aside class="notes">WHAT TO SAY (≈75s): So what does it actually do? I hand the agent a repository where the tests are broken, and give it one English instruction: "fix the failing tests." Watch the loop. First it reaches for a tool — run_bash — and runs pytest. Three of eleven pass; eight failing. Now it reasons: it reads the source to see what's going on. It finds the bug — an off-by-one and a missing None check — and applies a patch directly to the file. Then, crucially, it doesn't assume it's done — it runs pytest AGAIN to check its own work. Eleven of eleven, green. And it stops on its own, because the goal is met. Nobody told it how many steps to take — it decided, by observing the test output, that the job was finished. I ran exactly this and it took a buggy repo all the way to eleven out of eleven. That run-read-patch-verify cycle is the whole game.</aside>
+</section>
+
+<section>
+  <h2>Architecture</h2>
+  <div style="display:flex; align-items:center; justify-content:center; gap:0.9em; margin:0.8em 0 1.1em; font-size:0.82em;">
+    <div style="background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:0.5em 0.85em; text-align:center;">Terminal<br><span style="color:var(--fg-dim); font-size:0.72em;">you</span></div>
+    <div style="color:var(--accent); font-size:1.4em;">&rarr;</div>
+    <div style="background:var(--bg3); border:1.5px solid var(--accent); border-radius:10px; padding:0.5em 0.95em; text-align:center;"><strong>Agent</strong><br><span style="color:var(--fg-dim); font-size:0.72em;">ReAct loop</span></div>
+    <div style="color:var(--cyan); font-size:1.5em;">&#8644;</div>
+    <div style="display:flex; flex-direction:column; gap:0.6em;">
+      <div style="background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:0.45em 0.85em; text-align:center;">vLLM &middot; Qwen3&#8209;14B<br><span style="color:var(--fg-dim); font-size:0.72em;">stateless API · 32K</span></div>
+      <div style="background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:0.45em 0.85em; text-align:center;">Tools<br><span style="color:var(--fg-dim); font-size:0.72em;">sandboxed workspace</span></div>
+    </div>
+  </div>
+  <ul>
+    <li>The model is just a <strong>stateless, OpenAI-compatible API</strong> — no memory of its own.</li>
+    <li>The <em>loop</em> drives everything: think → call a tool → feed the result back.</li>
+    <li>Every tool runs inside a <strong>sandboxed workspace</strong> — file ops can't escape it.</li>
+  </ul>
+  <aside class="notes">WHAT TO SAY (≈60s): Here's the whole system on one slide — under six boxes. On the left, I talk to it from a terminal. That goes to the Agent, which is the ReAct loop — the part I actually wrote. The Agent talks to a vLLM server running Qwen3-14B locally with a 32K context window, over an OpenAI-compatible API. The key thing about that two-way arrow: the server is completely stateless — it remembers nothing between calls. So all the memory lives in the loop, not the model. The Agent also calls the Tools, and those results flow right back in as the next observation. And the tools sit inside a sandboxed workspace — reads and writes are confined there. So: the loop is the brain, the model is a stateless oracle it queries, and the tools are its hands — safely boxed in.</aside>
+</section>
+
+<section>
+  <h2>The ReAct Loop — the heart</h2>
+  <h3>reason &rarr; act &rarr; observe &rarr; repeat</h3>
+  <pre><code class="language-python">for _ in range(max_iters):           # safety net
+    resp = model.chat(messages, tools=schemas)
+    msg = resp.choices[0].message
+    messages.append(msg)             # remember what it said
+    if not msg.tool_calls:           # no tool? it's done
+        return msg.content
+    for call in msg.tool_calls:      # act + observe
+        result = run_tool(call.name, call.args)
+        messages.append({"role": "tool",
+                         "tool_call_id": call.id,
+                         "content": result})</code></pre>
+  <ul>
+    <li>The <em>messages</em> list <strong>IS the memory</strong> — the API is stateless, so we re-send the whole conversation every turn.</li>
+  </ul>
+  <aside class="notes">WHAT TO SAY (≈90s): This is the engine of the whole agent — four steps in a loop: reason, act, observe, repeat. We hand the model the conversation so far plus the JSON schemas for our tools. It reasons, and one of two things happens. If it returns plain content with no tool calls, it's finished — we hand that back. Otherwise it returns one or more tool_calls; we execute each, and append the output back into the conversation as a message with role "tool". Then we loop. The most important idea here: the model is <em>stateless</em> — the API remembers nothing between calls. So <em>this messages list is the memory.</em> Every turn we re-send the entire growing conversation; that's how it "remembers" what it read and did. Each result carries a tool_call_id — the pairing that tells the model which call this answer belongs to, since it may fire several at once. And the for-loop has a hard max-iters cap, so a confused agent can never spin forever.</aside>
+</section>
+
+<section>
+  <h2>The 10 Tools</h2>
+  <table>
+    <thead>
+      <tr><th>Category</th><th>Tools</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><em>File I/O</em></td><td><code>read_file</code> &middot; <code>write_file</code> &middot; <code>apply_patch</code> &middot; <code>multi_edit</code></td></tr>
+      <tr><td><em>Discovery</em></td><td><code>list_dir</code> &middot; <code>glob_files</code> &middot; <code>grep_files</code></td></tr>
+      <tr><td><em>Execution</em></td><td><code>run_bash</code> &middot; <code>run_python</code></td></tr>
+      <tr><td><em>Delegation</em></td><td><code>spawn_subagent</code></td></tr>
+    </tbody>
+  </table>
+  <ul>
+    <li>Tools are an <strong>append-only registry</strong> of functions + JSON schemas — adding a tool <em>never touches the loop</em>.</li>
+  </ul>
+  <aside class="notes">WHAT TO SAY (≈60s): Ten tools, and I won't read them all — the grouping is the point. Four families: <em>File I/O</em> to read and edit code; <em>Discovery</em> to find your way around a repo; <em>Execution</em> to actually run things — bash and Python; and <em>Delegation</em>, where the agent can spawn a sub-agent for a focused subtask. The design idea that makes this clean: each tool is just a function plus a JSON schema, dropped into an append-only registry. The loop you just saw is completely generic — it only knows "call a tool by name." So adding an eleventh tool is a one-line registration; I never reopen the loop.</aside>
+</section>
+
+<section>
+  <h2>What Makes It an <em>Agent</em>, Not a Chatbot</h2>
+  <h3>Reliability engineering — the interesting part</h3>
+  <ul>
+    <li class="fragment"><strong>Sandbox</strong> — <code>_safe_path()</code> confines every file op to one workspace (CWE-22 path-traversal defense).</li>
+    <li class="fragment"><strong>Verifies its own work</strong> — runs <em>pytest</em>, reads the failures, patches, re-runs until green (tests as a feedback signal).</li>
+    <li class="fragment"><strong>Survives long tasks</strong> — context <em>compaction</em> summarizes old history past ~24k tokens, keeps the recent 10 (fits the 32K window).</li>
+    <li class="fragment"><strong>Recovers, doesn't crash</strong> — tools return <code>"ERROR: ..."</code> strings, never raise — so a bad call becomes feedback the model can fix.</li>
+  </ul>
+  <aside class="notes">WHAT TO SAY (≈90s): This slide is the heart of the project — the difference between a demo and something you can depend on. First, a sandbox: every file path runs through one function, _safe_path, that resolves it and rejects anything escaping the workspace — a real path-traversal defense, so the model can't write to your home directory by accident. Second, the one I care about most: it verifies its own work. It runs pytest, reads the failures, edits the code, and re-runs — the test suite becomes a feedback signal, the same loop a human uses. Third, long tasks blow past the context window, so past about 24k tokens it summarizes old history and keeps the recent ten messages — that's what lets it survive a long session in a 32K window. And fourth: tools never raise an exception that kills the loop. A bad command comes back as an "ERROR" string, which the model reads as more feedback and tries again. Together, these give you autonomy that keeps going — in the right direction.</aside>
+</section>
+
+<section>
+  <h2>Does It Actually Work?</h2>
+  <h3>You can't claim capability from 3 toy tasks</h3>
+  <ul>
+    <li>So we built a <strong>627-task benchmark</strong>: 163 HumanEval+ &nbsp;+&nbsp; 424 MBPP (downloaded &amp; converted) &nbsp;+&nbsp; 37 hand-authored <strong>HARD</strong> tasks.</li>
+    <li><span style="opacity:0.85">HARD = debugging, refactors, multi-file, DP, graphs, OOP, parsing.</span></li>
+    <li class="fragment"><strong>Honest scoring:</strong> the test files are <em>hidden</em> from the agent while it works — it can't read them to hard-code answers — and restored only for grading.</li>
+    <li class="fragment"><strong>Validation gate:</strong> every task is proven real — the reference solution <em>passes</em>, the empty stub <em>fails</em>.</li>
+  </ul>
+  <aside class="notes">WHAT TO SAY (≈90s): Three hand-picked demos prove nothing — so the real question is whether this holds up at scale. We built a 627-task benchmark: 163 from HumanEval+, 424 from MBPP — standard sets we downloaded and converted — plus 37 hard problems I wrote by hand: debugging, refactors, multi-file changes, dynamic programming, graphs, OOP, parsing. But the number only matters if the methodology is honest, so two things. First, the test files are hidden from the agent the entire time it's working — it physically cannot open the tests and hard-code the outputs — and they're only restored at grading time. That's the difference between measuring problem-solving and measuring cheating. Second, a validation gate runs before any task counts: the reference solution must pass and an empty stub must fail. If either is wrong, the task is broken and we throw it out — so every one of those 627 is a real, well-formed problem. That's what makes the next number trustworthy.</aside>
+</section>
+
+<section>
+  <h2>Results: does it actually work?</h2>
+  <p style="text-align:center; font-size:1.5em; margin:0.3em 0;">
+    On the full <strong>627-task</strong> suite: <em>pass-rate</em> <strong>79.9%</strong>
+  </p>
+  <table style="width:52%; margin:0.4em auto;">
+    <thead>
+      <tr><th>Difficulty</th><th>Pass-rate</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Easy</td><td><strong>93%</strong></td></tr>
+      <tr><td>Medium</td><td><strong>83%</strong></td></tr>
+      <tr><td>Hard</td><td><strong>63%</strong></td></tr>
+    </tbody>
+  </table>
+  <p style="text-align:center; font-size:0.8em; opacity:.7; margin:0;">
+    easy &raquo; medium &raquo; hard — degrades <em>gracefully</em> (a real benchmark, not luck)
+  </p>
+  <p class="fragment" style="margin-top:0.5em;">
+    <strong>The key insight (from the eval traces):</strong> the dominant failure wasn't
+    <em>bad code</em> — the model sometimes <strong>replied in prose instead of calling a tool</strong>.
+    When it actually engages a tool, it's <strong>~92% correct</strong>.
+  </p>
+  <p class="fragment" style="margin-top:0.2em;">
+    A <em>guardrail</em> (nudge it to <strong>act</strong>) recovered most of those.
+    The gains came from fixing a <strong>tool-use</strong> failure — not raw model ability.
+  </p>
+  <aside class="notes">WHAT TO SAY (≈90s): Here's the payoff. On the full 627-task suite the agent passes about 80 percent — 501 of 627 — and remember, the tests are hidden while it works, so it can't cheat. But the single number isn't the interesting part; the shape is. Easy beats medium beats hard, a clean gradient. That graceful degradation is exactly what a real benchmark looks like — if it were luck or memorization, the curve would be flat or noisy. Now the research story. Early runs were worse, and I went into the eval traces to find out why. I expected buggy code. Instead, the dominant failure was the model just talking — replying in prose, explaining what it would do, never actually calling a tool. When I filtered to runs where it genuinely engaged a tool, it was about 92 percent correct. So the model was capable; it was just sometimes failing to act. I added one guardrail: if it answers without a tool call, nudge it to act — otherwise mark it no-action. That recovered most of the lost tasks. The headline: the gains came from diagnosing a tool-use failure in the traces, not from a better model.</aside>
+</section>
+
+<section>
+  <h2>Honest limitations &amp; what I learned</h2>
+  <ul>
+    <li>No true <strong>tool parallelism</strong> — tools run one at a time per loop.</li>
+    <li>A <strong>single workspace</strong> — no isolation across concurrent tasks.</li>
+    <li><strong>Toy-to-moderate</strong> task scale — not SOTA SWE-bench-level difficulty.</li>
+    <li>Open-weight model is <strong>stochastic</strong> — same prompt, different runs.</li>
+  </ul>
+  <h3 style="margin-top:0.6em;">What I learned</h3>
+  <ul>
+    <li>Reliability is mostly <em>engineering around</em> an already-capable model.</li>
+    <li>Building from scratch made the <em>failure modes</em> concrete — I could see them, not guess.</li>
+  </ul>
+  <aside class="notes">WHAT TO SAY (≈60s): I want to be straight about the limits. There's no real tool parallelism — tools execute one at a time. There's a single shared workspace, so I'm not isolating concurrent tasks. The task scale is toy-to-moderate — not SWE-bench-scale repository surgery. And because it's an open-weight model with sampling, it's stochastic: the same task can pass one run and fail the next. Two takeaways. First, reliability turned out to be mostly engineering — the sandbox, the verify-loop, the error contract, the guardrail — built around a model that was already capable. Second, doing this from scratch is what made the failure modes concrete. I could read them in the traces, which is the whole reason I found the tool-use bug.</aside>
+</section>
+
+<section class="title-slide">
+  <h1>From text generator to reliable agent</h1>
+  <p style="font-size:1.1em; margin-top:0.4em;">
+    An LLM that <strong>uses tools</strong>, <strong>manages state</strong>,
+    <strong>verifies its own work</strong>, and <strong>recovers from failure</strong>.
+  </p>
+  <p style="margin-top:0.8em; opacity:.85;">
+    Next: harder multi-file tasks &amp; true parallelism.
+  </p>
+  <p style="margin-top:1em; font-size:1.05em;">
+    <em>github.com/VincentTLe/coding-agent</em>
+  </p>
+  <p style="margin-top:1em; font-size:1.3em;"><strong>Thank you — Questions?</strong></p>
+  <aside class="notes">WHAT TO SAY (≈30s): So that's the thesis, start to finish: taking an LLM and turning it into a reliable agent — one that uses tools, manages its own state, verifies its work, and recovers when things go wrong. The natural next step is harder multi-file tasks and real tool parallelism. The full code is on GitHub at the link here. Thank you — I'd love to take your questions.</aside>
+</section>
+
+</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/highlight/highlight.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/notes/notes.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: 'dark',
+    themeVariables: {
+      background: '#0f1117', primaryColor: '#1f2330', primaryTextColor: '#e7ecef',
+      primaryBorderColor: '#7bdcb5', lineColor: '#7bdcb5',
+      secondaryColor: '#161922', secondaryTextColor: '#e7ecef', secondaryBorderColor: '#7bf0ff',
+      tertiaryColor: '#1f2330', tertiaryTextColor: '#e7ecef', tertiaryBorderColor: '#ff8aff',
+      mainBkg: '#1f2330', nodeBorder: '#7bdcb5', nodeTextColor: '#e7ecef',
+      clusterBkg: '#161922', clusterBorder: '#2a2f3d',
+      titleColor: '#7bdcb5', edgeLabelBackground: '#0f1117',
+      actorBkg: '#1f2330', actorBorder: '#7bdcb5', actorTextColor: '#e7ecef',
+      signalColor: '#e7ecef', signalTextColor: '#e7ecef',
+      labelBoxBkgColor: '#161922', labelBoxBorderColor: '#7bdcb5', labelTextColor: '#7bdcb5',
+      noteBkgColor: '#161922', noteTextColor: '#ffd966', noteBorderColor: '#ffd966',
+      fontFamily: 'Inter, -apple-system, "Segoe UI", sans-serif', fontSize: '15px',
+    },
+    flowchart: { curve: 'basis', htmlLabels: true, padding: 14, nodeSpacing: 55, rankSpacing: 70 },
+    sequence: { actorMargin: 50, useMaxWidth: true },
+  });
+
+  Reveal.initialize({
+    hash: true, controls: true, progress: true, slideNumber: 'c/t',
+    history: false, keyboard: true, overview: true, center: true, touch: true,
+    transition: 'slide', backgroundTransition: 'fade',
+    plugins: [RevealHighlight, RevealNotes],
+    width: 1280, height: 800, margin: 0.04, minScale: 0.2, maxScale: 2.0,
+  });
+
+  // Render mermaid ONLY after web fonts are ready — otherwise mermaid measures node
+  // widths with a fallback font and the real (wider) font overflows → labels get clipped.
+  function renderMermaid(root) {
+    if (!root) return;
+    const nodes = root.querySelectorAll('.mermaid:not([data-processed="true"])');
+    if (!nodes.length) return;
+    const go = () => { try { mermaid.run({ nodes: Array.from(nodes) }); } catch (e) { console.warn('Mermaid:', e); } };
+    (document.fonts && document.fonts.ready) ? document.fonts.ready.then(go) : go();
+  }
+  // Render only the VISIBLE slide's diagram. mermaid (htmlLabels) must measure label
+  // text in a displayed element — rendering a hidden slide's diagram sizes boxes wrong
+  // (text gets clipped). Each diagram renders when its slide first becomes visible.
+  Reveal.on('ready', () => renderMermaid(Reveal.getCurrentSlide()));
+  Reveal.on('slidechanged', e => renderMermaid(e.currentSlide));
+</script>
+</body>
+</html>

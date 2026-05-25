@@ -1,0 +1,3 @@
+def merge(lst):
+    """See task.md for the spec."""
+    raise NotImplementedError

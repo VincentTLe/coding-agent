@@ -1,0 +1,20 @@
+# mbpp_439 — multiple_to_single
+
+## Goal
+Write a function to join a list of multiple integers into a single integer.
+
+Implement `multiple_to_single` in `multiple_to_single.py` so the tests pass. Example checks:
+assert multiple_to_single([11, 33, 50])==113350
+assert multiple_to_single([-1,2,3,4,5,6])==-123456
+
+## Category
+strings
+
+## Difficulty
+easy
+
+## Tests
+hidden
+
+## Source/License
+MBPP sanitized task 439. MBPP: CC-BY-4.0.

@@ -1,0 +1,7 @@
+from count_Substrings import *
+
+
+def test_mbpp():
+    assert count_Substrings('112112') == 6
+    assert count_Substrings('111') == 6
+    assert count_Substrings('1101112') == 12

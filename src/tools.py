@@ -34,38 +34,31 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
-# WORKSPACE = "sandbox dir" — giới hạn nơi agent được phép đọc/ghi.
-# Mặc định là cwd, nhưng sẽ được set_workspace() override trước khi run_agent().
-# Lý do dùng `global`: tools.py không nhận workspace như param mỗi lần gọi —
-# nó là state toàn cục để mỗi tool function tự dùng được.
-WORKSPACE = Path.cwd()
+# workspace = "sandbox dir" — giới hạn nơi agent được phép đọc/ghi.
+# KHÔNG còn là global nữa: mỗi tool function nhận `workspace: Path` như tham số
+# keyword-only, và execute_tool() inject nó vào mỗi call. Lý do bỏ global:
+# state toàn cục khiến import có side-effect + không an toàn khi nhiều agent
+# (vd subagent) chạy với workspace khác nhau trong cùng process.
 
 
-def set_workspace(path: str | Path) -> None:
-    """Pin file operations to a directory. Call this once before run_agent()."""
-    global WORKSPACE
-    # `.resolve()` = chuyển path tương đối → tuyệt đối + giải symlink.
-    # Bắt buộc cho việc check sandbox bên dưới.
-    WORKSPACE = Path(path).resolve()
-    log.info(f"[tools] workspace = {WORKSPACE}")
-
-
-def _safe_path(path: str) -> Path:
-    """Resolve path relative to WORKSPACE and refuse to escape it.
+def _safe_path(path: str, workspace: Path) -> Path:
+    """Resolve path relative to `workspace` and refuse to escape it.
 
     Prevents the model from poking around /etc, ~/.ssh, etc.
     Cảnh báo: tên hàm bắt đầu bằng `_` là quy ước Python = "private", chỉ dùng
     nội bộ file này, không nên gọi từ ngoài.
+    `workspace` được truyền vào (positional) thay cho global cũ — caller (mỗi
+    tool function) đã có sẵn workspace từ keyword arg của nó.
     """
-    # Ghép WORKSPACE + path → resolve → đường dẫn tuyệt đối.
-    p = (WORKSPACE / path).resolve()
+    # Ghép workspace + path → resolve → đường dẫn tuyệt đối.
+    p = (workspace / path).resolve()
 
-    # Kiểm tra path có nằm trong WORKSPACE không. `p.parents` là list các thư
-    # mục cha của p (vd: /a/b/c.txt → /a/b, /a, /). Nếu WORKSPACE KHÔNG nằm
+    # Kiểm tra path có nằm trong workspace không. `p.parents` là list các thư
+    # mục cha của p (vd: /a/b/c.txt → /a/b, /a, /). Nếu workspace KHÔNG nằm
     # trong list cha → p đang ở ngoài sandbox → reject.
-    # `p != WORKSPACE` để cho phép case `path = "."` (chính workspace).
-    if WORKSPACE not in p.parents and p != WORKSPACE:
-        raise ValueError(f"path {p} escapes workspace {WORKSPACE}")
+    # `p != workspace` để cho phép case `path = "."` (chính workspace).
+    if workspace not in p.parents and p != workspace:
+        raise ValueError(f"path {p} escapes workspace {workspace}")
     return p
 
 
@@ -73,10 +66,10 @@ def _safe_path(path: str) -> Path:
 # Tool implementations — các hàm Python thật sự chạy khi model gọi tool
 # ---------------------------------------------------------------------------
 
-def read_file(path: str) -> str:
+def read_file(path: str, *, workspace: Path) -> str:
     """Return the full contents of a text file inside the workspace."""
-    # Resolve path qua _safe_path để chắc chắn nằm trong WORKSPACE.
-    p = _safe_path(path)
+    # Resolve path qua _safe_path để chắc chắn nằm trong workspace.
+    p = _safe_path(path, workspace)
 
     # Kiểm tra file tồn tại — nếu không, trả về error string (model sẽ thấy).
     # KHÔNG raise exception → vì exception sẽ bubble lên agent.py và crash agent.
@@ -90,13 +83,13 @@ def read_file(path: str) -> str:
     return text
 
 
-def write_file(path: str, content: str) -> str:
+def write_file(path: str, content: str, *, workspace: Path) -> str:
     """Overwrite (or create) a text file inside the workspace.
 
     The agent MUST send the full new content — there is no patch/diff format
     in this version. Keep files small for the demo.
     """
-    p = _safe_path(path)
+    p = _safe_path(path, workspace)
 
     # `mkdir(parents=True, exist_ok=True)` = tạo parent dirs nếu chưa có,
     # không crash nếu đã tồn tại. Cho phép agent tạo file ở subdir mới.
@@ -110,7 +103,7 @@ def write_file(path: str, content: str) -> str:
     return f"wrote {len(content)} chars to {path}"
 
 
-def run_bash(command: str, timeout: int = 600) -> str:
+def run_bash(command: str, timeout: int = 600, *, workspace: Path) -> str:
     """Run a shell command inside the workspace, capturing stdout+stderr.
 
     Default timeout 600s (10 phút) — đủ cho pytest, pip install, build nhỏ.
@@ -120,7 +113,7 @@ def run_bash(command: str, timeout: int = 600) -> str:
     try:
         # subprocess.run = chạy command đồng bộ, đợi xong mới return.
         # shell=True → command là chuỗi 1 dòng (cho phép pipe, redirect, etc.)
-        # cwd=WORKSPACE → CWD của subprocess = workspace, nên `ls` ra files
+        # cwd=workspace → CWD của subprocess = workspace, nên `ls` ra files
         # trong demo_repo, không phải project root.
         # capture_output=True → stdout/stderr không in ra terminal, lưu vào result.
         # text=True → stdout/stderr là string thay vì bytes.
@@ -129,7 +122,7 @@ def run_bash(command: str, timeout: int = 600) -> str:
         result = subprocess.run(
             command,
             shell=True,
-            cwd=WORKSPACE,
+            cwd=workspace,
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -151,7 +144,7 @@ def run_bash(command: str, timeout: int = 600) -> str:
 # Phase 2 tools — surgical edits, search, sub-agent, exec
 # ---------------------------------------------------------------------------
 
-def apply_patch(path: str, old_text: str, new_text: str) -> str:
+def apply_patch(path: str, old_text: str, new_text: str, *, workspace: Path) -> str:
     """Surgical search-and-replace edit. `old_text` PHẢI xuất hiện CHÍNH XÁC 1 LẦN.
 
     DESIGN RATIONALE:
@@ -174,9 +167,9 @@ def apply_patch(path: str, old_text: str, new_text: str) -> str:
       File KHÔNG bị sửa nếu có bất kỳ lỗi nào (atomic by virtue of count check
       đứng trước write_text).
     """
-    # Sandbox check — raise ValueError nếu path escape WORKSPACE.
+    # Sandbox check — raise ValueError nếu path escape workspace.
     # Exception sẽ bubble lên execute_tool() và convert thành string "ERROR: ...".
-    p = _safe_path(path)
+    p = _safe_path(path, workspace)
 
     # Guard: file phải tồn tại trước khi đọc. Không cho phép apply_patch tạo
     # file mới — đó là việc của write_file. Phân tách concerns rõ ràng.
@@ -221,7 +214,7 @@ def apply_patch(path: str, old_text: str, new_text: str) -> str:
     return f"patched {path}: replaced {len(old_text)} chars with {len(new_text)} chars"
 
 
-def multi_edit(path: str, edits: list) -> str:
+def multi_edit(path: str, edits: list, *, workspace: Path) -> str:
     """Apply MULTIPLE edits to ONE file atomically (all-or-nothing).
 
     SIGNATURE:
@@ -245,7 +238,7 @@ def multi_edit(path: str, edits: list) -> str:
       return error TRƯỚC KHI write — file gốc trên đĩa không bị động.
     """
     # Sandbox check — same pattern as apply_patch.
-    p = _safe_path(path)
+    p = _safe_path(path, workspace)
     if not p.exists():
         return f"ERROR: file not found: {path}"
 
@@ -299,7 +292,7 @@ def multi_edit(path: str, edits: list) -> str:
     return f"applied {len(edits)} edits to {path} ({original_len} → {len(content)} chars)"
 
 
-def grep_files(pattern: str, path: str = ".", file_glob: str = "") -> str:
+def grep_files(pattern: str, path: str = ".", file_glob: str = "", *, workspace: Path) -> str:
     """Regex search trong workspace. Output capped tại 50 dòng match.
 
     PARAMS:
@@ -324,8 +317,8 @@ def grep_files(pattern: str, path: str = ".", file_glob: str = "") -> str:
       Mỗi line: `relative/path:line_number:matched_line`
       Truncated ở 50 lines + suffix "[truncated, N more]" để giữ context budget.
     """
-    # Sandbox: path phải nằm trong WORKSPACE.
-    p = _safe_path(path)
+    # Sandbox: path phải nằm trong workspace.
+    p = _safe_path(path, workspace)
     if not p.exists():
         return f"ERROR: path not found: {path}"
 
@@ -342,12 +335,12 @@ def grep_files(pattern: str, path: str = ".", file_glob: str = "") -> str:
     if file_glob:
         cmd.extend(["--include", file_glob])
 
-    # Search target = path RELATIVE to WORKSPACE, và chạy grep với cwd=WORKSPACE.
+    # Search target = path RELATIVE to workspace, và chạy grep với cwd=workspace.
     # Lý do: nếu pass absolute str(p), grep in ra absolute path trong mỗi dòng
     # match (vd `/home/.../ws/a.py:1:...`) — vừa noisy vừa SAI so với docstring
     # (hứa relative path) vừa khó cho model tái sử dụng path. Dùng relative
     # target → output là `a.py:1:...` / `sub/b.py:1:...` đúng như tài liệu.
-    rel = p.relative_to(WORKSPACE)
+    rel = p.relative_to(workspace)
     target = str(rel) if str(rel) != "." else "."
 
     # `--` separator — đảm bảo pattern không bị parse là option flag nếu
@@ -357,9 +350,9 @@ def grep_files(pattern: str, path: str = ".", file_glob: str = "") -> str:
 
     # Subprocess execution với timeout = 30s. Grep với regex evil có thể
     # ReDoS (catastrophic backtracking) nhưng 30s đủ để fail-safe.
-    # cwd=WORKSPACE để grep emit path relative to workspace (xem comment trên).
+    # cwd=workspace để grep emit path relative to workspace (xem comment trên).
     try:
-        result = subprocess.run(cmd, cwd=WORKSPACE, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(cmd, cwd=workspace, capture_output=True, text=True, timeout=30)
     except subprocess.TimeoutExpired:
         return "ERROR: grep timed out after 30s"
 
@@ -387,7 +380,7 @@ def grep_files(pattern: str, path: str = ".", file_glob: str = "") -> str:
     return "\n".join(lines) if lines else "no matches"
 
 
-def glob_files(pattern: str, path: str = ".") -> str:
+def glob_files(pattern: str, path: str = ".", *, workspace: Path) -> str:
     """List files matching shell-glob pattern. Use ** for recursive.
 
     EXAMPLES:
@@ -410,10 +403,10 @@ def glob_files(pattern: str, path: str = ".") -> str:
       Lưu ý: glob KHÔNG match file ẩn (bắt đầu bằng `.`) trừ khi pattern
       explicit có `.` đầu.
 
-    OUTPUT: relative path đến WORKSPACE, 1/line, truncated tại 50.
+    OUTPUT: relative path đến workspace, 1/line, truncated tại 50.
     """
     # Sandbox check — `path` là điểm bắt đầu glob, không phải pattern.
-    p = _safe_path(path)
+    p = _safe_path(path, workspace)
     if not p.exists():
         return f"ERROR: path not found: {path}"
 
@@ -433,17 +426,17 @@ def glob_files(pattern: str, path: str = ".") -> str:
     if not matches:
         return f"no files match {pattern} in {path}"
 
-    # Convert sang relative-to-WORKSPACE path — gọn hơn absolute path
+    # Convert sang relative-to-workspace path — gọn hơn absolute path
     # (vd "src/agent.py" thay vì "/home/tle/.../coding-agent/src/agent.py").
-    # Nếu vì lý do nào đó match nằm ngoài WORKSPACE (không nên xảy ra vì
+    # Nếu vì lý do nào đó match nằm ngoài workspace (không nên xảy ra vì
     # _safe_path đã check), fallback dùng str(m) absolute.
     rel = []
     for m in matches:
         try:
-            rel.append(str(m.relative_to(WORKSPACE)))
+            rel.append(str(m.relative_to(workspace)))
         except ValueError:
             # relative_to raises ValueError nếu m không phải descendant của
-            # WORKSPACE. Defensive — không nên trigger trong practice.
+            # workspace. Defensive — không nên trigger trong practice.
             rel.append(str(m))
 
     # Same truncation policy as grep_files: 50 là sweet spot cho token budget.
@@ -452,7 +445,7 @@ def glob_files(pattern: str, path: str = ".") -> str:
     return "\n".join(rel)
 
 
-def list_dir(path: str = ".") -> str:
+def list_dir(path: str = ".", *, workspace: Path) -> str:
     """Liệt kê nội dung thư mục — sạch hơn run_bash('ls -la').
 
     OUTPUT FORMAT:
@@ -478,7 +471,7 @@ def list_dir(path: str = ".") -> str:
       files. Trong mỗi nhóm, alphabetical sort.
     """
     # Sandbox check.
-    p = _safe_path(path)
+    p = _safe_path(path, workspace)
     if not p.exists():
         return f"ERROR: path not found: {path}"
 
@@ -526,7 +519,7 @@ def list_dir(path: str = ".") -> str:
     return f"{path}/\n" + "\n".join(items)
 
 
-def run_python(code: str, timeout: int = 60) -> str:
+def run_python(code: str, timeout: int = 60, *, workspace: Path) -> str:
     """Eval Python snippet trong sandbox. Capture stdout+stderr+exit_code.
 
     USE CASES:
@@ -566,7 +559,7 @@ def run_python(code: str, timeout: int = 60) -> str:
         # không qua shell parsing → no command injection risk.
         result = subprocess.run(
             [sys.executable, "-c", code],
-            cwd=WORKSPACE,           # CWD = sandbox dir, không phải project root
+            cwd=workspace,           # CWD = sandbox dir, không phải project root
             capture_output=True,     # stdout/stderr → result object (không in ra terminal)
             text=True,               # decode bytes → str (utf-8 default)
             timeout=timeout,         # giết process sau N giây nếu chưa xong
@@ -587,7 +580,7 @@ def run_python(code: str, timeout: int = 60) -> str:
     return "\n".join(parts)
 
 
-def spawn_subagent(goal: str, max_iters: int = 8) -> str:
+def spawn_subagent(goal: str, max_iters: int = 8, *, workspace: Path) -> str:
     """Spawn child agent process để xử lý 1 subtask độc lập.
 
     USE CASES (chia để trị):
@@ -622,11 +615,11 @@ def spawn_subagent(goal: str, max_iters: int = 8) -> str:
     # ─────────────────────────────────────────────────────────────────
     # STEP 1: Locate project root.
     # Subagent invoked as `python -m src.agent <goal>` — cần cwd có
-    # thư mục `src/` chứa `agent.py`. WORKSPACE thường là `demo_repo/`
+    # thư mục `src/` chứa `agent.py`. `workspace` thường là `demo_repo/`
     # (descendant của project root), nên phải walk lên tới khi tìm.
     # ─────────────────────────────────────────────────────────────────
     project_root = None
-    cur = WORKSPACE
+    cur = workspace
 
     # Safeguard: max 10 levels up. Tránh infinite loop nếu filesystem bị
     # corrupt hoặc symlink loop. Realistic depth ≤ 5.
@@ -649,15 +642,14 @@ def spawn_subagent(goal: str, max_iters: int = 8) -> str:
 
     # ─────────────────────────────────────────────────────────────────
     # STEP 2: Run subprocess.
-    # `python -m src.agent <goal>` → invoke agent.py __main__ block.
-    # __main__ sẽ tự set_workspace(demo_repo) — child agent KHÔNG inherit
-    # parent's WORKSPACE (hardcoded behavior trong agent.py).
-    # Note: nếu cần subagent work trong workspace khác, cần modify agent.py
-    # hoặc thêm --workspace flag.
+    # `python -m src.agent <goal> --workspace <workspace>` → invoke agent.py
+    # __main__ block với CÙNG workspace như parent. Trước đây child luôn
+    # dùng demo_repo (hardcoded) — đó là bug lâu năm. Giờ ta pass
+    # `--workspace str(workspace)` để child sandbox đúng chỗ parent đang làm.
     # ─────────────────────────────────────────────────────────────────
     try:
         result = subprocess.run(
-            [sys.executable, "-m", "src.agent", goal],
+            [sys.executable, "-m", "src.agent", goal, "--workspace", str(workspace)],
             cwd=project_root,        # cwd phải là project root để Python tìm thấy package `src`
             capture_output=True,     # bắt stdout+stderr (subagent verbose log)
             text=True,
@@ -883,12 +875,22 @@ TOOL_SCHEMAS = [
     },
 ]
 
+# Lưu ý: `workspace` CỐ TÌNH không có trong TOOL_SCHEMAS — model không bao giờ
+# truyền nó. execute_tool() tự inject `workspace=...` vào mỗi call.
 
-def execute_tool(name: str, arguments_json: str) -> str:
+# Import-time invariant: tên trong TOOLS phải khớp CHÍNH XÁC tên trong
+# TOOL_SCHEMAS. Nếu lệch (vd thêm tool vào dict mà quên schema, hoặc đổi tên
+# 1 bên), fail NGAY lúc import thay vì lỗi mơ hồ lúc runtime.
+assert set(TOOLS) == {s["function"]["name"] for s in TOOL_SCHEMAS}, "TOOLS vs TOOL_SCHEMAS drift"
+
+
+def execute_tool(name: str, arguments: str, workspace: Path) -> str:
     """Dispatch a tool call by name with a JSON string of arguments.
 
     The model gives us `arguments` as a string of JSON (never a dict). We parse,
     look up the function, call it, and stringify the result for the model.
+    `workspace` is injected by the caller (run_agent) — the model never sends it;
+    we append it as a keyword arg to every tool call.
     """
     # 1. Validate tool name. Nếu model gọi tool không tồn tại, trả error string.
     if name not in TOOLS:
@@ -897,16 +899,18 @@ def execute_tool(name: str, arguments_json: str) -> str:
     # 2. Parse arguments JSON. Nếu rỗng → dict rỗng (cho tools không args).
     # Nếu malformed JSON → trả error string cho model thấy (model có thể sửa).
     try:
-        args = json.loads(arguments_json) if arguments_json else {}
+        args = json.loads(arguments) if arguments else {}
     except json.JSONDecodeError as e:
         return f"ERROR: bad JSON arguments: {e}"
 
-    # 3. Gọi function với args (`**args` = unpack dict thành keyword args).
+    # 3. Gọi function với args (`**args` = unpack dict thành keyword args),
+    # cộng thêm `workspace=workspace` (keyword-only) mà ta inject — model không
+    # gửi workspace, nó là state của caller.
     # Try/except để bắt mọi exception, convert thành error string.
     # Tại sao? Vì exception trong tool sẽ crash agent.py loop. Mình muốn agent
     # được "thấy" error qua tool result và tự sửa, không crash.
     try:
-        result = TOOLS[name](**args)
+        result = TOOLS[name](**args, workspace=workspace)
     except TypeError as e:
         # TypeError thường = sai args (vd thiếu required, hoặc type không đúng).
         return f"ERROR: bad args for {name}: {e}"

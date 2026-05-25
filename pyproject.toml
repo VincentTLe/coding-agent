@@ -1,7 +1,7 @@
 [project]
 name = "coding-agent"
 version = "0.1.0"
-description = "A from-scratch coding agent built on locally-served Qwen 3.6-27B via vLLM. No frameworks."
+description = "A from-scratch coding agent built on a locally-served Qwen3-14B via vLLM. No frameworks."
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [
@@ -11,13 +11,13 @@ license = { text = "MIT" }
 dependencies = [
     "openai>=1.0",
     "python-dotenv>=1.0",
-    "httpx>=0.27",
 ]
 
 [project.optional-dependencies]
-dev = [
-    "ruff>=0.6",
-    "pytest>=8.0",
+# Extra deps only the eval harness/converter needs (eval/convert_benchmark.py).
+eval = [
+    "requests>=2.0",
+    "huggingface_hub>=0.20",
 ]
 
 [tool.ruff]
@@ -27,7 +27,13 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP"]
 
+# NOTE: deliberately NO [tool.pytest.ini_options] here. The eval harness runs
+# pytest with cwd=<task dir> and no path args; a repo-level pytest config would
+# become the rootdir and hijack collection (running tests/ + demo_repo/ instead
+# of the task's own tests). Run the unit suite explicitly with `pytest tests/`.
+
 [dependency-groups]
 dev = [
+    "ruff>=0.6",
     "pytest>=9.0.3",
 ]

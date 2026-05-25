@@ -1,0 +1,7 @@
+from number_of_substrings import *
+
+
+def test_mbpp():
+    assert number_of_substrings("abc") == 6
+    assert number_of_substrings("abcd") == 10
+    assert number_of_substrings("abcde") == 15

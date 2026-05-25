@@ -1,0 +1,3 @@
+def check_occurences(test_list):
+    """See task.md for the spec."""
+    raise NotImplementedError

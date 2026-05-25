@@ -1,25 +1,25 @@
 """
 01_chat.py — Stateless multi-turn chat against any OpenAI-compatible LLM.
 
+LESSON 1 of the ladder — plain streaming chat, NO tools.
+  Read this top-to-bottom. It is the foundation every later lesson
+  builds on: 02 adds ONE tool, 03 adds the ReAct loop, 04 adds the
+  safety layer. Start here.
+
 KEY CONCEPT (re-read this any time you get lost)
   The server is STATELESS. It does not remember any earlier turn.
   This client keeps a Python list called `messages` and resends the
   WHOLE list every API call. That list IS the memory.
 
-YOUR JOB
-  Replace every `# TODO ...` line with real code. The comments above
-  each section explain the syntax + concepts you'll need. Try to
-  reason from the hints first; only ask Claude/web when stuck.
-
-WHEN DONE
+TRY IT
   $ python examples/01_chat.py
   Tell the bot your name. Then ask "what is my name?".
-  If it answers correctly, your messages-list-as-memory is working.
+  If it answers correctly, the messages-list-as-memory is working.
 
-HOW TO PROGRESS
-  Fill sections 1 -> 8 in order. After each section, save the file
-  and run it. Sections 1-5 are setup (won't run anything visible);
-  the file only "does something" once section 7 (main) is filled.
+ROAD MAP OF THIS FILE
+  Sections 1 -> 8 in order. Sections 1-5 are setup (config + client +
+  the messages list). Section 6 is the one round-trip to the server.
+  Section 7 is the interactive loop; section 8 is the entry-point guard.
 
 SWAPPING MODELS (no code changes needed)
   This file reads server URL + model name from `.env`. To switch backends,
@@ -54,11 +54,11 @@ SWAPPING MODELS (no code changes needed)
 #   b) `load_dotenv` from the `dotenv` library (loads .env into os.environ)
 #   c) the `OpenAI` class from the `openai` library
 
-# TODO 1.a:
+#   a) the stdlib module that gives access to os.environ
 import os
-# TODO 1.b:
+#   b) load_dotenv, which copies .env into os.environ
 from dotenv import load_dotenv
-# TODO 1.c:
+#   c) the OpenAI client class
 from openai import OpenAI
 from openai.types.chat import ChatCompletionMessageParam
 
@@ -70,8 +70,7 @@ from openai.types.chat import ChatCompletionMessageParam
 # os.environ. After this call, os.environ["VLLM_BASE_URL"] works.
 # Call it with NO arguments — it auto-detects ./.env in the cwd.
 
-# TODO 2.a:
-load_dotenv() 
+load_dotenv()
 
 
 # ===================================================================
@@ -88,12 +87,9 @@ load_dotenv()
 #
 # Style: module-level constants are ALL_CAPS_WITH_UNDERSCORES.
 
-# TODO 3.a: BASE_URL = ...           (treat as required)
-BASE_URL = os.environ["VLLM_BASE_URL"]
-# TODO 3.b: MODEL    = ...           (treat as required)
-MODEL = os.environ["VLLM_MODEL_NAME"]
-# TODO 3.c: API_KEY  = ...           (optional, default to "not-needed")
-API_KEY = os.environ.get("VLLM_API_KEY", "not-needed")
+BASE_URL = os.environ["VLLM_BASE_URL"]          # required
+MODEL = os.environ["VLLM_MODEL_NAME"]           # required
+API_KEY = os.environ.get("VLLM_API_KEY", "not-needed")  # optional
 
 # ===================================================================
 # SECTION 4 — CREATE THE OPENAI CLIENT
@@ -105,10 +101,9 @@ API_KEY = os.environ.get("VLLM_API_KEY", "not-needed")
 #     base_url=  the server's URL
 #     api_key=   the auth token
 
-# TODO 4.a: client = ...
 client = OpenAI(
     base_url=BASE_URL,
-    api_key=API_KEY
+    api_key=API_KEY,
 )
 
 # ===================================================================
@@ -123,13 +118,12 @@ client = OpenAI(
 # Optional type hint (good documentation):
 #     messages: list[dict] = [...]
 
-# TODO 5.a:
 messages: list[ChatCompletionMessageParam] = [
     {
         "role": "system",
-        "content": "You are a helpful assistant. Keep the answer concise."
+        "content": "You are a helpful assistant. Keep the answer concise.",
     }
-]       
+]
 
 # ===================================================================
 # SECTION 6 — chat_once: ONE ROUND-TRIP TO THE SERVER
@@ -180,7 +174,6 @@ messages: list[ChatCompletionMessageParam] = [
 
 def chat_once(user_text: str) -> None:
     """One round-trip: append user turn, call model, print, append assistant turn."""
-    # TODO 6: implement steps 1-8 from the comment block above.
     # Bỏ tin nhắn của user vào cuối danh sách lịch sử ( nhét câu hỏi vào hộp kí ức - memory box)  :
     messages.append({"role": "user", "content": user_text})
     
@@ -211,7 +204,7 @@ def chat_once(user_text: str) -> None:
     
 
 
-#chat_once("Hello world")  # test the function before implementing main()
+#chat_once("Hello world")  # uncomment to smoke-test chat_once on its own
 
 # ===================================================================
 # SECTION 7 — main(): THE INTERACTIVE INPUT LOOP
@@ -242,7 +235,6 @@ def chat_once(user_text: str) -> None:
 #     "x" in {"a","b","x"}    True; sets are great for "is one of" checks
 
 def main() -> None:
-    # TODO 7: implement the loop following the pseudo-code above.
     """ Vòng lặp chính của giao diện CLI """
     print("Welcome to the QWEN3 Chat Agent !")
     print("Type your message here and press Enter to chat with the model. Press Ctrl+C or type 'exit' to quit.\n")
@@ -280,7 +272,5 @@ def main() -> None:
 # is executed directly. If someone does `import 01_chat` later, the
 # loop won't auto-fire (useful for testing/reuse).
 
-# TODO 8: write the standard `if __name__ == "__main__":` guard
-#         and call main() inside it.
 if __name__ == "__main__":
-    main()  
+    main()

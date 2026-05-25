@@ -1,0 +1,7 @@
+from perimeter_pentagon import *
+
+
+def test_mbpp():
+    assert perimeter_pentagon(5) == 25
+    assert perimeter_pentagon(10) == 50
+    assert perimeter_pentagon(15) == 75

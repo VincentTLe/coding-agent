@@ -1,384 +1,178 @@
 # Coding Agent from Scratch
 
-Built-from-scratch AI coding agent dùng Qwen3-14B local qua vLLM. Không framework (no LangChain / LangGraph / CrewAI).
+**A from-scratch ReAct coding agent — no agent frameworks — driving a local Qwen3-14B model to read, edit, run, and verify code.**
 
-- **Course**: Math/Stat 361 Research (Knox College)
-- **Advisor**: Prof. Andrew Leahy
-- **Demo**: checkpoint 2026-05-20 → final 2026-05-29
+🇻🇳 Tiếng Việt: [README.vi.md](README.vi.md)
+
+This is a coding agent built from first principles: no LangChain, no LangGraph, no CrewAI. The ReAct loop, the tool layer, the sandbox, and the context management are all hand-written against the raw OpenAI-compatible chat-completions API. The model runs locally — **Qwen3-14B served by vLLM** on a single NVIDIA A6000 — and is given **10 tools** to operate inside a **sandboxed workspace**. The interesting part is reliability: the agent runs `pytest`, reads the failures, patches the source, and re-runs until the suite is green, and the interactive REPL survives long sessions through **token-budget context compaction**. A **627-task benchmark harness** measures all of this with honest, hidden-test scoring.
+
+Built as Math/Stat 361 undergraduate research at Knox College (advisor: Prof. Andrew Leahy).
 
 ---
 
-## 1. HOW IT WORKS — toàn cảnh
+## Highlights
+
+- **Built from scratch** — the agent loop, tool dispatch, sandbox, and streaming UI are hand-written. The only third-party pieces are the OpenAI SDK (HTTP transport) and vLLM (model serving).
+- **Runs a local open-weight model** — Qwen3-14B via vLLM, OpenAI-compatible endpoint, fully on-prem on one A6000. No hosted API.
+- **10 tools across 4 groups** — file I/O, code discovery, execution, and delegation (see table below).
+- **Verifies its own work** — it executes the test suite, inspects failures, edits the source, and loops until tests pass. Demonstrated end-to-end fixing a buggy repo to **11/11 passing**.
+- **Sandboxed and crash-resistant** — every file operation is confined to an explicit workspace directory via a path-traversal guard; tool failures are returned to the model as text rather than crashing the loop.
+- **Context compaction** — the interactive REPL estimates token usage and auto-summarizes old history past a 24k-token threshold while keeping the 10 most recent messages verbatim, so it stays inside a 32K context window on long tasks.
+- **Safe-by-design edits** — surgical edits require an exact, unique match; multi-edit is all-or-nothing, so a failed edit never leaves a half-modified file.
+- **627-task eval harness** — a benchmark of 163 HumanEval+, 424 sanitized MBPP, 37 hand-authored hard tasks, and 3 legacy demos. It runs agents in parallel (`--jobs N`), scores each with an independent `pytest` the agent never controls, **hides benchmark tests from the agent while it works** so it can't hard-code answers, and a validation gate proves every task is real (reference solution passes, stub fails).
+
+---
+
+## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  YOU (terminal)  ── gõ task → đọc output                         │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  PYTHON PROCESS — examples/06_chat.py  (REPL chat)               │
-│  ──────────────────────────────────────                          │
-│    while True:                                                    │
-│      user = input("you> ")                                        │
-│      if slash command: handle                        # ↓ §4      │
-│        (/help /clear /think /nothink /compact /tokens /exit)     │
-│      messages.append({"role": "user", "content": user})           │
-│      if estimate_tokens(messages) > 24000:           # compaction │
-│        messages = compact_messages(messages)         # ← auto     │
-│                                                                   │
-│      for turn in range(15):                          # inner loop │
-│        stream = client.chat.completions.create(                   │
-│          model, messages, tools=TOOL_SCHEMAS,        # ← tools.py │
-│          stream=True,                                             │
-│          extra_body={"chat_template_kwargs":                      │
-│                      {"enable_thinking": thinking_enabled}})      │
-│                                                                   │
-│        for chunk in stream:                          # streaming  │
-│          delta.reasoning_content → in màu trắng      # thinking   │
-│          delta.content           → in màu tím        # answer     │
-│          delta.tool_calls        → tích luỹ          # actions    │
-│                                                                   │
-│        validate JSON args (anti triple-quote crash)               │
-│        messages.append(assistant msg with tool_calls)             │
-│                                                                   │
-│        if no tool_calls: break       ← agent xong                 │
-│                                                                   │
-│        for tc in tool_calls:                                      │
-│          result = execute_tool(...)  ← tools.py dispatcher        │
-│          messages.append({"role": "tool", "content": result})     │
-│        # loop tiếp → model thấy tool results                      │
-└──────────────────────┬──────────────────────────────────────────┘
-                       │ HTTP POST /v1/chat/completions
-                       ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  VLLM SERVER — chạy trong tmux session "vllm"                    │
-│  ────────────────────────────────                                │
-│    Launched by: bash scripts/start_vllm.sh                       │
-│    Listening:   http://localhost:8765                            │
-│    Model:       Qwen3-14B trên GPU1 (~28GB BF16, A6000 48GB)     │
-│    Context:     --max-model-len 32768 (32K)                      │
-│    GPU mem:     --gpu-memory-utilization 0.75                    │
-│    Parsers:     --reasoning-parser qwen3  (tách <think> block)   │
-│                 --tool-call-parser hermes (tách <tool_call> XML) │
-│                 --enable-auto-tool-choice                        │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  Terminal (you)  ── type a task → watch streamed output        │
+└───────────────────────────────┬──────────────────────────────┘
+                                 │
+                                 ▼
+┌──────────────────────────────────────────────────────────────┐
+│  Agent process  (cli/chat.py REPL, or cli/solve.py / src.agent)│
+│  ────────────────────────────────────────────────────────     │
+│   ReAct loop:                                                  │
+│     1. Send messages + tool schemas to the model               │
+│     2. Stream back: reasoning · answer · tool_calls             │
+│     3. If no tool_calls → done                                 │
+│     4. Else execute each tool, append results, loop            │
+│     5. Safety net: stop after max iterations                   │
+│   Context compaction kicks in past 24k estimated tokens        │
+└───────────────────────────────┬──────────────────────────────┘
+                                 │ HTTP  POST /v1/chat/completions
+                                 ▼
+┌──────────────────────────────────────────────────────────────┐
+│  vLLM server  (localhost:8765)                                 │
+│  ────────────────────────────────                              │
+│   Model:    Qwen3-14B (BF16, ~28 GB) on one A6000              │
+│   Context:  --max-model-len 32768  (32K)                       │
+│   Parsers:  --reasoning-parser qwen3   (splits <think> blocks) │
+│             --tool-call-parser hermes  (parses tool-call XML)  │
+│             --enable-auto-tool-choice                          │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-**3 câu tóm tắt:**
-1. `06_chat.py` chạy REPL, giữ `messages` list, mỗi user input gửi qua **OpenAI SDK** đến **vLLM** HTTP.
-2. **vLLM** chạy **Qwen3-14B** trên GPU, stream về từng token (thinking + content + tool_calls).
-3. Khi model gọi tool, `06_chat.py` chạy tool qua `src/tools.py`, append result vào `messages`, loop lại.
+The loop is plain ReAct (reason → act → observe), implemented directly against the chat-completions protocol. The model emits tool calls in the Hermes format and a `<think>` reasoning block; vLLM's **hermes tool-call parser** and **qwen3 reasoning parser** turn those into structured `tool_calls` and `reasoning_content` that the agent reads. Tools are a registry (`name → function` plus a JSON schema list), so adding a tool is append-only — the loop never changes.
 
-### Tools — 10 tools, 4 nhóm
+---
 
-Tất cả định nghĩa trong `src/tools.py` (hàm + JSON schema + dispatcher). Model chọn tool đúng theo nhóm.
+## The 10 tools
 
-| Nhóm | Tool | Làm gì |
+All defined in [`src/tools.py`](src/tools.py) — implementation, JSON schema, and a single `execute_tool()` dispatcher side by side.
+
+| Group | Tool | What it does |
 |---|---|---|
-| **FILE I/O** | `read_file` | đọc toàn bộ nội dung file |
-| | `write_file` | ghi đè / tạo file mới (full content) |
-| | `apply_patch` | sửa surgical, 1 match duy nhất (`old_text` phải unique) |
-| | `multi_edit` | nhiều edit cho 1 file, atomic (all-or-nothing) |
-| **DISCOVERY** | `list_dir` | liệt kê thư mục (sạch hơn `ls`) |
-| | `glob_files` | match file theo pattern (vd `**/*.py`) |
-| | `grep_files` | regex search across files |
-| **EXECUTION** | `run_bash` | chạy shell command (pytest, git, pip…), timeout 600s |
-| | `run_python` | chạy snippet Python nhanh, timeout 60s |
-| **DELEGATION** | `spawn_subagent` | chạy 1 agent con trong subprocess (timeout 300s, max_iters 8) |
+| **File I/O** | `read_file` | Return the full contents of a file. |
+| | `write_file` | Overwrite or create a file with full content. |
+| | `apply_patch` | Surgical search-and-replace; `old_text` must match **exactly once** (refuses ambiguous edits). |
+| | `multi_edit` | Multiple edits to one file, applied **atomically** (all-or-nothing). |
+| **Discovery** | `list_dir` | List a directory's files and sub-directories with sizes. |
+| | `glob_files` | Match files by glob pattern (e.g. `**/*.py`). |
+| | `grep_files` | Regex search across files, returning `path:line` hits. |
+| **Execution** | `run_bash` | Run a shell command (pytest, git, pip…), 600s timeout. |
+| | `run_python` | Run a short Python snippet, 60s timeout. |
+| **Delegation** | `spawn_subagent` | Run a child agent in a separate process for an isolated subtask (300s timeout, 8 iterations). |
 
-> **Sandbox**: mọi file op bị giới hạn trong workspace dir (mặc định `demo_repo/`). `_safe_path()` trong `tools.py` chặn path-traversal (`../`) — agent không đọc/ghi ra ngoài workspace.
-
-### Context compaction
-
-Conversation dài làm tràn 32K context. `06_chat.py` tự xử lý:
-
-- `estimate_tokens(messages)` ước lượng token mỗi turn.
-- Khi vượt `COMPACT_THRESHOLD_TOKENS = 24000` (~75% context), `compact_messages()` tóm tắt history cũ thành 1 summary, **giữ nguyên `KEEP_RECENT_MESSAGES = 10` message gần nhất verbatim**.
-- `/compact` để nén thủ công ngay; `/tokens` (hoặc `/tok`) để xem ước lượng token hiện tại.
+**Why `spawn_subagent` is a separate process:** the child gets its own message history (context isolation), a crash in the child can't take down the parent, and a hard 300s timeout plus an 8-iteration cap bound recursion.
 
 ---
 
-## 2. FILE LAYOUT — ai import ai
+## Context compaction
+
+Long conversations overflow the 32K context window. The interactive REPL ([`cli/chat.py`](cli/chat.py)) handles this automatically:
+
+- `estimate_tokens()` approximates token usage each turn (roughly chars / 4).
+- When the estimate crosses `COMPACT_THRESHOLD_TOKENS = 24000` (~75% of context), `compact_messages()` summarizes the older history into a single message and keeps the most recent `KEEP_RECENT_MESSAGES = 10` messages verbatim.
+- `/compact` forces it manually; `/tokens` shows the current estimate against the threshold.
+
+A subtle but important detail: the summary boundary must land on a user-role message, so an assistant's `tool_calls` is never orphaned from its `tool` result (otherwise the API rejects the request). Compaction is treated as a state-management correctness problem, not just truncation.
+
+---
+
+## Sandbox and safety
+
+- **`_safe_path(path, workspace)`** resolves every requested path against the workspace directory passed in and refuses anything that escapes it — a CWE-22 path-traversal defense. The workspace is an explicit parameter threaded through `run_agent(goal, workspace, ...)` and `execute_tool(name, args, workspace)` — there is no global workspace state. The agent cannot read or write outside its workspace (the CLI default is `demo_repo/`).
+- **Errors are returned, not raised.** `execute_tool()` catches exceptions and bad arguments and returns them to the model as `ERROR: ...` strings, so a failed tool call becomes feedback the agent can recover from instead of a crash.
+- **Edits are safe by construction.** `apply_patch` refuses to edit on zero or multiple matches; `multi_edit` validates all edits before writing, so the file on disk is never left partially modified.
+
+---
+
+## Quickstart
+
+Requires the vLLM server running (one NVIDIA GPU with enough VRAM for Qwen3-14B in BF16, ~28 GB) and the project virtualenv.
+
+**1. Start the model server** ([`scripts/start_vllm.sh`](scripts/start_vllm.sh) — Qwen3-14B, 32K context, port 8765):
+
+```bash
+bash scripts/start_vllm.sh
+# wait for "Application startup complete"; verify with:
+curl -sf http://localhost:8765/v1/models
+```
+
+**2. Run the interactive REPL** (streaming chat + tools + `/think`, `/compact`, `/tokens`):
+
+```bash
+python cli/chat.py
+```
+
+**3. Or run a one-shot task** with the non-streaming agent loop:
+
+```bash
+python cli/solve.py "Fix all failing tests in demo_repo/"
+# equivalently: python -m src.agent "Fix all failing tests" --workspace demo_repo
+```
+
+**4. Run the eval harness** ([`eval/run.py`](eval/run.py)) over the benchmark:
+
+```bash
+python eval/run.py                          # all 627 tasks, one at a time
+python eval/run.py --jobs 8                  # 8 agents in parallel
+python eval/run.py --filter difficulty=hard  # filter by metadata
+python eval/run.py 01_strings                # a single task
+```
+
+---
+
+## Results and status
+
+End-to-end verified on `demo_repo/`: starting from a buggy `is_prime`/`factorial`/`calculator`, the agent ran `run_bash(pytest)` → `read_file` → `apply_patch` → `run_bash(pytest)` and reached **11/11 tests passing** — fixing only the source, never the tests.
+
+At scale, the eval harness ([`eval/README.md`](eval/README.md)) runs **627 tasks**: 163 HumanEval+, 424 sanitized MBPP, 37 hand-authored hard tasks (debugging, refactor, multi-file, DP, graphs, data structures, OOP, parsing, algorithms, recursion), and 3 legacy demos. Each run snapshots and restores the task fixtures, scores with an independent `pytest` the agent never controls, and **hides the benchmark tests from the agent while it works** (restored only for grading) so it implements from the spec rather than hard-coding outputs; debug/refactor tasks keep tests visible so the agent can use `pytest` as a feedback signal. A guardrail nudges the model if it replies without acting and records `no_action` rather than failing silently, and a validation gate (`eval/validate_tasks.py`) proves every task is real before it counts. The latest full run scored **501/627 (79.9%)** with a clean easy→hard gradient (**easy 93% · medium 83% · hard 63%**); when the agent engages a tool it is **92% correct** (501/543), so most remaining failures are tool-use, not coding ability. Full per-task results and the per-category/difficulty breakdown live in **`eval/results/`** (see [`eval/README.md`](eval/README.md)).
+
+**Honest scope.** This is undergraduate research, not a SWE-Bench entry. HumanEval/MBPP are well-known and partially saturated for modern models, so the benchmark tier is a breadth + harness-sanity signal while the curated hard tier is the more honest stress test; an open-weight 14B model is stochastic, so pass rates are best read over multiple runs (`--repeats K`). Known limitations: limited interruptibility and no tool-result caching. The vLLM server is run on demand on a shared GPU, not kept always-on.
+
+---
+
+## Repo layout
 
 ```
 coding-agent/
-│
-├── examples/06_chat.py        🟢 ENTRY POINT (REPL chat)
-│   Imports: src.tools, src.prompts, openai, dotenv
-│   Imported by: nothing (entry point)
-│
-├── examples/05_agent_loop.py  🟢 ENTRY POINT (one-shot CLI cũ)
-│   Imports: src.agent, src.tools
-│   Imported by: nothing (entry point)
-│
-├── examples/01_chat.py        🟢 ENTRY POINT (bài học đầu, không tool)
-│   Imports: openai, dotenv
-│   Imported by: nothing (entry point)
-│
-├── src/
-│   ├── __init__.py            (marker — đánh dấu src/ là Python package)
-│   ├── agent.py               ReAct loop (KHÔNG streaming, bản gốc)
-│   │   Imports: src.tools, src.prompts, openai, dotenv
-│   │   Imported by: examples/05_agent_loop.py
-│   ├── tools.py               10 tools + JSON schemas + dispatcher + sandbox
-│   │   Imports: stdlib only
-│   │   Imported by: src.agent, examples/06_chat.py
-│   └── prompts.py             SYSTEM_PROMPT (1 string)
-│       Imports: nothing
-│       Imported by: src.agent, examples/06_chat.py
-│
-├── eval/run.py                🟢 ENTRY POINT (benchmark over eval/tasks/)
-│   Imports: src.agent, src.tools
-│   Imported by: nothing (entry point)
-│
-├── scripts/start_vllm.sh      🟢 ENTRY POINT (launch vLLM server)
-│   Standalone bash script — không relate Python imports.
-│
-├── demo_repo/                 SANDBOX cho agent (workspace mặc định)
-│   ├── algorithms.py          is_prime + factorial + fibonacci
-│   ├── test_algorithms.py     pytest cases cho ở trên (8 tests)
-│   ├── calculator.py          add + multiply
-│   ├── test_calculator.py     pytest cases cho ở trên (3 tests)
-│   └── fibonacci.py           artifact do chính agent tự sinh ra (bằng chứng write_file)
-│
-├── .env                       Biến môi trường runtime (gitignored)
-├── .env.example               Template
-├── pyproject.toml             Deps + ruff/pytest config
-├── uv.lock                    Lockfile (uv tự tạo)
-├── AGENTS.md                  Rule A/B/C (verify, cache docs, verbose)
-└── README.md                  File này
+├── cli/                    how you RUN the real agent
+│   ├── chat.py             primary REPL: streaming + tools + compaction
+│   └── solve.py            one-shot task runner
+├── src/                    the agent library (importable, no side effects)
+│   ├── agent.py            ReAct loop — run_agent(goal, workspace, ...)
+│   ├── tools.py            10 tools + JSON schemas + dispatcher + sandbox
+│   └── prompts.py          system prompt
+├── examples/               teaching ladder: 01→04, read to learn (not to run)
+├── tests/                  pytest unit tests (sandbox, tools, dispatcher)
+├── eval/                   the 627-task benchmark harness
+│   ├── run.py              parallel runner (snapshot → run → score → restore)
+│   ├── validate_tasks.py   quality gate (reference passes, stub fails)
+│   ├── convert_benchmark.py regenerates HumanEval+/MBPP tasks
+│   └── tasks/              bench/ (HE+ & MBPP) · curated/ · legacy demos
+├── demo_repo/              default sandbox workspace (11-test demo)
+└── scripts/start_vllm.sh   launch the vLLM server
 ```
 
-**Đường dẫn chính khi gõ `python examples/06_chat.py`:**
-
-```
-06_chat.py
-   │
-   ├──── from dotenv import load_dotenv         # đọc .env
-   ├──── from openai import OpenAI              # HTTP client
-   │
-   ├──── from src.tools import (...)            ← LOAD src/tools.py
-   │        TOOL_SCHEMAS, execute_tool, set_workspace
-   │
-   └──── from src.prompts import SYSTEM_PROMPT  ← LOAD src/prompts.py
-```
+**Further reading:**
+- [`SYSTEM_DEEP_DIVE.md`](SYSTEM_DEEP_DIVE.md) — a thorough walkthrough of the chat-completions protocol, streaming, tool calling, and every tool's rationale.
+- [`PRESENTATION.html`](PRESENTATION.html) — slide deck for the research checkpoint.
+- [`eval/README.md`](eval/README.md) — the benchmark, how to run it, and its caveats.
 
 ---
 
-## 3. RUN — 3 cách bật agent lên
-
-### 3A. Local trên lab server (lambdavector2) — cách nhanh nhất
-
-```bash
-# 1. Kiểm tra vLLM còn chạy không (đã có tmux session "vllm")
-curl -sf http://localhost:8765/v1/models >/dev/null && echo OK || echo "vLLM DOWN"
-
-# Nếu DOWN:
-tmux attach -t vllm           # vào pane vLLM coi log
-# hoặc khởi động lại:
-tmux new -d -s vllm 'bash ~/code/coding-agent/scripts/start_vllm.sh'
-# đợi ~1-2 phút thấy "Application startup complete"
-
-# 2. Mở REPL
-cd ~/code/coding-agent && source .venv/bin/activate
-python examples/06_chat.py
-```
-
-### 3B. SSH từ máy khác (vd máy của thầy) vào lab server
-
-```bash
-# Trên máy của thầy / máy bất kì có SSH:
-ssh tle@<địa-chỉ-lambdavector2>     # cần access lab network (VPN nếu off-campus)
-
-# Trong session SSH (làm tiếp như 3A):
-cd ~/code/coding-agent && source .venv/bin/activate
-python examples/06_chat.py
-```
-
-> **Lưu ý:** nếu mạng lab không cho phép SSH từ ngoài, dùng laptop của anh (đã có access) + screen share / chiếu màn hình cho thầy xem.
-
-### 3C. Chạy hoàn toàn cục bộ trên máy có GPU (khả thi nhưng phức tạp)
-
-Cần:
-- Python 3.12
-- GPU NVIDIA ≥ 30GB VRAM (A6000 / A100 / 4090 24GB không đủ cho BF16, cần FP8 hoặc INT4 quant)
-- Tải `Qwen/Qwen3-14B` (~28GB) từ Hugging Face
-- Install vLLM + deps
-
-```bash
-git clone <repo-url> coding-agent && cd coding-agent
-uv venv && source .venv/bin/activate && uv sync
-pip install vllm                              # ~5-10 phút download
-hf download Qwen/Qwen3-14B --local-dir ~/models/Qwen3-14B
-cp .env.example .env
-
-# Tab 1 — vLLM server
-bash scripts/start_vllm.sh
-
-# Tab 2 — REPL
-python examples/06_chat.py
-```
-
----
-
-## 4. DEMO — 10 phút cho thầy
-
-### Pre-demo (~30 giây)
-
-```bash
-# 1. Verify vLLM
-curl -sf http://localhost:8765/v1/models >/dev/null && echo "vLLM OK"
-
-# 2. cd + venv
-cd ~/code/coding-agent && source .venv/bin/activate
-
-# 3. Reset demo_repo về buggy state (sạch hint comments)
-cat > demo_repo/algorithms.py <<'PYEOF'
-"""Common math algorithms."""
-
-
-def is_prime(n: int) -> bool:
-    """Return True if n is a prime number (n >= 2)."""
-    if n < 2:
-        return False
-    for i in range(1, n):
-        if n % i == 0:
-            return False
-    return True
-
-
-def factorial(n: int) -> int:
-    """Return n! (n factorial). factorial(0) = 1, factorial(5) = 120."""
-    if n < 0:
-        raise ValueError("n must be non-negative")
-    result = 1
-    for i in range(1, n):
-        result *= i
-    return result
-
-
-def fibonacci(n: int) -> int:
-    """Return the nth Fibonacci number. fib(0)=0, fib(1)=1."""
-    if n < 0:
-        raise ValueError("n must be non-negative")
-    a, b = 0, 1
-    for _ in range(n):
-        a, b = b, a + b
-    return a
-PYEOF
-
-cat > demo_repo/calculator.py <<'PYEOF'
-"""A tiny calculator module."""
-
-
-def add(a: int, b: int) -> int:
-    return a - b
-
-
-def multiply(a: int, b: int) -> int:
-    return a * b
-PYEOF
-
-# 4. Verify pre-state: một số test FAIL (tổng 11 tests)
-python -m pytest demo_repo --tb=no -q
-```
-
-> Mục tiêu demo: agent chạy pytest, thấy fail, **sửa SOURCE (không sửa test)**, re-run đến khi **11/11 pass**.
-
-### Demo flow (REPL)
-
-```bash
-python examples/06_chat.py
-```
-
-```
-═══════════════════════════════════════════════════════════
-PHẦN 1 — FAST MODE (mặc định, không thinking)
-═══════════════════════════════════════════════════════════
-
-you> Hello, what can you do?
-   → trả lời ngay, KHÔNG thinking block
-
-you> Add a function power(base, exp) to calculator.py with tests in test_calculator.py
-   → đọc file → viết func + test → chạy pytest → done
-
-═══════════════════════════════════════════════════════════
-PHẦN 2 — DEEP MODE (bật thinking)
-═══════════════════════════════════════════════════════════
-
-you> /think
-   → "Thinking mode: ON (deep)"
-
-you> Fix all failing tests in this repo
-   → [thinking] → ls → pytest → [thinking] → read → [thinking] → write → pytest → done
-
-═══════════════════════════════════════════════════════════
-PHẦN 3 — TRADE-OFF
-═══════════════════════════════════════════════════════════
-
-you> /nothink
-you> What does multiply do?
-   → trả lời ngay, không thinking
-
-you> /tokens
-   → in token estimate hiện tại + threshold (auto-compact ở 24000)
-
-you> /exit
-```
-
-> Full slash commands: `/help  /clear  /think  /nothink  /compact  /tokens  /exit`
-
-### Cách DỪNG agent
-
-| Khi nào | Phím |
-|---|---|
-| Agent thinking/streaming lâu | **Ctrl+C** → `[interrupted]` → quay về `you>` |
-| Ở cursor `you>` | **Ctrl+C** hoặc `/exit` → thoát REPL |
-
----
-
-## 5. TROUBLESHOOTING
-
-| Vấn đề | Cách fix |
-|---|---|
-| `vLLM DOWN` (curl fail) | `tmux attach -t vllm` xem log, hoặc relaunch `bash scripts/start_vllm.sh` |
-| REPL báo `API error: Connection refused` | vLLM chưa start xong → đợi ~1-2 phút |
-| Agent loop vô tận | Ctrl+C → /clear → gõ lại task ngắn hơn |
-| Pytest report `collected 0 items / 1 error` | File anh sửa có SYNTAX error — agent đã được dạy nhận và fix |
-| Demo_repo không còn bug | Chạy lại đoạn `cat > demo_repo/*.py` ở Pre-demo trên |
-| Tool call crash vì JSON | Đã có sanitization — agent retry tự động (không crash REPL) |
-
----
-
-## 6. CODE GUIDE — đọc từng file theo thứ tự
-
-Anh muốn hiểu sâu thì đọc theo order này:
-
-1. **`examples/01_chat.py`** — chat đơn giản KHÔNG tool. Hiểu pattern `messages` list + API call.
-2. **`src/prompts.py`** — 1 string SYSTEM_PROMPT.
-3. **`src/tools.py`** — 10 tools (4 nhóm) + JSON schemas + dispatcher + sandbox (`_safe_path`). Đọc comments Việt theo từng phần.
-4. **`src/agent.py`** — ReAct loop bản KHÔNG streaming. Hiểu xong 01 + tools + agent là biết hết core.
-5. **`examples/06_chat.py`** — REPL streaming, thêm: stream chunks, thinking display, JSON sanitization, thinking toggle, context compaction (`estimate_tokens` / `compact_messages`).
-6. **`scripts/start_vllm.sh`** — biết vLLM bật bằng flag gì.
-
-Mỗi file đã có **inline Vietnamese comments** giải thích từng section.
-
----
-
-## 7. ROADMAP
-
-- **Phase 1** (now → May 29) — basic agent ✅ + 10 tools ✅ + context compaction ✅ + checkpoint 2026-05-20 + final 2026-05-29
-- **Phase 2** (Jun) — Reflexion loop + persistent `MEMORY.md`
-- **Phase 3** (Jul-Aug) — LoRA fine-tuning Qwen3-14B trên agent traces (Unsloth + DPO)
-- **Phase 4** (Aug+) — agent generate new tools cho chính mình, edit own prompts (self-improvement)
-
-Plan đầy đủ: `~/.claude/plans/push-i-k-c-gleaming-crystal.md`. Pre-research SOTA: `docs/research/_SUMMARY.md` (30 reports).
-
----
-
-## 8. AGENTS.md rules (cho session AI mới)
-
-- **Rule A**: web-search official sources trước khi đưa ra technical claim.
-- **Rule B**: cache official docs vào `docs/reference/<tech>/`, append `docs/reference/INDEX.md`.
-- **Rule C**: verbose agent runtime (logs đầy đủ thay vì print thưa).
+*Math/Stat 361 Research, Knox College — advisor Prof. Andrew Leahy.*

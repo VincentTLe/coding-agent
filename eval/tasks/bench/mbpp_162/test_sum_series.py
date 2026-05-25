@@ -1,0 +1,7 @@
+from sum_series import *
+
+
+def test_mbpp():
+    assert sum_series(6) == 12
+    assert sum_series(10) == 30
+    assert sum_series(9) == 25

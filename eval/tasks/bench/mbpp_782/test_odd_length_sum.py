@@ -1,0 +1,7 @@
+from odd_length_sum import *
+
+
+def test_mbpp():
+    assert odd_length_sum([1,2,4]) == 14
+    assert odd_length_sum([1,2,1,2]) == 15
+    assert odd_length_sum([1,7]) == 8

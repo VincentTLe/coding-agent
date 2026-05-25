@@ -1,0 +1,7 @@
+from volume_sphere import *
+import math
+
+def test_mbpp():
+    assert math.isclose(volume_sphere(10), 4188.790204786391, rel_tol=0.001)
+    assert math.isclose(volume_sphere(25), 65449.84694978735, rel_tol=0.001)
+    assert math.isclose(volume_sphere(20), 33510.32163829113, rel_tol=0.001)

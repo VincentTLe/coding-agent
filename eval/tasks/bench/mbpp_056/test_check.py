@@ -1,0 +1,7 @@
+from check import *
+
+
+def test_mbpp():
+    assert check(70) == False
+    assert check(23) == False
+    assert check(73) == True

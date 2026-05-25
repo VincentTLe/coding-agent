@@ -30,20 +30,31 @@ This file adds project-specific context and three project-specific rules.
   - File I/O: `read_file`, `write_file`, `apply_patch`, `multi_edit`
   - Discovery: `list_dir`, `glob_files`, `grep_files`
   - Execution: `run_bash`, `run_python`
-  - Delegation: `spawn_subagent`
-  Every file path is routed through `_safe_path()` — the **sandbox**. This is
-  load-bearing safety, not decoration; never weaken or bypass it.
-- **Entry points** in `examples/`:
-  - `01_chat.py` — minimal chat against the model
-  - `05_agent_loop.py` — the core tool-using agent loop
-  - `06_chat.py` — interactive chat with **context compaction** and slash commands
-- **Context compaction** (in `examples/06_chat.py`): auto-summarizes history at
+  - Delegation: `spawn_subagent` (passes its workspace down to the child)
+  Every file path is routed through `_safe_path(path, workspace)` — the
+  **sandbox**. The workspace is an **explicit parameter** (`run_agent(goal,
+  workspace, ...)`, `execute_tool(name, args, workspace)`); there is no global
+  `WORKSPACE` and no `set_workspace` anymore. This is load-bearing safety, not
+  decoration; never weaken or bypass it.
+- **Library vs. entry points.** `src/` is the importable library (importing
+  `src.agent` is side-effect-free — the client is created lazily by
+  `get_client()`). You RUN the agent from `cli/`:
+  - `cli/chat.py` — interactive streaming REPL with **context compaction** and
+    slash commands (`python cli/chat.py`)
+  - `cli/solve.py` — one-shot task runner (also `python -m src.agent "task" --workspace dir`)
+  `examples/` is now a **teaching ladder** (read to learn, not the runtime):
+  `01_chat.py` → `02_one_tool.py` → `03_react_loop.py` → `04_sandbox_safety.py`.
+  `tests/` holds pytest unit tests (sandbox, tools, dispatcher).
+- **Context compaction** (in `cli/chat.py`): auto-summarizes history at
   `COMPACT_THRESHOLD_TOKENS = 24000` (~75% of the 32K window), keeping the last
   `KEEP_RECENT_MESSAGES = 10` verbatim. Helpers: `estimate_tokens()`,
   `compact_messages()`. Slash commands include `/compact` (summarize now) and
   `/tokens` (show current estimate).
-- **Benchmark** in `eval/`: `python eval/run.py` runs the agent over each task in
-  `eval/tasks/` and scores it by whether `pytest` passes. See `eval/README.md`.
+- **Benchmark** in `eval/`: `python eval/run.py` runs the agent over **627 tasks**
+  (163 HumanEval+, 424 sanitized MBPP, 37 curated hard tasks, 3 legacy demos) and
+  scores each by an independent `pytest` the agent never controls. Parallel
+  (`--jobs N`), with honest hidden-test scoring, a `no_action` guardrail, and a
+  validation gate (`eval/validate_tasks.py`). See `eval/README.md`.
 
 ## Project-specific rules (extend `~/AGENTS.md`)
 
@@ -101,7 +112,7 @@ The coding agent built in this project must log each step it takes — tool invo
 - **Dense Vietnamese comments.** Source files are commented in Vietnamese,
   explaining the *why* and the mechanics — written so the owner can study and
   re-explain the code later. Match the existing comment style (see `src/tools.py`,
-  `examples/06_chat.py`). Keep comments dense but accurate; do not let them drift
+  `cli/chat.py`). Keep comments dense but accurate; do not let them drift
   from the code.
 - **Do NOT add new `src/*.py` files casually.** The source surface is small and
   deliberate. Adding a module is a structural decision — ask the owner first.

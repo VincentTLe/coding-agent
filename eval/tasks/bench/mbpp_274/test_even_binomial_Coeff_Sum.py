@@ -1,0 +1,7 @@
+from even_binomial_Coeff_Sum import *
+
+
+def test_mbpp():
+    assert even_binomial_Coeff_Sum(4) == 8
+    assert even_binomial_Coeff_Sum(6) == 32
+    assert even_binomial_Coeff_Sum(2) == 2

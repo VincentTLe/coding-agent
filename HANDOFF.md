@@ -5,10 +5,22 @@ Last updated: 2026-05-24.
 
 ## Why this project exists
 
-Started with `examples/01_chat.py` (now `06_chat.py` is the primary REPL)
-and grew incrementally into a from-scratch ReAct coding agent. The
-May-20 checkpoint with Prof. Leahy is behind us; since then the toolset
-went **3 → 10 tools** and the chat REPL gained **context compaction**.
+Started with `examples/01_chat.py` and grew incrementally into a
+from-scratch ReAct coding agent. The May-20 checkpoint with Prof. Leahy
+is behind us. Since then, three big things landed:
+
+1. **Repo restructure** — the runnable entry points moved out of
+   `examples/` into a new `cli/` package (`examples/06_chat.py` →
+   `cli/chat.py`, `examples/05_agent_loop.py` → `cli/solve.py`).
+   `examples/` is now a pure teaching ladder.
+2. **Workspace refactor** — workspace is an explicit parameter
+   everywhere; the old global `WORKSPACE`/`set_workspace` is gone.
+   Importing `src.agent` is now side-effect-free.
+3. **627-task eval harness** — the old "3 demo tasks" eval became a real
+   benchmark suite with hidden-test scoring, a validation gate, a no-op
+   guardrail, and parallel execution. Plus unit tests under `tests/`.
+
+(10 tools + REPL context compaction were already done at the checkpoint.)
 
 ## TL;DR — what works right now
 
@@ -21,13 +33,18 @@ curl -sf http://localhost:8765/v1/models
 # (Do NOT leave the server always-on — shared GPU. Ctrl-C when done.)
 
 # Primary REPL (interactive chat + tools + /compact, /tokens)
-python examples/06_chat.py
+python cli/chat.py                  # workspace defaults to demo_repo/
+python cli/chat.py --workspace /tmp/playground
 
 # One-shot task runner
-python examples/05_agent_loop.py "Fix all failing tests in demo_repo/"
+python cli/solve.py "Fix all failing tests in demo_repo/"
+# also: python -m src.agent "task" --workspace demo_repo
 
-# Stress-test the agent with the eval set
-python eval/run.py
+# Benchmark the agent (627 tasks; parallel)
+python eval/run.py --jobs 8 --out eval/results/full_run.jsonl
+
+# Unit tests (sandbox / tools / dispatcher) — run explicitly:
+pytest tests/
 ```
 
 End-to-end verified 2026-05-24: on `demo_repo/`, the agent ran
@@ -99,7 +116,17 @@ All in `src/tools.py`: `TOOLS` dict + `TOOL_SCHEMAS` (10 entries) +
 The 7 tools beyond the original 3 (`read_file`, `write_file`,
 `run_bash`) are all shipped and used in live runs.
 
-## Context compaction — DONE (`examples/06_chat.py`)
+**Workspace is now a parameter, not a global** (the big refactor since
+the checkpoint). `_safe_path(path, workspace)`,
+`execute_tool(name, arguments, workspace)`, and every tool function take
+`workspace` explicitly; the dispatcher injects it as a keyword arg
+(`TOOLS[name](**args, workspace=workspace)`). `spawn_subagent` threads
+its own workspace down to the child. There is **no** `set_workspace` and
+**no** module-level `WORKSPACE` anymore — so `import src.agent` /
+`import src.tools` is side-effect-free (no env read, no client built;
+that's deferred to `get_client()` in `src/agent.py`).
+
+## Context compaction — DONE (`cli/chat.py`)
 
 The primary REPL auto-compacts conversation history so long sessions
 don't blow the 32K window.
@@ -118,9 +145,10 @@ don't blow the 32K window.
 | File | Purpose |
 |---|---|
 | `src/prompts.py` | `SYSTEM_PROMPT` with explicit JSON-escaping rules — Qwen3-14B was emitting `<tool_call>` blocks with Python triple-quotes; Hermes parser couldn't extract them. Adding "escape `\n` and `\"`, never triple-quote inside JSON" fixed it. |
-| `src/agent.py` | `run_agent(goal, max_iters=15)` — ReAct loop. Uses `tool_choice="auto"` and `msg.model_dump(exclude_none=True)` to preserve `tool_calls` in history (otherwise the next API call rejects the conversation). ANSI-colored log output (blue turn header, green tool call, yellow tool result, magenta assistant, cyan finish, red warn). Heavy Vietnamese inline comments. |
-| `examples/06_chat.py` | **Primary REPL.** Interactive chat + tools + context compaction + `/compact`, `/tokens` slash commands. |
-| `examples/05_agent_loop.py` | One-shot task runner. argparse CLI: positional `task`, optional `--max-iters` and `--workspace`. `sys.path.insert(0, project_root)` trick so it imports `src.*` cleanly when run as a script. |
+| `src/agent.py` | `run_agent(goal, workspace, max_iters=15)` — ReAct loop; **workspace is a required param**. Returns `{"finish_reason", "iters_used"}` (`finish_reason ∈ {finished, max_iters, api_error, timeout, no_action}`). Lazy `get_client()` singleton → import is side-effect-free. **no_action guardrail**: if the model replies without a tool call, nudge up to `MAX_NUDGES = 2`, else return `no_action`. Uses `tool_choice="auto"` + `msg.model_dump(exclude_none=True)` to preserve `tool_calls` in history. ANSI-colored logs. Heavy VN comments. |
+| `cli/chat.py` | **Primary REPL** (moved from `examples/06_chat.py`). Interactive chat + tools + context compaction + `/compact`, `/tokens`. Takes `--workspace` (default `demo_repo`). |
+| `cli/solve.py` | One-shot task runner (moved from `examples/05_agent_loop.py`). Thin argparse wrapper around `run_agent`: positional `task`, optional `--max-iters`, `--workspace`. Kept out of `src/agent.py` so the loop stays importable without argparse/sys.exit. |
+| `examples/01_chat.py` | Teaching ladder, step 1 (chat, no tools). `examples/` is now read-to-learn only; runnable entry points live in `cli/`. |
 | `demo_repo/calculator.py` + `test_calculator.py` | Tiny demo with `add(a, b)` returning `a - b`. |
 | `demo_repo/algorithms.py` + `test_algorithms.py` | Math demo with 2 bugs: `is_prime` uses `range(1, n)`, `factorial` uses `range(1, n)`. Plus a correct `fibonacci`. 11 tests, 5 fail until both bugs are fixed. |
 | `README.md` | Quick-start, repo layout, Phase 1-4 roadmap. |
@@ -141,35 +169,71 @@ run_bash("pytest")   → 11 passed
 overwrite approach (which used to clobber docstrings and force a
 self-correction loop).
 
-## Eval framework — 3 capabilities tested
+## Eval harness — 627-task benchmark suite (BIG change since checkpoint)
+
+The old "3 demo tasks" eval grew into a real benchmark. **627 tasks**:
 
 ```
 eval/
 ├── README.md
-├── run.py                       # discovers tasks, pins workspace, runs agent, scores
+├── run.py                 # discovers tasks, snapshots workspace, runs agent, scores
+├── validate_tasks.py      # quality gate (ref passes / stub fails → else quarantine)
+├── convert_benchmark.py   # regenerates bench/* from HumanEval+ & MBPP (no new deps)
+├── LICENSES.md            # HumanEval MIT, MBPP CC-BY-4.0, EvalPlus Apache-2.0
+├── solutions/             # reference solutions (NEVER shown to the agent)
+├── results/              # <timestamp>.jsonl + <timestamp>.md (gitignored)
 └── tasks/
-    ├── 01_strings/              # multi-bug DEBUG (reverse_string drops last char,
-    │                            #                 count_vowels ignores uppercase)
-    ├── 02_implement/            # CODE GENERATION from docstrings
-    │                            # (shapes.py: 4 stubs returning 0.0)
-    └── 03_add_feature/          # MULTI-STEP planning + multi-file write
-                                 # (add gcd + lcm to math_ops.py, write tests for both)
+    ├── bench/he_*         # 163  HumanEval+ (implement from spec, hardened tests)
+    ├── bench/mbpp_*       # 424  MBPP-sanitized (NL spec)
+    ├── curated/*          # 37   hard, tool-stressing: debugging, refactor, multi_file,
+    │                      #      dp, graphs, data_structures, oop, parsing, algorithms, recursion
+    ├── {01,02,03}_*       # 3    original demo tasks
+    └── _quarantine/       #      tasks that failed validation (skipped by discovery)
 ```
 
 Run:
 
 ```bash
-python eval/run.py              # all tasks, prints PASS/FAIL summary
-python eval/run.py 01_strings   # one task
+python eval/run.py --jobs 8 --out eval/results/run.jsonl   # parallel, all tasks
+python eval/run.py --filter difficulty=hard                # filter by metadata
+python eval/run.py --filter bench/he_0 --repeats 3         # subset, pass@k
+python eval/run.py --resume --out eval/results/run.jsonl   # continue an interrupted run
+python eval/run.py 01_strings                              # one task (back-compat)
+python eval/validate_tasks.py --jobs 16                    # prove every task is real (CPU-only)
 ```
 
-The runner re-runs `pytest` inside each task's directory after the agent
-exits, so the score is from the test outcome, not the agent's own claim.
+`eval/run.py` flags: `--jobs N` (parallel via `ProcessPoolExecutor`,
+spawn — each worker re-imports a clean OpenAI client), `--filter` (repeatable),
+`--repeats K` (pass@k), `--resume`, `--agent-timeout`, `--temperature`,
+`--out` (JSONL), `--min-pass-rate` (CI gate). Writes JSONL incrementally
++ a Markdown summary grouped by category & difficulty.
 
-Initial pytest states verified:
-- `01_strings`: 4 fail / 6 pass
-- `02_implement`: 8 fail / 2 pass
-- `03_add_feature`: 3 pass (agent adds new content, doesn't fix anything)
+**Honest scoring:**
+- Each task runs in its own snapshot; `pytest` re-runs after the agent
+  exits and the score is the test outcome, never the agent's own claim
+  (recursive snapshot/restore).
+- **Hidden tests** (`## Tests: hidden`, all benchmark tasks): the test
+  file is removed from the agent's workspace while it works and restored
+  only for grading — it implements from the spec and can't read tests to
+  hardcode outputs. Debug/refactor tasks keep tests **visible** (pytest
+  is the feedback signal).
+- **no_action guardrail** (in `src/agent.py`): the model can't "win" by
+  describing code in prose — see the agent.py row above.
+- **Validation gate** (`validate_tasks.py`): every task proven real
+  (reference passes, stub fails) or quarantined to `tasks/_quarantine/`.
+
+**Pass-rate: not recorded here.** The authoritative clean run lives at
+`eval/results/<timestamp>.md` (headline + per-category/difficulty
+breakdown). Don't quote a number from this doc.
+
+## Unit tests — `tests/`
+
+`pytest tests/` runs the unit suite (sandbox `_safe_path`, individual
+tools, the `execute_tool` dispatcher). **Note:** `pyproject.toml`
+deliberately has NO `[tool.pytest.ini_options]` — a repo-level pytest
+config would hijack rootdir/collection and clash with the eval harness
+(which runs pytest with `cwd=<task dir>` and no path args). So always run
+the unit suite explicitly as `pytest tests/`, not bare `pytest`.
 
 ## Git history cleanup — Co-Authored-By line removed
 
@@ -204,8 +268,9 @@ itself:
 
 ## Repo history (checkpoint baseline, May-19)
 
-This is the commit log as of the May-20 checkpoint. Since then the
-toolset grew 3 → 10 and `examples/06_chat.py` added compaction — run
+This is the commit log as of the May-20 checkpoint. Since then: the
+`cli/` restructure, the workspace-as-parameter refactor, the 627-task
+eval harness + validation gate + guardrail, and `tests/` — run
 `git log --oneline` for the current HEAD.
 
 ```
@@ -230,13 +295,23 @@ Done since the May-20 checkpoint:
 
 - [x] **10 tools** in `src/tools.py` (file I/O, discovery, execution,
       delegation) with `TOOL_SCHEMAS` + `_safe_path` sandbox.
-- [x] **Context compaction** in `examples/06_chat.py` (auto-trigger +
+- [x] **Context compaction** in `cli/chat.py` (auto-trigger +
       `/compact`, `/tokens`).
+- [x] **Workspace refactor** — explicit param everywhere, no global /
+      `set_workspace`, side-effect-free imports, lazy `get_client()`.
+- [x] **`cli/` restructure** — `chat.py` + `solve.py` moved out of
+      `examples/`; `examples/` is now the teaching ladder only.
+- [x] **627-task eval harness** — parallel `run.py`, hidden-test scoring,
+      `no_action` guardrail, `validate_tasks.py` gate, `convert_benchmark.py`.
+- [x] **Unit tests** under `tests/` (`pytest tests/`).
 - [x] vLLM config settled at **32K / 0.75 util** on GPU1.
 - [x] End-to-end demo re-verified (`apply_patch` path, 11/11 passing).
 
 Next / open:
 
+- [ ] **Authoritative eval run**: do a clean full `eval/run.py` and drop
+      the headline into `eval/results/<timestamp>.md` (+ eval/README
+      Results placeholder). Docs intentionally quote no pass-rate yet.
 - [ ] **Stray file**: `demo_repo/fibonacci.py` is untracked, a duplicate
       standalone fibonacci not imported by any test — leftover. NOT part
       of the demo; clean it up (or just ignore it).
@@ -248,10 +323,14 @@ Next / open:
 | Where | What |
 |---|---|
 | `~/code/coding-agent/` | The whole project |
-| `examples/06_chat.py` | **Primary REPL** (chat + tools + compaction) |
-| `examples/05_agent_loop.py` | One-shot task runner |
-| `eval/run.py` | Benchmark runner |
-| `src/tools.py` | 10 tools + `TOOL_SCHEMAS` + `_safe_path` sandbox |
+| `cli/chat.py` | **Primary REPL** (chat + tools + compaction); `--workspace` |
+| `cli/solve.py` | One-shot task runner (`--workspace`, `--max-iters`) |
+| `examples/` | Teaching ladder (read-to-learn, e.g. `01_chat.py`) |
+| `eval/run.py` | 627-task benchmark runner (`--jobs`, `--filter`, `--resume`, ...) |
+| `eval/validate_tasks.py` | Task quality gate (ref passes / stub fails) |
+| `tests/` | Unit suite — run as `pytest tests/` |
+| `src/agent.py` | ReAct loop `run_agent(goal, workspace, ...)`; `get_client()` |
+| `src/tools.py` | 10 tools + `TOOL_SCHEMAS` + `_safe_path(path, workspace)` sandbox |
 | `~/code/coding-agent/.env` | `VLLM_BASE_URL`, `VLLM_MODEL_NAME=Qwen/Qwen3-14B`, `VLLM_API_KEY=not-needed`, `LOG_LEVEL=INFO` |
 | `~/code/coding-agent/scripts/start_vllm.sh` | The vLLM launch script |
 | `~/code/coding-agent/AGENTS.md` | Project rules (A: verify, B: cache docs, C: verbose agent) |
@@ -289,9 +368,9 @@ Next / open:
 | Step | Command | What it shows |
 |---|---|---|
 | Start server | `tmux attach -t vllm` → `bash scripts/start_vllm.sh` | Qwen3-14B on GPU1, 32K window |
-| Interactive | `python examples/06_chat.py` | Chat + tools + `/compact`, `/tokens` |
-| One-shot fix | `python examples/05_agent_loop.py "Fix all failing tests in demo_repo/"` | Colored ReAct trace, `apply_patch`, 11/11 pass |
-| Benchmark | `python eval/run.py` | Task pass/fail summary |
+| Interactive | `python cli/chat.py` | Chat + tools + `/compact`, `/tokens` |
+| One-shot fix | `python cli/solve.py "Fix all failing tests in demo_repo/"` | Colored ReAct trace, `apply_patch`, 11/11 pass |
+| Benchmark | `python eval/run.py --jobs 8` | 627-task pass/fail summary by category/difficulty |
 | Slides | open `PRESENTATION.html` | reveal.js deck |
 
 Reset `demo_repo/` between runs:

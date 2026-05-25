@@ -1,0 +1,20 @@
+# mbpp_751 — check_min_heap
+
+## Goal
+Write a function to check if the given array represents min heap or not. https://www.geeksforgeeks.org/how-to-check-if-a-given-array-represents-a-binary-heap/
+
+Implement `check_min_heap` in `check_min_heap.py` so the tests pass. Example checks:
+assert check_min_heap([1, 2, 3, 4, 5, 6]) == True
+assert check_min_heap([2, 3, 4, 5, 10, 15]) == True
+
+## Category
+recursion
+
+## Difficulty
+hard
+
+## Tests
+hidden
+
+## Source/License
+MBPP sanitized task 751. MBPP: CC-BY-4.0.

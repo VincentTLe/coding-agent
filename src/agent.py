@@ -35,6 +35,7 @@ from __future__ import annotations
 # thu thập trace cho fine-tuning ở Phase 3. Đây là Rule C trong AGENTS.md.
 import logging
 import os
+import time
 from pathlib import Path
 
 # Đọc biến môi trường từ .env (BASE_URL, MODEL_NAME, API_KEY) — y hệt 01_chat.py.
@@ -50,11 +51,12 @@ from openai import OpenAI, OpenAIError
 # "list[dict] không phải Iterable[ChatCompletionMessageParam]" khi truyền vào create().
 from openai.types.chat import ChatCompletionMessageParam
 
-# Lấy 3 thứ từ tools.py:
+# Lấy 2 thứ từ tools.py:
 #   - TOOL_SCHEMAS: danh sách JSON schema mô tả tools (model nhìn vào để biết gọi sao)
-#   - execute_tool: dispatcher chạy tool theo name + args
-#   - set_workspace: chốt thư mục agent được phép đọc/ghi (sandbox)
-from src.tools import TOOL_SCHEMAS, execute_tool, set_workspace
+#   - execute_tool: dispatcher chạy tool theo name + args + workspace (sandbox dir)
+# Lưu ý: KHÔNG còn `set_workspace` — workspace nay là tham số tường minh truyền
+# thẳng vào execute_tool() ở mỗi lời gọi (xem run_agent), không phải global.
+from src.tools import TOOL_SCHEMAS, execute_tool
 
 # System prompt — tách ra file riêng để sau này dễ versioning cho training data.
 from src.prompts import SYSTEM_PROMPT
@@ -86,33 +88,86 @@ def cprint(color: str, text: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Setup (same shape as 01_chat.py — đọc .env, tạo client, set logging)
+# Setup (LAZY — KHÔNG side-effect ở import)
+#
+# Trước đây file này đọc .env, dựng OpenAI client và gọi logging.basicConfig
+# NGAY ở top level → chỉ cần `import src.agent` là đã require .env + cấu hình
+# logging toàn cục cho cả tiến trình. Điều đó làm import có tác dụng phụ: eval
+# harness / examples / test import module này sẽ crash nếu thiếu .env, và việc
+# basicConfig chạy lúc import giẫm lên cấu hình logging của caller.
+#
+# Cách sửa: ĐẨY mọi thứ vào hàm lazy, chỉ chạy khi run_agent thực sự cần:
+#   - get_client(): singleton — lần đầu mới load_dotenv + đọc env + dựng client.
+#   - logging: cấu hình 1 lần bên trong run_agent qua _setup_logging() (có guard).
+# => `import src.agent` giờ KHÔNG dựng client, KHÔNG cần env, KHÔNG đụng logging.
 # ---------------------------------------------------------------------------
 
-# Đọc file .env vào os.environ. Có file ./.env thì auto detect.
-load_dotenv()
-
-# Đọc 3 biến cấu hình. Nếu thiếu BASE_URL hay MODEL → crash ngay (fail fast).
-# API_KEY có default vì vLLM không enforce auth.
-BASE_URL = os.environ["VLLM_BASE_URL"]
-MODEL = os.environ["VLLM_MODEL_NAME"]
-API_KEY = os.environ.get("VLLM_API_KEY", "not-needed")
-
-# Tạo OpenAI client trỏ vào vLLM. Đây chính là pattern "portability" — chỉ cần
-# đổi base_url trong .env là chạy được với GPT-4 cloud, Ollama, Claude proxy, ...
-client = OpenAI(base_url=BASE_URL, api_key=API_KEY)
-
-# Cấu hình logging. `format="%(message)s"` = chỉ in nội dung message, không in
-# timestamp/level — gọn cho demo. Level INFO = thấy mọi log.info().
-logging.basicConfig(level=logging.INFO, format="%(message)s")
+# `log` chỉ là một logger object — lấy logger KHÔNG có side-effect (không cấu
+# hình gì), nên để ở module level vẫn an toàn. Việc CẤU HÌNH (basicConfig) mới
+# là thứ phải hoãn lại tới run_agent.
 log = logging.getLogger("agent")
+
+# Singleton client — None cho tới lần get_client() đầu tiên. `global` cho phép
+# gán lại biến module-level từ trong hàm.
+_client: OpenAI | None = None
+
+# Đã cấu hình logging chưa — guard để _setup_logging() chỉ basicConfig 1 lần,
+# tránh giẫm lên cấu hình của caller ở những lần run_agent sau.
+_logging_ready = False
+
+
+def get_client() -> OpenAI:
+    """Trả về OpenAI client (singleton), dựng lười ở lần gọi đầu tiên.
+
+    Tại sao lười? — Để `import src.agent` không có tác dụng phụ: không đọc .env,
+    không cần biến môi trường, không tạo kết nối. Chỉ khi run_agent (hoặc caller)
+    THỰC SỰ cần gọi model thì mới load_dotenv + đọc env + dựng client.
+
+    Đọc 3 biến cấu hình ở đây (không phải lúc import). Thiếu BASE_URL hay MODEL
+    → crash ngay (fail fast). API_KEY có default vì vLLM không enforce auth.
+    """
+    global _client
+    if _client is None:
+        # Đọc file .env vào os.environ. Có file ./.env thì auto detect.
+        load_dotenv()
+        base_url = os.environ["VLLM_BASE_URL"]
+        api_key = os.environ.get("VLLM_API_KEY", "not-needed")
+        # Tạo OpenAI client trỏ vào vLLM. Đây chính là pattern "portability" — chỉ
+        # cần đổi base_url trong .env là chạy được với GPT-4 cloud, Ollama, ...
+        _client = OpenAI(base_url=base_url, api_key=api_key)
+    return _client
+
+
+def get_model() -> str:
+    """Đọc MODEL lười từ env (gọi sau khi get_client đã load_dotenv, hoặc tự đọc).
+
+    Tách riêng khỏi get_client để chỗ gọi API đọc tên model rõ ràng. load_dotenv
+    là idempotent nên gọi ở đây cũng an toàn nếu vì lý do gì client chưa dựng.
+    """
+    load_dotenv()
+    return os.environ["VLLM_MODEL_NAME"]
+
+
+def _setup_logging() -> None:
+    """Cấu hình logging 1 lần duy nhất (có guard), gọi từ run_agent.
+
+    `format="%(message)s"` = chỉ in nội dung message, không in timestamp/level —
+    gọn cho demo. Level INFO = thấy mọi log.info(). Guard `_logging_ready` để
+    không basicConfig lại ở các lần run_agent sau (tránh giẫm cấu hình caller).
+    """
+    global _logging_ready
+    if not _logging_ready:
+        logging.basicConfig(level=logging.INFO, format="%(message)s")
+        _logging_ready = True
 
 
 # ---------------------------------------------------------------------------
 # THE AGENT LOOP — trái tim của hệ thống
 # ---------------------------------------------------------------------------
 
-def run_agent(goal: str, max_iters: int = 15) -> None:
+def run_agent(goal: str, workspace: Path, max_iters: int = 15,
+              time_budget_s: float | None = None,
+              temperature: float | None = None) -> dict:
     """Run the ReAct loop until the model stops calling tools, or max_iters.
 
     ReAct = Reasoning + Acting interleaved. Each iteration:
@@ -120,7 +175,25 @@ def run_agent(goal: str, max_iters: int = 15) -> None:
       - act:     model emits tool_calls (or nothing -> we're done).
       - observe: we execute each tool and append result as role=tool.
     Termination: model returns NO tool_calls (it has decided it's done).
+
+    workspace: thư mục sandbox agent được phép đọc/ghi — nay là THAM SỐ tường
+    minh (positional thứ 2, BẮT BUỘC), không còn là global trong tools.py. Mỗi
+    lời gọi execute_tool() bên dưới truyền thẳng workspace này xuống tool.
+
+    Returns {"finish_reason": str, "iters_used": int} so the eval harness can
+    record the outcome. finish_reason ∈ {finished, max_iters, api_error, timeout, no_action}.
+    `iters_used` = số turn ĐÃ thực hiện (1-based `i` tại điểm thoát) — nhất quán ở
+    MỌI nhánh return (finished / max_iters / api_error / timeout / no_action).
+    Callers that ignore the return value (the REPL, the CLI) are unaffected.
+
+    time_budget_s: optional wall-clock cap, checked BETWEEN turns (None = no cap).
     """
+    # Cấu hình logging 1 lần (lười — không chạy lúc import). Phải gọi TRƯỚC mọi
+    # cprint/log.info bên dưới để output hiện ra.
+    _setup_logging()
+    # Dựng client lười + đọc tên model lười (không có gì xảy ra lúc import module).
+    client = get_client()
+    model = get_model()
     # Khởi tạo "cuốn sổ ký ức" (messages list) — y hệt 01_chat.py, nhưng nay
     # chứa cả system prompt VÀ goal của user (2 message ban đầu).
     # Dùng OpenAI TypedDict để Pylance pass-through; dict literal vẫn assign được
@@ -132,7 +205,28 @@ def run_agent(goal: str, max_iters: int = 15) -> None:
 
     # Vòng lặp giới hạn `max_iters` turn — safety net để agent không loop vô tận.
     # Mỗi turn = 1 round-trip với model + thực thi tool nếu có.
+    start = time.monotonic()
+    # Guardrail "nói mà không làm": ~30% lần model trả prose (mô tả/viết code dạng
+    # text) ngay turn đầu mà KHÔNG gọi tool nào → loop tưởng "xong" → task fail oan.
+    #   made_tool_call: đã gọi tool lần nào chưa (chốt phân biệt "xong thật" vs "bail").
+    #   nudges_used:    đã nhắc bao nhiêu lần; chặn ở MAX_NUDGES để không loop vô tận.
+    made_tool_call = False
+    nudges_used = 0
+    MAX_NUDGES = 2
+    NUDGE = ("You replied with text but called no tool, so nothing has actually changed "
+             "on disk and the task is NOT done. If the task needs a file created or edited, "
+             "call write_file / apply_patch / multi_edit now — do not just describe the code. "
+             "Only stop without a tool call once the work is truly complete.")
     for i in range(1, max_iters + 1):
+        # Hết ngân sách thời gian (nếu eval truyền vào) → dừng gọn. Chỉ check GIỮA
+        # các turn: không ngắt được 1 tool đang chạy dở, nhưng mỗi tool đã có timeout
+        # riêng (run_bash 600s, run_python/pytest 60s) nên thời gian bị chặn trên.
+        if time_budget_s is not None and time.monotonic() - start > time_budget_s:
+            cprint(Color.WARN, f"\nAgent hit time budget {time_budget_s:.0f}s on turn {i}.")
+            # `iters_used: i` (KHÔNG phải i-1) cho NHẤT QUÁN với mọi nhánh return
+            # khác — tất cả đều báo `i` (1-based số turn đã bước vào). Bug cũ trả
+            # i-1 khiến eval đếm lệch 1 ở case timeout.
+            return {"finish_reason": "timeout", "iters_used": i}
         # Header phân tách từng turn — dễ nhìn khi demo.
         cprint(Color.HEADER, f"\n=== Turn {i} (history: {len(messages)} messages) ===")
 
@@ -156,17 +250,24 @@ def run_agent(goal: str, max_iters: int = 15) -> None:
         # HỢP LỆ (mọi assistant-tool_calls trước đó đã có đủ tool message ghép
         # cặp). Vì ta return TRƯỚC khi append assistant message mới, list không
         # bao giờ bị bỏ lại với 1 assistant.tool_calls "mồ côi" không có kết quả.
+        # temperature=None → dùng default của model (REPL). Eval truyền 0.0 để
+        # decode tham lam (greedy): tool-call ổn định + kết quả TÁI LẬP được (pass@1
+        # chuẩn). Ở temp mặc định (~0.6), thỉnh thoảng turn-1 model trả prose thay
+        # vì gọi write_file → task fail oan; greedy gần như loại bỏ hành vi đó.
+        create_kwargs = dict(
+            model=model,
+            messages=messages,
+            tools=TOOL_SCHEMAS,
+            tool_choice="auto",
+            max_tokens=2048,
+        )
+        if temperature is not None:
+            create_kwargs["temperature"] = temperature
         try:
-            resp = client.chat.completions.create(  # type: ignore[arg-type]
-                model=MODEL,
-                messages=messages,
-                tools=TOOL_SCHEMAS,
-                tool_choice="auto",
-                max_tokens=2048,
-            )
+            resp = client.chat.completions.create(**create_kwargs)  # type: ignore[arg-type]
         except OpenAIError as e:
             cprint(Color.WARN, f"\nAPI error on turn {i}: {e}. Stopping.")
-            return
+            return {"finish_reason": "api_error", "iters_used": i}
 
         # -----------------------------------------------------------------------
         # BƯỚC 2: BÓC LẤY MESSAGE (giống 01_chat.py)
@@ -207,8 +308,34 @@ def run_agent(goal: str, max_iters: int = 15) -> None:
         # `not msg.tool_calls` true khi tool_calls là None HOẶC list rỗng.
         # -----------------------------------------------------------------------
         if not msg.tool_calls:
-            cprint(Color.FINISH, "\nAgent finished.")
-            return
+            # Đã hành động ít nhất 1 lần → tin agent đã xong thật (giữ nguyên hành vi
+            # ReAct cũ, bảo toàn quyền kết thúc hợp lệ của agent đã làm việc xong).
+            if made_tool_call:
+                cprint(Color.FINISH, "\nAgent finished.")
+                return {"finish_reason": "finished", "iters_used": i}
+            # Chưa đụng tool lần nào mà đã "xong" → gần như chắc là trả prose suông.
+            # Còn quota nhắc VÀ còn turn để model phản hồi nudge thì nhắc rồi loop lại.
+            # An toàn pairing: assistant vừa append KHÔNG có tool_calls nên messages
+            # đang hợp lệ; thêm 1 user nudge sau nó OK.
+            #
+            # `and i < max_iters`: CHỈ nhắc khi VẪN CÒN turn phía sau để model đáp lại
+            # nudge. Nếu đây là turn cuối (i == max_iters), nudge cũng vô nghĩa (loop
+            # sẽ dừng ngay, model không kịp đọc) → rơi thẳng xuống no_action bên dưới.
+            # Đây là fix cho ca biên max_iters <= MAX_NUDGES: trước đây cứ còn quota là
+            # nudge + continue, nên turn cuối append nudge rồi vòng lặp kết thúc và HÀM
+            # RƠI XUỐNG nhánh max_iters ở cuối → báo nhầm "max_iters" thay vì "no_action".
+            if nudges_used < MAX_NUDGES and i < max_iters:
+                nudges_used += 1
+                cprint(Color.WARN,
+                       f"\nModel answered without calling a tool; nudging ({nudges_used}/{MAX_NUDGES}).")
+                messages.append({"role": "user", "content": NUDGE})
+                continue
+            # Hết quota (hoặc đây là turn cuối) mà vẫn không act → dừng, đánh dấu
+            # no_action để harness phân biệt với "finished" thật (fail kiểu "nói mà
+            # không làm"). Return TẠI ĐÂY (iters_used=i) thay vì để rơi xuống nhánh
+            # max_iters ở cuối hàm — phân loại finish_reason chính xác hơn.
+            cprint(Color.WARN, "\nAgent stopped without ever calling a tool (no_action).")
+            return {"finish_reason": "no_action", "iters_used": i}
 
         # -----------------------------------------------------------------------
         # BƯỚC 5.5: NẾU ĐÂY LÀ TURN CUỐI (i == max_iters) MÀ MODEL VẪN GỌI TOOL,
@@ -224,6 +351,9 @@ def run_agent(goal: str, max_iters: int = 15) -> None:
         # BƯỚC 6: NẾU CÓ TOOL_CALLS, CHẠY TỪNG CÁI VÀ TRẢ KẾT QUẢ VỀ
         # Có thể có >1 tool_call trong 1 turn (model parallel calls).
         # -----------------------------------------------------------------------
+        # Tới đây chắc chắn sẽ chạy tool (đã qua BƯỚC 5.5 break) → đánh dấu agent
+        # đã THỰC SỰ hành động (tắt guardrail "nói mà không làm" cho các turn sau).
+        made_tool_call = True
         for tc in msg.tool_calls:
             # type:ignore: msg.tool_calls có thể chứa ChatCompletionMessageCustomToolCall
             # (không có .function). Hiện model chỉ emit function calls (Hermes parser)
@@ -233,7 +363,8 @@ def run_agent(goal: str, max_iters: int = 15) -> None:
 
             # execute_tool tự parse JSON args + dispatch theo name. Nó luôn trả
             # về string (kể cả khi có lỗi — string bắt đầu bằng "ERROR:").
-            result = execute_tool(tc.function.name, tc.function.arguments)  # type: ignore[union-attr]
+            # `workspace` truyền tường minh xuống dispatcher (không còn global).
+            result = execute_tool(tc.function.name, tc.function.arguments, workspace)  # type: ignore[union-attr]
 
             # Cắt bớt khi log để khỏi spam terminal. Model vẫn nhận FULL kết quả
             # qua append messages bên dưới.
@@ -255,6 +386,7 @@ def run_agent(goal: str, max_iters: int = 15) -> None:
     # (chưa chịu trả content trần để báo "xong"). Đây là safety net chống loop
     # vô tận — không hẳn là bug, nhưng dấu hiệu task quá khó hoặc model bị kẹt.
     cprint(Color.WARN, f"\nAgent hit max_iters={max_iters} without finishing.")
+    return {"finish_reason": "max_iters", "iters_used": max_iters}
 
 
 # ---------------------------------------------------------------------------
@@ -263,20 +395,34 @@ def run_agent(goal: str, max_iters: int = 15) -> None:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    import sys
+    import argparse
 
-    if len(sys.argv) < 2:
-        print("Usage: python -m src.agent 'task description'")
-        print("Example: python -m src.agent 'Fix the failing tests in demo_repo/'")
-        sys.exit(1)
+    # argparse thay cho việc bóc sys.argv thủ công — cho phép --workspace (chốt
+    # sandbox file ops) + --max-iters tùy chọn, và tự sinh usage/-h.
+    parser = argparse.ArgumentParser(
+        description="ReAct coding agent. Example: "
+                    "python -m src.agent 'Fix the failing tests in demo_repo/'")
+    # positional `goal` với nargs="+" → gom MỌI từ user gõ thành 1 list, rồi
+    # join lại thành câu hoàn chỉnh (giữ hành vi cũ: gõ không cần đóng ngoặc kép).
+    parser.add_argument("goal", nargs="+", help="natural-language task description")
+    # --workspace: thư mục sandbox agent được phép đọc/ghi. Default demo_repo/ —
+    # agent không "đi lạc" sang sửa src/agent.py của chính mình (self-modification
+    # là Phase 4, chưa phải bây giờ).
+    parser.add_argument("--workspace", default="demo_repo",
+                        help="sandbox directory the agent may read/write (default: demo_repo)")
+    # --max-iters tùy chọn: bỏ trống thì dùng default của run_agent (15).
+    parser.add_argument("--max-iters", type=int, default=None,
+                        help="max ReAct turns (default: run_agent's 15)")
+    args = parser.parse_args()
 
-    # Chốt sandbox file ops vào demo_repo/ — agent không thể "đi lạc" sang sửa
-    # src/agent.py của chính mình. Nếu sửa được, ta đã có "self-modification"
-    # nhưng đó là Phase 4 — chưa phải bây giờ.
-    set_workspace(Path(__file__).parent.parent / "demo_repo")
+    # Join các từ goal thành 1 câu. Path(...).resolve() biến --workspace thành
+    # đường dẫn tuyệt đối trước khi đưa vào run_agent (tool ops chốt vào đây).
+    task = " ".join(args.goal)
+    workspace = Path(args.workspace).resolve()
 
-    # sys.argv[0] là tên script. sys.argv[1:] là các từ user gõ → join lại
-    # thành 1 câu hoàn chỉnh cho agent.
-    task = " ".join(sys.argv[1:])
     cprint(Color.HEADER, f"GOAL: {task}\n")
-    run_agent(task)
+    # Chỉ truyền max_iters khi user có chỉ định → nếu không, dùng default của hàm.
+    if args.max_iters is not None:
+        run_agent(task, workspace=workspace, max_iters=args.max_iters)
+    else:
+        run_agent(task, workspace=workspace)

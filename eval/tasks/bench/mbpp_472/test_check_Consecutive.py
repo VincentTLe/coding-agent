@@ -1,0 +1,7 @@
+from check_Consecutive import *
+
+
+def test_mbpp():
+    assert check_Consecutive([1,2,3,4,5]) == True
+    assert check_Consecutive([1,2,3,5,6]) == False
+    assert check_Consecutive([1,2,1]) == False

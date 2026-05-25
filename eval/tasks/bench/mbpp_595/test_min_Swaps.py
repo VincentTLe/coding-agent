@@ -1,0 +1,7 @@
+from min_Swaps import *
+
+
+def test_mbpp():
+    assert min_Swaps("1101","1110") == 1
+    assert min_Swaps("111","000") == "Not Possible"
+    assert min_Swaps("111","110") == "Not Possible"

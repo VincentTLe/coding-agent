@@ -1,0 +1,3 @@
+def get_median(arr1, arr2, n):
+    """See task.md for the spec."""
+    raise NotImplementedError

@@ -148,6 +148,7 @@
     <li class="fragment">vLLM + Qwen3 internals</li>
     <li class="fragment">Sandbox security</li>
     <li class="fragment">Context compaction &mdash; <span style="color: #ffd966;">surviving long tasks</span></li>
+    <li class="fragment">Eval harness &mdash; <span style="color: #7bf0ff;">627-task benchmark</span></li>
     <li class="fragment" style="color: #7bff7b;"><strong>Live demo</strong></li>
   </ol>
 </section>
@@ -166,7 +167,7 @@
   <pre class="mermaid">
 flowchart TD
     U["👤 User<br/>(terminal)"]:::user
-    L1["🎨 Layer 1 — Terminal UX<br/>06_chat.py + compaction"]:::layer1
+    L1["🎨 Layer 1 — Terminal UX<br/>cli/chat.py + compaction"]:::layer1
     L2["🔄 Layer 2 — ReAct Loop<br/>chat() inner loop"]:::layer2
     L3["📦 Layer 3 — OpenAI SDK<br/>HTTP client"]:::layer3
     L4["⚙️ Layer 4 — vLLM Server<br/>port 8765"]:::layer4
@@ -305,7 +306,7 @@ while True:
         if tcd.function:
             if tcd.function.name: tool_calls[idx]["name"] += tcd.function.name
             if tcd.function.arguments: tool_calls[idx]["arguments"] += tcd.function.arguments</code></pre>
-  <div class="card code-loc fragment"><code>examples/06_chat.py:163-174</code></div>
+  <div class="card code-loc fragment"><code>cli/chat.py:385-399</code></div>
   <p class="fragment" style="margin-top: 1em;">And the streaming primitive:</p>
   <pre class="fragment"><code class="language-python">print(chunk, end="", flush=True)
 # end=""    → no newline (coalesce fragments)
@@ -425,16 +426,16 @@ while True:
 
 <section>
   <h2>The dispatcher</h2>
-  <div class="card code-loc"><code>src/tools.py:217</code></div>
-  <pre><code class="language-python">def execute_tool(name: str, arguments_json: str) -&gt; str:
+  <div class="card code-loc"><code>src/tools.py:887</code></div>
+  <pre><code class="language-python">def execute_tool(name: str, arguments: str, workspace: Path) -&gt; str:
     if name not in TOOLS:
         return f"ERROR: unknown tool {name}. Available: {list(TOOLS)}"
     try:
-        args = json.loads(arguments_json) if arguments_json else {}
+        args = json.loads(arguments) if arguments else {}
     except json.JSONDecodeError as e:
         return f"ERROR: bad JSON arguments: {e}"
     try:
-        result = TOOLS[name](**args)
+        result = TOOLS[name](**args, workspace=workspace)  # workspace passed in, not global
     except Exception as e:
         return f"ERROR: {name} crashed: {e}"
     return result</code></pre>
@@ -529,13 +530,13 @@ flowchart LR
     if not msg.tool_calls:
         return  # TERMINATE
     for tc in msg.tool_calls:
-        result = execute_tool(tc.function.name, tc.function.arguments)
+        result = execute_tool(tc.function.name, tc.function.arguments, workspace)
         messages.append({
             "role": "tool",
             "tool_call_id": tc.id,
             "content": result,
         })</code></pre>
-  <div class="card code-loc"><code>src/agent.py:109-211</code>. This loop is the entire agent brain. Claude Code, Cursor, Codex — all descendants.</div>
+  <div class="card code-loc"><code>src/agent.py:168-380</code> — <code>run_agent(goal, workspace, ...)</code>. This loop is the entire agent brain. Claude Code, Cursor, Codex — all descendants.</div>
 </section>
 
 <!-- =========== §5 vLLM =========== -->
@@ -721,29 +722,28 @@ flowchart TB
 
 <section>
   <h2>The 4-line sandbox</h2>
-  <pre><code class="language-python">WORKSPACE = Path.cwd()  # set once at startup via set_workspace()
-
-def _safe_path(path: str) -&gt; Path:
-    p = (WORKSPACE / path).resolve()  # absolutify + symlinks + collapse ..
-    if WORKSPACE not in p.parents and p != WORKSPACE:
-        raise ValueError(f"path {p} escapes workspace {WORKSPACE}")
+  <pre><code class="language-python">def _safe_path(path: str, workspace: Path) -&gt; Path:   # workspace is a PARAMETER
+    p = (workspace / path).resolve()  # absolutify + symlinks + collapse ..
+    if workspace not in p.parents and p != workspace:
+        raise ValueError(f"path {p} escapes workspace {workspace}")
     return p</code></pre>
   <div class="card key fragment"><strong>Trick 1 — <code style="color:#7bdcb5;">.resolve()</code></strong> follows symlinks AND collapses <code>..</code> → the REAL target path.</div>
-  <div class="card key fragment"><strong>Trick 2 — <code style="color:#7bf0ff;">.parents</code></strong> verifies target is descendant of <code>WORKSPACE</code>.</div>
-  <div class="card code-loc"><code>src/tools.py:51-67</code>. <strong>17 lines = the entire security boundary.</strong></div>
+  <div class="card key fragment"><strong>Trick 2 — <code style="color:#7bf0ff;">.parents</code></strong> verifies target is a descendant of <code>workspace</code>.</div>
+  <div class="card key fragment"><strong>No global, no <code>set_workspace</code>.</strong> <code>workspace</code> is threaded explicitly: <code>run_agent(goal, workspace)</code> → <code>execute_tool(..., workspace)</code> → each tool → <code>_safe_path(path, workspace)</code>. Importing <code>src.agent</code> stays side-effect-free.</div>
+  <div class="card code-loc"><code>src/tools.py:44-62</code>. The entire security boundary, parameterized.</div>
 </section>
 
 <section>
   <h2>Worked example: <code style="color:#ff7b7b;">../../etc/passwd</code></h2>
-  <pre><code class="language-python"># Model emits: read_file("../../etc/passwd")
+  <pre><code class="language-python"># Model emits: read_file("../../etc/passwd")  → workspace passed in by execute_tool
 
-p = (WORKSPACE / "../../etc/passwd").resolve()
+p = (workspace / "../../etc/passwd").resolve()
 #   = /home/tle/.../demo_repo/../../etc/passwd
 #   = /etc/passwd                        # ← collapsed
 
 list(p.parents) == [Path("/etc"), Path("/")]
-WORKSPACE in p.parents == False          # not in list
-p == WORKSPACE        == False
+workspace in p.parents == False          # not in list
+p == workspace        == False
 
 → raise ValueError("path /etc/passwd escapes workspace ...")
 → caught by execute_tool
@@ -814,7 +814,7 @@ for chunk in stream:
         print(f"{MAGENTA}{delta.content}{RESET}",
               end="", flush=True)</code></pre>
   </div>
-  <div class="card code-loc fragment"><code>examples/06_chat.py:121-160</code>. Two booleans = the entire stream UI logic.</div>
+  <div class="card code-loc fragment"><code>cli/chat.py:347-380</code>. Two booleans = the entire stream UI logic.</div>
 </section>
 
 <!-- =========== §9.5 CONTEXT COMPACTION =========== -->
@@ -863,7 +863,7 @@ while split &lt; len(messages) and messages[split].get("role") != "user":
     split += 1
 if split &gt;= len(messages):
     return messages, "skipped (no clean user boundary)"  # bail, don't corrupt</code></pre>
-  <div class="card code-loc fragment"><code>examples/06_chat.py:139-191</code> — split on a <strong>user-role</strong> message so every tool_call/tool_result pair stays together.</div>
+  <div class="card code-loc fragment"><code>cli/chat.py:143-200</code> — split on a <strong>user-role</strong> message so every tool_call/tool_result pair stays together.</div>
   <aside class="notes">This is the single non-obvious bug in compaction and the reason a from-scratch implementation is worth showing. tool_call_id pairing is the same invariant from the very first roles slide — it bites you again here. The fix: never cut mid-turn. We start at -10, then walk forward until we land on a user message, which is always a clean boundary because the user never depends on a prior tool_call. If we walk off the end (rare — e.g. trailing tool messages), we bail and skip compaction entirely rather than send a malformed history. Better to risk overflow than guarantee a 400.</aside>
 </section>
 
@@ -890,6 +890,49 @@ if split &gt;= len(messages):
   </div>
   <div class="card key fragment">Same building blocks as the rest of the agent — a slash-command dispatcher and a token budget. No framework, ~50 lines.</div>
   <aside class="notes">Two ways to trigger. Automatic is the real path: every turn, before calling the model, estimate the budget and compact if over threshold — so a long task never crashes. Manual gives control during a demo: /tokens is a read-only gauge color-coded green/yellow/red against the 24K threshold, and /compact forces summarization immediately even if you're under budget — handy to show the mechanism on stage without waiting for a 26-message history. The whole thing is just a slash-command dispatcher plus the estimator; no LangChain, no memory framework.</aside>
+</section>
+
+<!-- =========== §9.7 EVAL HARNESS =========== -->
+
+<section class="section-title center">
+  <h1>§9.7 — Measuring It</h1>
+  <h3>From 3 demo tasks → a 627-task benchmark suite</h3>
+</section>
+
+<section>
+  <h2>The benchmark suite — 627 tasks</h2>
+  <div class="stat-grid">
+    <div class="stat fragment"><div class="stat-value" style="color:#7bdcb5;">627</div><div class="stat-label">tasks total</div></div>
+    <div class="stat fragment"><div class="stat-value" style="color:#7bf0ff;">163</div><div class="stat-label">HumanEval+ (<code>bench/he_*</code>)</div></div>
+    <div class="stat fragment"><div class="stat-value" style="color:#ff8aff;">424</div><div class="stat-label">MBPP-sanitized (<code>bench/mbpp_*</code>)</div></div>
+    <div class="stat fragment"><div class="stat-value" style="color:#ffd966;">37</div><div class="stat-label">curated hard tasks</div></div>
+    <div class="stat fragment"><div class="stat-value" style="color:#7bff7b;">3</div><div class="stat-label">legacy demo tasks</div></div>
+  </div>
+  <div class="card fragment" style="border-left-color:#ffd966;"><strong>Curated</strong> spans debugging, refactor, multi-file, DP, graphs, data-structures, OOP, parsing, algorithms, recursion — the cases short benchmarks miss.</div>
+  <div class="card key fragment"><strong>Every task is proven real.</strong> <code>eval/validate_tasks.py</code> gate: reference solution must PASS and the stub must FAIL, else the task is quarantined. No vacuous "stub already passes" tasks.</div>
+  <div class="card code-loc fragment"><code>eval/convert_benchmark.py</code> regenerates <code>bench/*</code> (no new deps); sources/licenses in <code>eval/LICENSES.md</code> — HumanEval MIT, MBPP CC-BY-4.0, EvalPlus Apache-2.0.</div>
+  <aside class="notes">The old eval was 3 hand-written tasks. Now it's 627: HumanEval+ and MBPP-sanitized pulled in via convert_benchmark.py (only huggingface_hub + requests, no heavy deps), plus 37 curated hard tasks that exercise the long-horizon skills the public benchmarks don't — multi-file edits, dynamic programming, graph algorithms, OOP. The validation gate is the trust anchor: validate_tasks.py runs each task's reference solution (must pass) and its stub (must fail); anything that fails that check is moved to _quarantine and skipped by the runner, so a green score can't come from a broken or trivial task.</aside>
+</section>
+
+<section>
+  <h2>Honest scoring + the no-op guardrail</h2>
+  <div class="two-col">
+    <div class="card warn fragment" style="border-left-color:#ffd966;">
+      <strong style="color:#ffd966;">🙈 Tests hidden while it works</strong><br/>
+      Benchmark tests are stripped (<code>## Tests: hidden</code>) so the agent implements from the <em>spec</em>, then restored only for grading — it can't read tests to hardcode answers. Debug/refactor tasks keep tests <em>visible</em> (pytest is the feedback signal).
+    </div>
+    <div class="card key fragment" style="border-left-color:#7bff7b;">
+      <strong style="color:#7bff7b;">🛡 no_action guardrail</strong><br/>
+      If the model replies <em>without</em> calling a tool, the loop nudges it (up to <strong>2×</strong>), then records <code>finish_reason="no_action"</code> — catching the silent "described code in prose, did nothing" failure instead of scoring it as finished.
+    </div>
+  </div>
+  <pre><code class="language-bash">python eval/run.py --jobs 8 --out eval/results/full_run.jsonl
+#   --jobs N        parallel agents (ProcessPoolExecutor, spawn)
+#   --filter / --repeats / --resume / --agent-timeout / --temperature
+#   → JSONL per task + Markdown summary by category & difficulty</code></pre>
+  <div class="card fragment"><strong>Independent grading:</strong> each task runs in its own snapshot; pytest re-runs after the agent exits and restores hidden tests — the score is the test outcome, never the agent's own claim.</div>
+  <div class="card code-loc fragment"><code>eval/run.py</code> · guardrail in <code>src/agent.py</code> (<code>MAX_NUDGES = 2</code>). Latest clean run: see <code>eval/results/&lt;timestamp&gt;.md</code>.</div>
+  <aside class="notes">Two ideas make the number trustworthy. First, hidden tests: for implement-from-spec tasks the test files are removed from the workspace the agent sees (marked '## Tests: hidden' in task.md) and restored only at grading time, so the agent can't peek at assertions and hardcode return values; debugging and refactor tasks deliberately keep tests visible because there pytest IS the task signal. Second, the guardrail: a common silent failure is the model writing 'here's the fixed function...' in prose without ever calling a tool — that used to look like a finish. Now run_agent nudges up to twice and otherwise returns finish_reason='no_action', a distinct bucket. The harness is parallel (spawn-based process pool so each worker re-imports a clean OpenAI client), resumable, and writes both JSONL and a Markdown summary grouped by category and difficulty. I'm deliberately not quoting a pass-rate on this slide — the authoritative clean run lives in eval/results/ as a timestamped file.</aside>
 </section>
 
 <!-- =========== §10 BIG PICTURE + DEMO + CLOSE =========== -->
@@ -969,7 +1012,7 @@ flowchart TB
   <ol class="steps">
     <li class="fragment"><strong>Pre-check</strong> — <code>curl localhost:8765/v1/models</code> returns OK</li>
     <li class="fragment"><strong>Reset bugs</strong> — restore <code>5 failed / 6 passed</code> state</li>
-    <li class="fragment"><strong>Launch REPL</strong> — <code>python examples/06_chat.py</code></li>
+    <li class="fragment"><strong>Launch REPL</strong> — <code>python cli/chat.py</code></li>
     <li class="fragment"><strong>Greeting</strong> (fast mode default): <code>you&gt; Hello, what can you do?</code></li>
     <li class="fragment"><strong>Trigger /think</strong> → cyan "Thinking mode: ON"</li>
     <li class="fragment"><strong>Fix tests</strong> — watch ReAct loop with apply_patch</li>
@@ -1001,8 +1044,8 @@ flowchart TB
       <h3 style="color: #ff8aff;">Phase 3 — research thesis</h3>
       <ol style="font-size: 0.7em;">
         <li class="fragment">Log every session as a trajectory (JSONL).</li>
-        <li class="fragment">Generate synthetic curriculum (~500 toy bug-fix tasks).</li>
-        <li class="fragment">Auto-label success (pytest passes).</li>
+        <li class="fragment">Run the <strong>627-task</strong> suite to harvest pass/fail traces <em>(harness DONE)</em>.</li>
+        <li class="fragment">Auto-label success (pytest passes — already how eval scores).</li>
         <li class="fragment">DPO fine-tune Qwen3-14B (LoRA) on successful vs failed.</li>
         <li class="fragment">Self-play loop → model learns from its own use.</li>
       </ol>

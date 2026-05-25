@@ -1,0 +1,7 @@
+from bell_Number import *
+
+
+def test_mbpp():
+    assert bell_Number(2) == 2
+    assert bell_Number(3) == 5
+    assert bell_Number(4) == 15

@@ -4,7 +4,7 @@ Per AGENTS.md Rule B: when a non-trivial technology is introduced, its official 
 
 Format: `<technology>: <URL>, downloaded YYYY-MM-DD, covers <topic>`
 
-- Qwen3.6-27B: https://huggingface.co/Qwen/Qwen3.6-27B, downloaded 2026-05-17, covers architecture (64 layers, hybrid Gated DeltaNet + Gated Attention), tokenizer vocab 248,320, BF16 weights, 262K context → `qwen-3.6-27b/model-card-summary.md`
+- Qwen3-14B: https://huggingface.co/Qwen/Qwen3-14B, downloaded 2026-05-17, covers architecture, tokenizer, BF16 weights, and context length for the model the project actually serves (Qwen3-14B on a single A6000) → `qwen3-14b/model-card-summary.md`
 - vLLM parallelism + quantization: https://docs.vllm.ai/en/latest/serving/parallelism_scaling.html and https://docs.vllm.ai/en/latest/features/quantization/index.html, downloaded 2026-05-17, covers `--tensor-parallel-size` flag, NVLink guidance, supported quant methods (AWQ, GPTQ, FP8, INT4, ...) → `vllm/parallelism-and-quantization.md`
 - FlashAttention: https://arxiv.org/abs/2307.08691 (v2 paper) + https://arxiv.org/abs/2205.14135 (v1), downloaded 2026-05-17, covers O(N) memory vs naive O(N²), block-wise tiling, 2-4× speedup → `flash-attention/key-claims.md`
 - PagedAttention / vLLM paper: https://arxiv.org/abs/2309.06180, downloaded 2026-05-17, covers KV cache block management, 2-4× throughput over baseline serving systems → `paged-attention/key-claims.md`
@@ -19,14 +19,14 @@ Each agent cached its own per-technology summary(ies). Pointers below; see `docs
 - agent-memory (MemGPT, Letta, Mem0, Zep/Graphiti, Generative Agents, Claude Code memory, Cursor rules, context overflow): https://code.claude.com/docs/en/memory + papers, downloaded 2026-05-18 → `agent-memory/*.md`
 - tool-calling (vLLM tool-calling parsers + OpenAI/Anthropic/Gemini schemas): https://docs.vllm.ai/en/stable/features/tool_calling/ + provider docs, downloaded 2026-05-18 → `tool-calling/*.md`
 - agent-recovery (Claude Code loop, Aider reflections, Reflexion + loop detection): https://code.claude.com/docs/en/agent-sdk/agent-loop, downloaded 2026-05-18 → `agent-recovery/*.md`
-- vLLM 2026 features (V1 engine, FP8 KV cache blog, spec decode flags, tool-call parsers): https://vllm.ai/blog/2026-04-22-fp8-kvcache + https://recipes.vllm.ai/Qwen/Qwen3.6-27B, downloaded 2026-05-18 → `vllm/features-2026.md`
+- vLLM 2026 features (V1 engine, FP8 KV cache blog, spec decode flags, tool-call parsers): https://vllm.ai/blog/2026-04-22-fp8-kvcache + https://recipes.vllm.ai/Qwen/Qwen3-14B, downloaded 2026-05-18 → `vllm/features-2026.md`
 - inference-engines (SGLang, TensorRT-LLM, comparison benchmarks): https://recipes.vllm.ai + sglang + tensorrt-llm docs, downloaded 2026-05-18 → `inference-engines/*.md`
-- speculative-decoding (vLLM official docs, Qwen 3.6 recipe, EAGLE-3 alternatives): https://recipes.vllm.ai/Qwen/Qwen3.6-27B + vLLM speculative-decoding docs, downloaded 2026-05-18 → `speculative-decoding/*.md`
+- speculative-decoding (vLLM official docs, Qwen3 recipe, EAGLE-3 alternatives): https://recipes.vllm.ai/Qwen/Qwen3-14B + vLLM speculative-decoding docs, downloaded 2026-05-18 → `speculative-decoding/*.md`
 - kv-cache (vLLM prefix caching design, FP8 KV blog, chunked prefill tuning, CPU swap): https://vllm-project.github.io/2026/04/22/fp8-kvcache.html + vLLM docs, downloaded 2026-05-18 → `kv-cache/*.md`
 - quantization (vLLM support matrix): https://docs.vllm.ai/en/latest/features/quantization/, downloaded 2026-05-18 → `quantization/vllm-quantization-support-matrix.md`
-- coding-llms (Qwen 3.6-27B card, 35B-A3B card, competitor cards): https://huggingface.co/Qwen/Qwen3.6-27B + DeepSeek/Llama/GLM cards, downloaded 2026-05-18 → `coding-llms/*.md`
-- swe-bench (Verified top-15 May 2026, leaderboard, Qwen 3.6 card): https://www.swebench.com + https://huggingface.co/Qwen/Qwen3.6-27B, downloaded 2026-05-18 → `swe-bench/*.md`
-- coding-benchmarks (HumanEval/MBPP/EvalPlus, LiveCodeBench, BigCodeBench, MultiPL-E/EvalPerf/CodeContests/APPS, Qwen 3.6 scores): https://livecodebench.github.io + benchmark sites, downloaded 2026-05-18 → `coding-benchmarks/*.md`
+- coding-llms (Qwen3-14B card, competitor cards): https://huggingface.co/Qwen/Qwen3-14B + DeepSeek/Llama/GLM cards, downloaded 2026-05-18 → `coding-llms/*.md`
+- swe-bench (Verified top-15 May 2026, leaderboard, Qwen3 card): https://www.swebench.com + https://huggingface.co/Qwen/Qwen3-14B, downloaded 2026-05-18 → `swe-bench/*.md`
+- coding-benchmarks (HumanEval/MBPP/EvalPlus, LiveCodeBench, BigCodeBench, MultiPL-E/EvalPerf/CodeContests/APPS, Qwen3 scores): https://livecodebench.github.io + benchmark sites, downloaded 2026-05-18 → `coding-benchmarks/*.md`
 - long-context-evals (RULER overview, LongBench v2, NIAH and friends, Qwen long-context): https://github.com/NVIDIA/RULER + benchmark sites, downloaded 2026-05-18 → `long-context-evals/*.md`
 - agent-benchmarks (τ-bench, GAIA, OSWorld, WebArena/SWE-Lancer/AgentBench): https://github.com/sierra-research/tau-bench + benchmark sites, downloaded 2026-05-18 → `agent-benchmarks/*.md`
 - code-sandbox (e2b, Daytona, Modal, Firecracker/gVisor microVM, bubblewrap/nsjail/Docker): https://code.claude.com/docs/en/sandboxing + sandbox vendor docs, downloaded 2026-05-18 → `code-sandbox/*.md`

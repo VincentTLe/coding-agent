@@ -1,0 +1,7 @@
+from issort_list import *
+
+
+def test_mbpp():
+    assert issort_list([1,2,4,6,8,10,12,14,16,17])==True
+    assert issort_list([1, 2, 4, 6, 8, 10, 12, 14, 20, 17])==False
+    assert issort_list([1, 2, 4, 6, 8, 10,15,14,20])==False

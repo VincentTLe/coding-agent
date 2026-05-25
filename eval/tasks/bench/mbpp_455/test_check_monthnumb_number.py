@@ -1,0 +1,7 @@
+from check_monthnumb_number import *
+
+
+def test_mbpp():
+    assert check_monthnumb_number(5)==True
+    assert check_monthnumb_number(2)==False
+    assert check_monthnumb_number(6)==False

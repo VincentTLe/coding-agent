@@ -453,8 +453,8 @@
 <pre class="mermaid">
 flowchart TB
     User["👤 USER<br/>terminal keypresses"]
-    L1["🎨 LAYER 1: Terminal UX<br/>06_chat.py — ANSI colors, streaming print"]
-    L2["🔄 LAYER 2: ReAct Loop + Compaction<br/>06_chat.py — chat() inner loop, /compact"]
+    L1["🎨 LAYER 1: Terminal UX<br/>cli/chat.py — ANSI colors, streaming print"]
+    L2["🔄 LAYER 2: ReAct Loop + Compaction<br/>cli/chat.py — chat() inner loop, /compact"]
     L3["📦 LAYER 3: OpenAI SDK<br/>HTTP client, JSON serialization"]
     L4["⚙️ LAYER 4: vLLM Server<br/>port 8765, PagedAttention, parsers"]
     L5["🧠 LAYER 5: Qwen3-14B Model<br/>BF16, 40 layers, GPU1"]
@@ -594,7 +594,7 @@ sequenceDiagram
   </div>
 
   <div class="card code-loc">
-  In <code>examples/06_chat.py:163-174</code> — the accumulator pattern:
+  In <code>cli/chat.py:163-174</code> — the accumulator pattern:
   <pre><code class="language-python">if delta.tool_calls:
     for tcd in delta.tool_calls:
         idx = tcd.index
@@ -724,7 +724,7 @@ flowchart TB
     Agent --> DISC
     Agent --> EXEC
     Agent --> DELEG
-    FILE -.bounded by.-> WS["📁 WORKSPACE<br/>demo_repo/"]
+    FILE -.bounded by.-> WS["📁 workspace param<br/>e.g. demo_repo/"]
     DISC -.bounded by.-> WS
     EXEC -.cwd pinned.-> WS
     T10 -.timeout 300s · max_iters 8.-> Child["🤖 fresh agent<br/>own context window"]
@@ -898,7 +898,7 @@ flowchart TB
   <h3>Estimating tokens cheaply</h3>
   <p>We do not call the tokenizer on every turn. A coarse heuristic — <strong>~1 token per 4 characters</strong> — is good enough to decide <em>when</em> to compact:</p>
   <div class="card code-loc">
-  <code>examples/06_chat.py</code> — the estimate + threshold check:
+  <code>cli/chat.py</code> — the estimate + threshold check:
   <pre><code class="language-python">COMPACT_THRESHOLD_TOKENS = 24000
 KEEP_RECENT_MESSAGES = 10
 
@@ -1043,7 +1043,7 @@ flowchart LR
 
   <h3>How we toggle it per-request</h3>
   <div class="card code-loc">
-  <code>examples/06_chat.py:105-117</code> — pass via OpenAI SDK's <code>extra_body</code>:
+  <code>cli/chat.py:105-117</code> — pass via OpenAI SDK's <code>extra_body</code>:
   <pre><code class="language-python">stream = client.chat.completions.create(
     model=model,
     messages=messages,
@@ -1115,7 +1115,7 @@ flowchart LR
   <p>Qwen3 sometimes emits Python triple-quoted strings inside <code>arguments</code> — not valid JSON. The Hermes parser passes them through unchanged. If we appended that to history verbatim, vLLM 400s on the next request (it re-parses history).</p>
 
   <div class="card code-loc">
-  Our defense in <code>examples/06_chat.py:267-291</code>:
+  Our defense in <code>cli/chat.py:267-291</code>:
   <pre><code class="language-python">for tc in tool_calls:
     try:
         if tc["arguments"]:
@@ -1145,10 +1145,10 @@ asst_msg["tool_calls"] = [{
   <div class="diagram">
   <pre class="mermaid">
 flowchart TD
-    Model["Model emits:<br/>read_file('../../etc/passwd')"] --> Dispatch["execute_tool('read_file', ...)"]
-    Dispatch --> Safe["_safe_path('../../etc/passwd')"]
-    Safe --> Resolve["(WORKSPACE / path).resolve()<br/>= /etc/passwd"]
-    Resolve --> Check{"WORKSPACE in<br/>parents of /etc/passwd?"}
+    Model["Model emits:<br/>read_file('../../etc/passwd')"] --> Dispatch["execute_tool('read_file', args, workspace)"]
+    Dispatch --> Safe["_safe_path('../../etc/passwd', workspace)"]
+    Safe --> Resolve["(workspace / path).resolve()<br/>= /etc/passwd"]
+    Resolve --> Check{"workspace in<br/>parents of /etc/passwd?"}
     Check -->|NO| Raise["raise ValueError<br/>'path escapes workspace'"]
     Raise --> Catch["execute_tool catches<br/>→ returns 'ERROR: ...'"]
     Catch --> Model2["Model sees error string,<br/>tries different path or gives up"]
@@ -1166,17 +1166,18 @@ flowchart TD
 
   <h3>The 4-line sandbox</h3>
   <div class="card code-loc">
-  <code>src/tools.py:51-67</code>:
-  <pre><code class="language-python">def _safe_path(path: str) -&gt; Path:
-    p = (WORKSPACE / path).resolve()    # absolutify, follow symlinks
-    if WORKSPACE not in p.parents and p != WORKSPACE:
-        raise ValueError(f"path {p} escapes workspace {WORKSPACE}")
+  <code>src/tools.py:44</code>:
+  <pre><code class="language-python">def _safe_path(path: str, workspace: Path) -&gt; Path:
+    p = (workspace / path).resolve()    # absolutify, follow symlinks
+    if workspace not in p.parents and p != workspace:
+        raise ValueError(f"path {p} escapes workspace {workspace}")
     return p</code></pre>
   Two tricks combined:
   <ul>
     <li><code>.resolve()</code> follows symlinks AND collapses <code>..</code> → the true target path</li>
-    <li><code>p.parents</code> check verifies the target is a descendant of <code>WORKSPACE</code></li>
+    <li><code>p.parents</code> check verifies the target is a descendant of <code>workspace</code></li>
   </ul>
+  <p>Note: <code>workspace</code> is an <strong>explicit parameter</strong> threaded down from <code>run_agent(goal, workspace)</code> via <code>execute_tool(name, args, workspace)</code> — there is no global <code>WORKSPACE</code> / <code>set_workspace()</code> anymore. Pure functions of their inputs, and one process can drive several workspaces (which is how <code>spawn_subagent</code> hands its sandbox to a child).</p>
   </div>
 
   <h3>What this DOES NOT protect</h3>
@@ -1235,7 +1236,7 @@ then renders subsequent text in bold blue.</div>
 
   <h3>State machine for [thinking] vs [assistant] headers</h3>
   <div class="card code-loc">
-  <code>examples/06_chat.py:121-156</code>:
+  <code>cli/chat.py:121-156</code>:
   <pre><code class="language-python">in_thinking = False
 in_content = False
 
@@ -1276,8 +1277,8 @@ for chunk in stream:
   <p>One user message → 20 distinct steps across 5 layers. Here's what happens when you type <code>Fix the failing tests in demo_repo/</code> in the REPL:</p>
 
   <ol class="steps">
-    <li><strong>Keypress → stdin.</strong> Terminal writes UTF-8 to <code>input()</code> at <code>06_chat.py:211</code>.</li>
-    <li><strong>Append user msg</strong> at <code>06_chat.py:239</code>.</li>
+    <li><strong>Keypress → stdin.</strong> Terminal writes UTF-8 to <code>input()</code> at <code>cli/chat.py:211</code>.</li>
+    <li><strong>Append user msg</strong> at <code>cli/chat.py:239</code>.</li>
     <li><strong>Enter ReAct iteration</strong> <code>for _turn in range(1, max_tool_turns + 1)</code>.</li>
     <li><strong>SDK builds API call</strong> with <code>messages</code>, <code>tools=TOOL_SCHEMAS</code>, <code>stream=True</code>, <code>enable_thinking</code>.</li>
     <li><strong>HTTP POST</strong> → <code>localhost:8765/v1/chat/completions</code>, opens SSE stream.</li>
@@ -1286,12 +1287,12 @@ for chunk in stream:
     <li><strong>Scheduler</strong> folds into next forward pass; PagedAttention allocates KV blocks.</li>
     <li><strong>Forward + sample loop.</strong> 40 transformer layers → logits → top-p sample → next token. ~15ms/token on A6000.</li>
     <li><strong>SSE chunks back</strong>: first <code>reasoning_content</code>, then <code>content</code>, then <code>tool_calls</code> deltas.</li>
-    <li><strong>Client accumulates</strong> tool_calls dict by index (<code>06_chat.py:163-174</code>).</li>
+    <li><strong>Client accumulates</strong> tool_calls dict by index (<code>cli/chat.py:163-174</code>).</li>
     <li><strong>JSON validation</strong> — mark <code>_bad_json</code> if needed.</li>
     <li><strong>Append assistant msg</strong> with tool_calls (preserve the field!).</li>
     <li><strong>If <code>tool_calls</code> empty</strong> → break, return to <code>you&gt;</code> prompt.</li>
-    <li><strong>For each tool_call</strong> → <code>execute_tool(name, args)</code> dispatches to one of the 10 tools (<code>read_file</code>, <code>apply_patch</code>, <code>grep_files</code>, <code>run_bash</code>, <code>spawn_subagent</code>, …).</li>
-    <li><strong>Sandbox check</strong>: <code>_safe_path</code> verifies path inside <code>WORKSPACE</code>.</li>
+    <li><strong>For each tool_call</strong> → <code>execute_tool(name, args, workspace)</code> dispatches to one of the 10 tools (<code>read_file</code>, <code>apply_patch</code>, <code>grep_files</code>, <code>run_bash</code>, <code>spawn_subagent</code>, …).</li>
+    <li><strong>Sandbox check</strong>: <code>_safe_path(path, workspace)</code> verifies path inside the workspace.</li>
     <li><strong>Append role="tool"</strong> message with <code>tool_call_id</code> + result string.</li>
     <li><strong>Loop back to step 4</strong> — model now sees the tool result.</li>
     <li><strong>3-6 iterations later</strong>, model emits content with NO tool_calls → done.</li>
@@ -1327,8 +1328,13 @@ for chunk in stream:
     <li><strong>run_python tool</strong> — run Python directly without a bash wrapper (Section 4)</li>
     <li><strong>spawn_subagent tool</strong> — divide and conquer via a child subprocess agent (Section 4)</li>
     <li><strong>Context compaction</strong> — when messages &gt; 24K tokens, summarize old turns, keep recent 10 verbatim (Section 6)</li>
+    <li><strong>Evaluation harness</strong> (<code>eval/</code>) — <strong>627 tasks</strong> (163 HumanEval+ · 424 MBPP · 37 curated hard · 3 demo), parallel runner <code>eval/run.py</code> (<code>--jobs</code>, <code>--filter</code>, <code>--repeats</code>, <code>--resume</code>), hidden-test honest scoring, a <code>no_action</code> guardrail, and a <code>validate_tasks.py</code> gate that proves each task real (ref passes, stub fails)</li>
   </ol>
   <p>Still open: an interruptibility SIGINT handler that tools check between sub-steps, and broader sandboxing (Docker / seccomp).</p>
+
+  <div class="card key">
+  <strong>How it scores honestly.</strong> Benchmark tests are <em>hidden</em> from the agent while it works (<code>## Tests: hidden</code>) and restored only for grading, so the model can't read the assertions and hard-code outputs; a task passes iff <code>pytest</code> exits 0 afterward. The authoritative pass rate lives in the latest <code>eval/results/&lt;timestamp&gt;.md</code> (gitignored, generated per run) rather than being frozen into this page.
+  </div>
 
   <h3>Phase 3 — the research thesis</h3>
   <p>Log every session as a trajectory. Auto-label success (pytest passes / user accepted). Fine-tune Qwen3-14B (LoRA) via DPO on (successful_trajectory, failed_trajectory) pairs from the same prompt. The agent learns from its own use. Same recipe behind DeepSeek's SWE-RL. This is the <strong>publishable contribution</strong>.</p>
@@ -1395,10 +1401,10 @@ for chunk in stream:
   <p>The <code>&lt;think&gt;...&lt;/think&gt;</code> content the model emits before its final answer. §8.</p></details>
 
   <details class="gloss"><summary>REPL</summary>
-  <p>Read-Eval-Print Loop; the <code>chat() while True</code> in <code>06_chat.py</code>. §11.</p></details>
+  <p>Read-Eval-Print Loop; the <code>chat() while True</code> in <code>cli/chat.py</code>. §11.</p></details>
 
   <details class="gloss"><summary>Sandbox</summary>
-  <p>Constraint that limits which paths/commands the agent may touch; ours is <code>_safe_path</code> + WORKSPACE resolution. §10.</p></details>
+  <p>Constraint that limits which paths/commands the agent may touch; ours is <code>_safe_path(path, workspace)</code> resolution against an explicit workspace parameter. §10.</p></details>
 
   <details class="gloss"><summary>spawn_subagent</summary>
   <p>Delegation tool: launches a child agent in a subprocess with its own context window (<code>timeout 300s</code>, <code>max_iters 8</code>) and returns only its final answer. §4.</p></details>
@@ -1444,7 +1450,7 @@ pytest demo_repo/ -q</code></pre>
   <p>Demo files get fixed during a run. To reset for next demo, copy from <code>SYSTEM_DEEP_DIVE.md</code> Section 10.7 the <code>cat &gt; ... &lt;&lt;'PYEOF'</code> heredoc commands.</p>
 
   <h3>3. Demo flow (10 minutes)</h3>
-  <pre><code class="language-bash">python examples/06_chat.py</code></pre>
+  <pre><code class="language-bash">python cli/chat.py</code></pre>
 
   <p>Try in order:</p>
   <div class="terminal">

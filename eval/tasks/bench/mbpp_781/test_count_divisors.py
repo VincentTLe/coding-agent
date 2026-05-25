@@ -1,0 +1,7 @@
+from count_divisors import *
+
+
+def test_mbpp():
+    assert count_divisors(10)
+    assert not count_divisors(100)
+    assert count_divisors(125)

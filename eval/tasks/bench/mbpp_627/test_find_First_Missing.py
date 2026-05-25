@@ -1,0 +1,7 @@
+from find_First_Missing import *
+
+
+def test_mbpp():
+    assert find_First_Missing([0,1,2,3]) == 4
+    assert find_First_Missing([0,1,2,6,9]) == 3
+    assert find_First_Missing([2,3,5,8,9]) == 0

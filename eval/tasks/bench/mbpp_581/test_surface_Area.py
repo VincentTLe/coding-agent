@@ -1,0 +1,7 @@
+from surface_Area import *
+
+
+def test_mbpp():
+    assert surface_Area(3,4) == 33
+    assert surface_Area(4,5) == 56
+    assert surface_Area(1,2) == 5

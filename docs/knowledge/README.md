@@ -2,7 +2,7 @@
 
 This is the owner's personal knowledge base, captured during the build of `coding-agent` (Math/Stat 361 project, Knox College, advisor Prof. Andrew Leahy, demo May 29, 2026).
 
-It is **not** a tutorial for others. It reflects what *I* (the owner) learned, in the order I learned it, with the analogies that clicked, and the specific numbers that apply to this project's hardware (2× A6000) and chosen model (Qwen 3.6-27B).
+It is **not** a tutorial for others. It reflects what *I* (the owner) learned, in the order I learned it, with the analogies that clicked, and the specific numbers that apply to this project's hardware (a single NVIDIA A6000, GPU1) and chosen model (Qwen3-14B, BF16).
 
 Goals when using this folder:
 
@@ -22,7 +22,7 @@ Goals when using this folder:
 | 06 | [Stateless API and Chat Format](06-stateless-api-and-chat-format.md) | 12 min | The interface our agent code talks to |
 | 07 | [Model Parameters and VRAM](07-model-parameters-and-vram.md) | 12 min | "Does it fit on our hardware?" |
 | 08 | [Quantization](08-quantization.md) | 12 min | "Why aren't you quantizing?" — common question |
-| 09 | [Tensor Parallelism](09-tensor-parallelism.md) | 12 min | How we actually run a 54 GB model on 48 GB cards |
+| 09 | [Tensor Parallelism](09-tensor-parallelism.md) | 12 min | How a model is split across GPUs when it won't fit on one (background; our Qwen3-14B fits on a single A6000, so we run `--tensor-parallel-size 1`) |
 | 10 | [vLLM vs Ollama](10-vllm-vs-ollama.md) | 12 min | Why we chose vLLM for the agent backend |
 | —  | [Glossary](glossary.md) | as needed | Lookup, not linear reading |
 
@@ -42,7 +42,7 @@ A lookup table for the "Likely questions from the professor" sections, since the
 | "How does the model remember previous turns?" | [06](06-stateless-api-and-chat-format.md) |
 | "How big is the model?" / "Does it fit?" | [07](07-model-parameters-and-vram.md) |
 | "Why didn't you quantize the model?" / "What is AWQ?" | [08](08-quantization.md) |
-| "How does the model run across two GPUs?" / "What is `--tensor-parallel-size`?" | [09](09-tensor-parallelism.md) |
+| "What is `--tensor-parallel-size`?" / "When would you split a model across GPUs?" | [09](09-tensor-parallelism.md) |
 | "Why vLLM and not Ollama?" / "What is PagedAttention?" | [10](10-vllm-vs-ollama.md) |
 | Any unfamiliar term | [glossary.md](glossary.md) |
 
@@ -58,12 +58,12 @@ Per `AGENTS.md` Rule A and Rule B:
 
 All three claims from the first pass have been resolved (web-verified 2026-05-17):
 
-- [01] **Vietnamese tokens-per-word**: the specific "~1.5–2.0" range was not found in a primary source. The table was rewritten to make a *qualified* claim (Vietnamese sits between English and CJK on Latin-script-with-diacritics tokenizers; Qwen 3.6's 248K vocab is favorable; exact fertility requires direct measurement). Petrov et al. (2023, arxiv 2305.15425) cited for the general cross-language disparity claim.
+- [01] **Vietnamese tokens-per-word**: the specific "~1.5–2.0" range was not found in a primary source. The table was rewritten to make a *qualified* claim (Vietnamese sits between English and CJK on Latin-script-with-diacritics tokenizers; the Qwen3 tokenizer's large vocab is favorable; exact fertility requires direct measurement). Petrov et al. (2023, arxiv 2305.15425) cited for the general cross-language disparity claim.
 - [04] **Gated DeltaNet citation** confirmed: Yang, Kautz, Hatamizadeh, *"Gated Delta Networks: Improving Mamba2 with Delta Rule"*, ICLR 2025 (arxiv 2412.06464). The placeholder citation 2312.06635 was incorrect and has been replaced.
-- [06] **`Qwen/Qwen3.6-27B-Instruct` confirmed not to exist.** The official Qwen namespace for this size publishes `Qwen/Qwen3.6-27B` (base, fused thinking + instruct) and `Qwen/Qwen3.6-27B-FP8` (FP8 quant). The repo name in `.env.example` was corrected from `Qwen/Qwen3.6-27B-Instruct` to `Qwen/Qwen3.6-27B`.
+- [06] **Model repo name verified.** The project runs `Qwen/Qwen3-14B` (BF16); the `.env` / `.env.example` `VLLM_MODEL_NAME` is set to `Qwen/Qwen3-14B`, matching the `--served-model-name` in `scripts/start_vllm.sh`. (An earlier plan targeted a larger Qwen3 model; that was dropped in favor of the 14B that fits comfortably on a single A6000.)
 
 No remaining `[UNVERIFIED]` or `[PARTIALLY VERIFIED]` markers in this knowledge base.
 
-## Vietnamese annotations [in brackets]
+## Inline annotations [in brackets]
 
-Where used in the body, brackets like `[bộ_xử_lý: processor]` translate tricky English math/CS terms inline. The main text is English (matches the lab notebook tradition and the demo presentation language).
+Where used in the body, bracketed glosses (for example `[gloss: plain-English meaning]`) clarify tricky math/CS terms inline. The main text is English (matches the lab notebook tradition and the demo presentation language).

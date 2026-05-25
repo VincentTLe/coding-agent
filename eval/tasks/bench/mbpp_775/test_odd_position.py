@@ -1,0 +1,7 @@
+from odd_position import *
+
+
+def test_mbpp():
+    assert odd_position([2,1,4,3,6,7,6,3]) == True
+    assert odd_position([4,1,2]) == True
+    assert odd_position([1,2,3]) == False

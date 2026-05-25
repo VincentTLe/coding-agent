@@ -12,3 +12,15 @@ vllm_logs/
 dist/
 build/
 .ipynb_checkpoints/
+
+# Eval run artifacts — generated at runtime, not source.
+# (The benchmark TASK dirs under eval/tasks/bench/ ARE committed; only the
+#  run outputs, per-task logs, and the downloaded benchmark cache are ignored.)
+eval/results/
+eval/.cache/
+
+# Personal documents / PII — never commit to this public repo
+*.pdf
+*.docx
+Transcript*.pdf
+Resume*.pdf

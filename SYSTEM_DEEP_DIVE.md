@@ -175,7 +175,7 @@ resp = client.chat.completions.create(
 
 Same endpoint, same stateless contract — we still resend the whole `messages` list every loop iteration. `tool_choice="auto"` lets the model decide whether to call a tool or reply directly; `"required"` would force a tool call every turn (wrong for an agent that must be able to *finish*).
 
-**REPL agent** — `examples/06_chat.py:192`:
+**REPL agent** — `cli/chat.py:192`:
 
 ```python
 messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
@@ -321,9 +321,9 @@ time
 
 ### 2.7 How we use it in our code
 
-The streaming loop lives in `stream_one_turn` at `examples/06_chat.py:88`.
+The streaming loop lives in `stream_one_turn` at `cli/chat.py:88`.
 
-**Opening the stream** (`06_chat.py:109`):
+**Opening the stream** (`cli/chat.py:109`):
 
 ```python
 stream = client.chat.completions.create(
@@ -337,7 +337,7 @@ stream = client.chat.completions.create(
 )
 ```
 
-**Accumulators** (`06_chat.py:115-122`):
+**Accumulators** (`cli/chat.py:115-122`):
 
 ```python
 content_buf = ""
@@ -347,7 +347,7 @@ in_thinking = False
 in_content = False
 ```
 
-**Reasoning extraction with compat shim** (`06_chat.py:134`):
+**Reasoning extraction with compat shim** (`cli/chat.py:134`):
 
 ```python
 r = getattr(delta, "reasoning_content", None) or getattr(delta, "reasoning", None)
@@ -355,7 +355,7 @@ r = getattr(delta, "reasoning_content", None) or getattr(delta, "reasoning", Non
 
 vLLM renamed the field; `getattr` with default handles both versions + raw OpenAI servers without reasoning support.
 
-**Tool-call accumulation** (`06_chat.py:163-174`):
+**Tool-call accumulation** (`cli/chat.py:163-174`):
 
 ```python
 if delta.tool_calls:
@@ -372,7 +372,7 @@ if delta.tool_calls:
                 tool_calls[idx]["arguments"] += tcd.function.arguments
 ```
 
-**Termination** (`06_chat.py:179`):
+**Termination** (`cli/chat.py:179`):
 
 ```python
 return content_buf, [tool_calls[i] for i in sorted(tool_calls)]
@@ -609,7 +609,7 @@ for tc in msg.tool_calls:
 
 Termination = `not msg.tool_calls`. Parallel tool calls handled by `for`. `tool_call_id: tc.id` is load-bearing.
 
-**Streaming + bad-JSON sanitization** — `06_chat.py:267-303`:
+**Streaming + bad-JSON sanitization** — `cli/chat.py:267-303`:
 
 ```python
 for tc in tool_calls:
@@ -671,7 +671,7 @@ So: **`list_dir`** enumerates one directory's entries (the cheap, targeted "what
 
 - The snippet cannot mutate the agent's in-memory state — no monkey-patching the running agent, no leaking variables between calls. Each invocation starts clean.
 - The model expresses intent directly as Python source instead of smuggling it through a shell string, which dodges an entire class of quoting/escaping bugs (nested quotes, `$`, backticks, newlines) that plague `python -c` one-liners.
-- Like `run_bash`, it runs with `cwd=WORKSPACE` and a timeout, so a runaway computation is bounded.
+- Like `run_bash`, it runs with `cwd=workspace` and a timeout, so a runaway computation is bounded.
 
 It is the right tool when the model wants to *compute* something (parse data, check a calculation, prototype a function) rather than *operate the system* (move files, run pytest, install a package) — which remains `run_bash`'s job.
 
@@ -1288,7 +1288,7 @@ Qwen3 design is most flexible for interactive agent: same model file, same vLLM 
 
 Without it, `<think>` blocks would leak into `content` and we'd strip them client-side with regex — fragile across streaming chunk boundaries.
 
-**2. Per-request toggle** — `examples/06_chat.py:105-117`:
+**2. Per-request toggle** — `cli/chat.py:105-117`:
 
 ```python
 stream = client.chat.completions.create(
@@ -1304,7 +1304,7 @@ stream = client.chat.completions.create(
 
 `extra_body` is the OpenAI SDK escape hatch for non-OpenAI fields. vLLM forwards `chat_template_kwargs` straight into Jinja template, so passing `enable_thinking` here is functionally identical to calling `tokenizer.apply_chat_template(..., enable_thinking=...)` directly.
 
-**3. Stream-side state machine** — `examples/06_chat.py:128-160`:
+**3. Stream-side state machine** — `cli/chat.py:128-160`:
 
 ```python
 r = getattr(delta, "reasoning_content", None) or getattr(delta, "reasoning", None)
@@ -1329,7 +1329,7 @@ if delta.content:
 
 Reasoning rendered **white** so it visually recedes against **magenta** assistant content — same convention Claude Code uses for its extended-thinking pane.
 
-**4. Sticky toggle + slash commands** — `examples/06_chat.py:196, 222-233`:
+**4. Sticky toggle + slash commands** — `cli/chat.py:196, 222-233`:
 
 ```python
 thinking_enabled = False           # default OFF (fast mode)
@@ -1494,9 +1494,9 @@ The single most important line in our stack: `scripts/start_vllm.sh:27`:
 
 Without it, Qwen3 would emit `<tool_call>{...}</tool_call>` text into `content`, and our client — iterating over `delta.tool_calls` — would see empty list every time. Agent never calls a single tool. `--enable-auto-tool-choice` flag is the partner switch.
 
-Because parser does its job, **client never sees Hermes XML directly**. `examples/06_chat.py:167-178` consumes already-parsed OpenAI shape (see Section 2 for streaming accumulator).
+Because parser does its job, **client never sees Hermes XML directly**. `cli/chat.py:167-178` consumes already-parsed OpenAI shape (see Section 2 for streaming accumulator).
 
-Quirk-handling at `examples/06_chat.py:267-273`:
+Quirk-handling at `cli/chat.py:267-273`:
 
 ```python
 for tc in tool_calls:
@@ -1508,7 +1508,7 @@ for tc in tool_calls:
         tc["_bad_json_error"] = str(e)
 ```
 
-This is the section 7.8 guard. When Qwen3 emits triple-quoted strings inside `arguments`, vLLM's parser passes malformed JSON through unchanged. If we blindly appended to history, vLLM returns HTTP 400 on next turn (it re-parses history). We validate up front, mark call broken, at `examples/06_chat.py:282-291` substitute `"{}"` into history while still returning parse error to model as tool result.
+This is the section 7.8 guard. When Qwen3 emits triple-quoted strings inside `arguments`, vLLM's parser passes malformed JSON through unchanged. If we blindly appended to history, vLLM returns HTTP 400 on next turn (it re-parses history). We validate up front, mark call broken, at `cli/chat.py:282-291` substitute `"{}"` into history while still returning parse error to model as tool result.
 
 **Chain of trust**: NousResearch defined format → Qwen team fine-tuned Qwen3 to emit it → vLLM hermes parser converts back to OpenAI shape → our client treats server like any OpenAI endpoint. Pull `--tool-call-parser hermes` out of launch script and the entire agent stops functioning.
 
@@ -1536,7 +1536,7 @@ Without containment, any of these can exfiltrate SSH keys, modify `.profile`, `r
 
 [CWE-22](https://cwe.mitre.org/data/definitions/22.html) is the classic vulnerability class: "The product uses external input to construct a pathname... but does not properly neutralize special elements." Two flavors:
 
-- **Relative traversal:** input `../../etc/passwd`. Naive concat `WORKSPACE + "/" + path` gives `/sandbox/../../etc/passwd`, OS resolves to `/etc/passwd` during `open()`.
+- **Relative traversal:** input `../../etc/passwd`. Naive concat `workspace + "/" + path` gives `/sandbox/../../etc/passwd`, OS resolves to `/etc/passwd` during `open()`.
 - **Absolute traversal:** input `/etc/passwd`. With `os.path.join`, absolute second argument *replaces* the first, silently escaping.
 
 [OWASP](https://owasp.org/www-community/attacks/Path_Traversal) lists encoded bypasses (`%2e%2e%2f`, `..%c0%af`, null bytes), which is why string-level sanitization ("strip `..`") is brittle. **Canonicalize, then compare** is OWASP-recommended.
@@ -1562,7 +1562,7 @@ After `resolve()`, you hold the *true* path the OS will touch — encoded `..`, 
 [PosixPath('/a/b'), PosixPath('/a'), PosixPath('/')]
 ```
 
-To verify `p` is inside `WORKSPACE`, ask: is `WORKSPACE` somewhere in `p.parents`? If yes, `p` is a descendant. If no, escape. Edge case: `p == WORKSPACE` (agent reads workspace root) — workspace is *not* its own parent, special-case with `or p == WORKSPACE`.
+To verify `p` is inside the `workspace`, ask: is `workspace` somewhere in `p.parents`? If yes, `p` is a descendant. If no, escape. Edge case: `p == workspace` (agent reads workspace root) — a directory is *not* its own parent, special-case with `or p == workspace`.
 
 ```
    Path resolution flow
@@ -1570,7 +1570,7 @@ To verify `p` is inside `WORKSPACE`, ask: is `WORKSPACE` somewhere in `p.parents
    model emits:  "../../etc/passwd"
                        │
                        ▼
-           WORKSPACE / "../../etc/passwd"
+           workspace / "../../etc/passwd"
            = /home/tle/code/coding-agent/demo_repo/../../etc/passwd
                        │
                        │  .resolve()   ← collapses .., follows symlinks
@@ -1581,7 +1581,7 @@ To verify `p` is inside `WORKSPACE`, ask: is `WORKSPACE` somewhere in `p.parents
            parents of /etc/passwd = [/etc, /]
                        │
                        ▼
-   Is WORKSPACE (/home/tle/.../demo_repo) in [/etc, /]?
+   Is workspace (/home/tle/.../demo_repo) in [/etc, /]?
                        │
                        ▼
                       NO  →  raise ValueError
@@ -1589,7 +1589,7 @@ To verify `p` is inside `WORKSPACE`, ask: is `WORKSPACE` somewhere in `p.parents
 
 ### 8.5 subprocess CWD vs. file path
 
-For `run_bash`, we set `cwd=WORKSPACE`. Makes shell-relative paths (`ls`, `cat foo.py`) resolve inside sandbox. **But shell can `cd` anywhere.** `cd /etc && cat passwd` works because shell itself runs as your user, with your privileges. CWD is a starting point, not a fence.
+For `run_bash`, we set `cwd=workspace`. Makes shell-relative paths (`ls`, `cat foo.py`) resolve inside sandbox. **But shell can `cd` anywhere.** `cd /etc && cat passwd` works because shell itself runs as your user, with your privileges. CWD is a starting point, not a fence.
 
 Thus: *file-path* sandbox is enforced (every `read_file`/`write_file` through `_safe_path`), *shell* sandbox is convenience-only. Honest trade-off for learning project.
 
@@ -1618,80 +1618,71 @@ Key invariant: **check runs in Python, not in the model.** Whatever the user typ
 
 ### 8.9 How we use it in our code
 
-Whole sandbox in 33 lines at `src/tools.py:35-67`:
+The whole sandbox is one small function at `src/tools.py:44`:
 
 ```python
-# tools.py:39
-WORKSPACE = Path.cwd()
-
-
-# tools.py:42-48
-def set_workspace(path: str | Path) -> None:
-    """Pin file operations to a directory. Call this once before run_agent()."""
-    global WORKSPACE
-    WORKSPACE = Path(path).resolve()
-    log.info(f"[tools] workspace = {WORKSPACE}")
-
-
-# tools.py:51-67
-def _safe_path(path: str) -> Path:
-    p = (WORKSPACE / path).resolve()
-    if WORKSPACE not in p.parents and p != WORKSPACE:
-        raise ValueError(f"path {p} escapes workspace {WORKSPACE}")
+# tools.py:44
+def _safe_path(path: str, workspace: Path) -> Path:
+    p = (workspace / path).resolve()
+    if workspace not in p.parents and p != workspace:
+        raise ValueError(f"path {p} escapes workspace {workspace}")
     return p
 ```
 
-Why module-level `WORKSPACE` and `global`? Tool functions called from OpenAI dispatcher with whatever args model emits — no clean way to thread `workspace` through as parameter on every call. We pay for convenience with single module-level variable, pinned once at startup. `set_workspace()` calls `.resolve()` *eagerly* so workspace itself is canonical.
+Note the design: `workspace` is an **explicit parameter**, not a module-level global. (An earlier version of this code used a global `WORKSPACE` pinned once via a `set_workspace()` helper; that was removed.) Threading the sandbox root through as an argument is the cleaner choice — it keeps the tools pure functions of their inputs (easy to unit-test, no hidden state), and it lets one process drive several workspaces, which is exactly what `spawn_subagent` needs when it hands its own workspace down to a child agent. The caller resolves the directory once (`Path(args.workspace).resolve()`), and that canonical `Path` is then passed down on every call.
 
-Two file tools route every path through the check (`tools.py:74-108`):
+Every file tool takes `workspace` as a keyword-only argument and routes its path through the check (`tools.py:69-104`):
 
 ```python
-def read_file(path: str) -> str:
-    p = _safe_path(path)              # raises ValueError if outside
+def read_file(path: str, *, workspace: Path) -> str:
+    p = _safe_path(path, workspace)   # raises ValueError if outside
     if not p.exists():
         return f"ERROR: file not found: {path}"
     return p.read_text(encoding="utf-8", errors="replace")
 
 
-def write_file(path: str, content: str) -> str:
-    p = _safe_path(path)              # same gate
+def write_file(path: str, content: str, *, workspace: Path) -> str:
+    p = _safe_path(path, workspace)   # same gate
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(content, encoding="utf-8")
     return f"wrote {len(content)} chars to {path}"
 ```
 
-`run_bash` takes weaker CWD-only approach (`tools.py:127-134`):
+`run_bash` takes the weaker CWD-only approach, anchoring the shell at the workspace (`tools.py:106`):
 
 ```python
-result = subprocess.run(
-    command,
-    shell=True,
-    cwd=WORKSPACE,
-    capture_output=True,
-    text=True,
-    timeout=timeout,
-)
+def run_bash(command: str, timeout: int = 600, *, workspace: Path) -> str:
+    result = subprocess.run(
+        command,
+        shell=True,
+        cwd=workspace,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
 ```
 
-Workspace pinned at two entry points:
-- `src/agent.py:230` — `set_workspace(Path(__file__).parent.parent / "demo_repo")` when running `python -m src.agent`.
-- `examples/06_chat.py:190` — `set_workspace(workspace)` at start of REPL.
+The workspace originates at the entry points and flows downward:
+- `src/agent.py` — `run_agent(goal, workspace, ...)` takes it as a parameter; `python -m src.agent "task" --workspace demo_repo` resolves `--workspace` (default `demo_repo/`) and passes it in.
+- `cli/chat.py` / `cli/solve.py` — resolve the workspace once and thread it through `run_agent` / `execute_tool`.
+- `execute_tool(name, arguments, workspace)` (`tools.py:887`) is the dispatcher; it forwards `workspace` to whichever tool the model invoked.
 
 ### 8.10 Worked example — model emits `read_file("../../etc/passwd")`
 
 ```python
-# 1. dispatcher routes the tool call
-execute_tool("read_file", {"path": "../../etc/passwd"})
+# 1. dispatcher routes the tool call (workspace threaded in explicitly)
+execute_tool("read_file", '{"path": "../../etc/passwd"}', workspace)
+#   workspace = Path("/home/tle/code/coding-agent/demo_repo")
 
-# 2. read_file calls _safe_path
-p = (WORKSPACE / "../../etc/passwd").resolve()
+# 2. read_file calls _safe_path(path, workspace)
+p = (workspace / "../../etc/passwd").resolve()
 #   = Path("/home/tle/code/coding-agent/demo_repo/../../etc/passwd").resolve()
 #   = Path("/etc/passwd")
 
 # 3. parents check
-list(p.parents)  # [Path("/etc"), Path("/")]
-WORKSPACE in p.parents  # False
-p == WORKSPACE          # False
+list(p.parents)        # [Path("/etc"), Path("/")]
+workspace in p.parents # False
+p == workspace         # False
 
 # 4. raise
 raise ValueError("path /etc/passwd escapes workspace /home/tle/code/coding-agent/demo_repo")
@@ -1809,12 +1800,12 @@ Each `1B` is single byte terminal swallows — never lands on screen. Bytes afte
 
 ### 9.9 How we use it in our code
 
-**Module-level color constants** (`examples/06_chat.py:53-63`):
+**Module-level color constants** (`cli/chat.py:53-63`):
 
 ```python
-WHITE = "\033[97m"       # thinking (trắng sáng, dễ nhìn trên nền tối)
+WHITE = "\033[97m"       # thinking (bright white, easy to read on a dark background)
 BLUE = "\033[1;34m"      # banner + turn header
-GREEN = "\033[1;32m"     # tool call (đang gọi tool)
+GREEN = "\033[1;32m"     # tool call (calling a tool)
 YELLOW = "\033[33m"      # tool result
 MAGENTA = "\033[1;35m"   # assistant content (visible reply)
 CYAN = "\033[1;36m"      # user prompt + system info
@@ -1831,7 +1822,7 @@ RESET = "\033[0m"        # reset
 - `RED = "\033[1;31m"` — bold red; reserved for errors.
 - `RESET = "\033[0m"` — SGR 0 turns *everything* off. Always close colored runs.
 
-**The streaming state machine** (`examples/06_chat.py:121-160`):
+**The streaming state machine** (`cli/chat.py:121-160`):
 
 Flags declared at 121-122:
 
@@ -1888,9 +1879,9 @@ def cprint(color: str, text: str) -> None:
     log.info(f"{color}{text}{Color.RESET}")
 ```
 
-Both patterns — module constants (06_chat.py) and class-namespaced (agent.py) — valid. Class gives namespace, avoids polluting module namespace. Module-form is shorter, reads more directly in f-strings. We use both deliberately so you see the trade-off.
+Both patterns — module constants (cli/chat.py) and class-namespaced (agent.py) — valid. Class gives namespace, avoids polluting module namespace. Module-form is shorter, reads more directly in f-strings. We use both deliberately so you see the trade-off.
 
-**`KeyboardInterrupt` mid-stream** (`examples/06_chat.py:248-253`):
+**`KeyboardInterrupt` mid-stream** (`cli/chat.py:248-253`):
 
 ```python
 try:
@@ -1934,7 +1925,7 @@ And tool output is *large*. A single `read_file` on a 400-line module, a `run_ba
 
 The naive fixes are both bad. Truncating from the front (drop the oldest messages) throws away the system prompt and the original task description — the model forgets *what it was asked to do*. Truncating from the back is absurd (it forgets what it just did). What we actually want is **lossy compression that preserves intent**: replace the bulky old history with a *short natural-language summary* of it, while keeping the most recent exchanges word-for-word because they are the live working context.
 
-That is exactly the compaction strategy implemented in `examples/06_chat.py`, governed by two constants:
+That is exactly the compaction strategy implemented in `cli/chat.py`, governed by two constants:
 
 - **`COMPACT_THRESHOLD_TOKENS = 24000`** — the trigger. We do *not* wait until 32K (the hard limit); we compact at 24K, leaving generous headroom for the next turn's tool output and the model's reply so a single big turn can't blow past 32768 before we get a chance to act.
 - **`KEEP_RECENT_MESSAGES = 10`** — how many of the most recent messages survive *verbatim*. Everything older than that gets folded into a summary.
@@ -1969,7 +1960,7 @@ This is a beautiful example of the API's structural invariants (§1.4) reaching 
 
 ### 10.4 Estimating tokens cheaply — `estimate_tokens`
 
-To decide *when* to compact, we need the conversation's token count, and we need it on every turn. The exact way to get it is to run the model's tokenizer over the rendered prompt — but that is comparatively expensive to do repeatedly, and the agent client deliberately does not import the heavy tokenizer (it only speaks the OpenAI HTTP API; §5.10). So `06_chat.py` uses a cheap heuristic: **`estimate_tokens ≈ total characters / 4`**.
+To decide *when* to compact, we need the conversation's token count, and we need it on every turn. The exact way to get it is to run the model's tokenizer over the rendered prompt — but that is comparatively expensive to do repeatedly, and the agent client deliberately does not import the heavy tokenizer (it only speaks the OpenAI HTTP API; §5.10). So `cli/chat.py` uses a cheap heuristic: **`estimate_tokens ≈ total characters / 4`**.
 
 Why divide by 4? Across typical English text and code, one BPE token averages roughly four characters — a rule of thumb that holds well enough for a *threshold* decision (OpenAI's own docs cite the same ~4-chars-per-token approximation for English). We are not billing anyone or packing a buffer to the byte; we just need to know "are we getting close to the ceiling?" A heuristic that is within ~10–20% is entirely adequate, and the 8K-token gap between `COMPACT_THRESHOLD_TOKENS` (24K) and `max_model_len` (32K) absorbs the estimation error. If the estimate is a bit low, we still compact well before the real limit; if a bit high, we compact slightly early and waste a negligible amount of headroom. Cheapness beats precision here.
 
@@ -2007,7 +1998,7 @@ A coding agent is not one program. It is a **stack** of programs, each speaking 
                               | keypresses, ANSI bytes
                               v
 +--------------------------------------------------------------------+
-|  LAYER 1: TERMINAL UX                            06_chat.py        |
+|  LAYER 1: TERMINAL UX                            cli/chat.py        |
 |  --------------------------------------------------------------    |
 |  - input() loop                                                    |
 |  - ANSI color codes (\x1b[36m for cyan "you>")                     |
@@ -2017,7 +2008,7 @@ A coding agent is not one program. It is a **stack** of programs, each speaking 
                               | str (user message)
                               v
 +--------------------------------------------------------------------+
-|  LAYER 2: REACT LOOP                             06_chat.py        |
+|  LAYER 2: REACT LOOP                             cli/chat.py        |
 |  --------------------------------------------------------------    |
 |  chat() while True:                                                |
 |     messages.append({role: "user", content: ...})                  |
@@ -2078,8 +2069,8 @@ A coding agent is not one program. It is a **stack** of programs, each speaking 
       |     execute : run_bash (subprocess) / run_python          |
       |     delegate: spawn_subagent (child proc, 300s, 8 iters)  |
       |                                                            |
-      |   _safe_path(p) resolves and checks workspace parents     |
-      |   WORKSPACE = Path("demo_repo/").resolve()                |
+      |   _safe_path(p, workspace) resolves + checks parents      |
+      |   workspace passed explicitly (e.g. demo_repo/) — no global|
       |                                                            |
       |   stdout/stderr/exit_code -> str -> back to messages[]    |
       ============================================================
@@ -2095,13 +2086,13 @@ Let's trace exactly what happens when user types:
 you> Fix the failing tests in demo_repo/
 ```
 
-**Step 1 — Keypresses to stdin.** Terminal emulator writes UTF-8 bytes to `06_chat.py`'s stdin. `input("you> ")` (`06_chat.py:211`) blocks until newline.
+**Step 1 — Keypresses to stdin.** Terminal emulator writes UTF-8 bytes to `cli/chat.py`'s stdin. `input("you> ")` (`cli/chat.py:211`) blocks until newline.
 
-**Step 2 — Append to messages.** `messages.append({"role": "user", "content": "Fix the failing tests in demo_repo/"})` (`06_chat.py:239`). `messages` list is **single source of truth**.
+**Step 2 — Append to messages.** `messages.append({"role": "user", "content": "Fix the failing tests in demo_repo/"})` (`cli/chat.py:239`). `messages` list is **single source of truth**.
 
-**Step 3 — Enter ReAct iteration.** Control enters `for _turn in range(1, max_tool_turns + 1):` (`06_chat.py:247`).
+**Step 3 — Enter ReAct iteration.** Control enters `for _turn in range(1, max_tool_turns + 1):` (`cli/chat.py:247`).
 
-**Step 4 — stream_one_turn assembles API call.** `06_chat.py:105`:
+**Step 4 — stream_one_turn assembles API call.** `cli/chat.py:105`:
 ```python
 client.chat.completions.create(
     model=MODEL,
@@ -2130,7 +2121,7 @@ data: {"choices":[{"delta":{"reasoning_content":" failing tests. I should"}}]}
 data: {"choices":[{"delta":{"reasoning_content":" first run pytest to see what fails."}}]}
 ```
 
-**Step 11 — Client receives and prints reasoning.** `06_chat.py:124-145`. `for chunk in stream:` pulls each SSE chunk. When `chunk.choices[0].delta.reasoning_content` present, print in white. User sees model "think" in real time.
+**Step 11 — Client receives and prints reasoning.** `cli/chat.py:124-145`. `for chunk in stream:` pulls each SSE chunk. When `chunk.choices[0].delta.reasoning_content` present, print in white. User sees model "think" in real time.
 
 **Step 12 — Tool call deltas arrive.** After `</think>`, model emits Hermes-format tool call. SDK parses into `delta.tool_calls`, but **chunked** — function name in one delta, arguments JSON character-by-character across many:
 ```
@@ -2140,7 +2131,7 @@ data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\"
 data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\"}"}}]}}]}
 ```
 
-**Step 13 — Accumulate tool_calls dict.** `06_chat.py:163-174`. Keep dict keyed by `tc.index`, concatenate fragments. At end:
+**Step 13 — Accumulate tool_calls dict.** `cli/chat.py:163-174`. Keep dict keyed by `tc.index`, concatenate fragments. At end:
 ```python
 tool_calls = [{
     "id": "call_abc",
@@ -2149,14 +2140,14 @@ tool_calls = [{
 }]
 ```
 
-**Step 14 — Append assistant message.** `06_chat.py:292`:
+**Step 14 — Append assistant message.** `cli/chat.py:292`:
 ```python
 messages.append({"role": "assistant", "content": "", "tool_calls": [...]})
 ```
 
-**Step 15 — Dispatch tools.** For each tool_call, `execute_tool(name, args)` (`06_chat.py:314`). Dispatcher matches on `"run_bash"`, calls `run_bash(command="pytest -x")`. Function calls `subprocess.run(["bash","-c","pytest -x"], cwd=WORKSPACE, capture_output=True, timeout=600)`, stringifies stdout/stderr/exit_code.
+**Step 15 — Dispatch tools.** For each tool_call, `execute_tool(name, args, workspace)`. The dispatcher matches on `"run_bash"`, parses the JSON arguments, and calls `run_bash(command="pytest -x", workspace=workspace)` — the workspace is threaded in explicitly, never read from a global. The function runs `subprocess.run("pytest -x", shell=True, cwd=workspace, capture_output=True, timeout=600)`, then stringifies stdout/stderr/exit_code.
 
-**Step 16 — Result back into messages.** Result string becomes `role: "tool"` (`06_chat.py:321`):
+**Step 16 — Result back into messages.** Result string becomes `role: "tool"` (`cli/chat.py:321`):
 ```python
 messages.append({
     "role": "tool",
@@ -2169,7 +2160,7 @@ messages.append({
 
 **Step 18 — Multi-tool iteration.** Across 3-6 iterations model: (a) reads `test_calculator.py`, (b) reads `calculator.py`, (c) emits `write_file` to fix bug, (d) runs `pytest` again, sees green, (e) returns plain `content` ("Fixed: the `add` function was using `-` instead of `+`. All tests pass.") with **no** `tool_calls`.
 
-**Step 19 — Exit ReAct loop.** Because `tool_calls` empty, `if not tool_calls: break` (`06_chat.py:295`).
+**Step 19 — Exit ReAct loop.** Because `tool_calls` empty, `if not tool_calls: break` (`cli/chat.py:295`).
 
 **Step 20 — Back to REPL.** Outer `while True:` returns to `input("you> ")`. Full session messages array retained; next user input appended on top.
 
@@ -2214,14 +2205,41 @@ Several limitations from the original three-tool version have since been **resol
 |---|---|---|
 | No true parallelism | `spawn_subagent` runs, but tools dispatch sequentially within a turn | Can't fan out "search the codebase AND read this file" concurrently |
 | No MCP / hooks / permission prompts | No external tool servers or gates on dangerous actions | Real agent ecosystem has these |
-| Single workspace | One `WORKSPACE = Path("demo_repo/")` | Can't reason about cross-repo refactors |
+| Single workspace per run | `run_agent(goal, workspace)` is scoped to one sandbox directory at a time | Can't reason about cross-repo refactors in a single goal |
 | No tool-result caching | Re-reading same file costs same | Claude Code caches |
 | No retry/backoff on tool errors | Tool error → raw string back to model | Model usually recovers but noisy |
 | No streaming tool execution | `run_bash` returns only after `subprocess.run` finishes | Long-running tests block REPL |
 
 OpenAI's [Practices for Governing Agentic AI Systems](https://cdn.openai.com/papers/practices-for-governing-agentic-ai-systems.pdf) lists "constrained action spaces, monitorability, interruptibility" as three pillars. We have (1) and (2) but not (3) — there is no way to interrupt a running tool from REPL mid-execution short of Ctrl-C-killing the whole process.
 
-### 11.6 Phase 2 / Phase 3 roadmap
+### 11.6 The evaluation harness — measuring the agent at scale
+
+A coding agent is only as trustworthy as the evidence that it actually solves problems. The repo therefore ships a real benchmark under `eval/`, not the handful of demo tasks the earlier drafts of this document described.
+
+**The task suite — 627 tasks.** The benchmark spans easy → hard:
+
+| Group | Count | Source | What it tests |
+|---|---|---|---|
+| `tasks/bench/he_*` | 163 | HumanEval+ (EvalPlus) | implement a function from a docstring spec, against hardened tests |
+| `tasks/bench/mbpp_*` | 424 | MBPP (sanitized) | short programming problems from a natural-language spec |
+| `tasks/curated/*` | 37 | hand-authored | tool-stressing: debugging, refactor, multi-file, DP, graphs, data structures, OOP, parsing, algorithms, recursion |
+| `tasks/{01,02,03}_*` | 3 | original demo tasks | the multi-bug debug / implement-from-stub / add-feature trio this doc opened with |
+
+Every task carries `## Category`, `## Difficulty`, and `## Tests` metadata, so a run can be sliced by group.
+
+**The runner — `eval/run.py`.** It runs tasks in parallel (`--jobs N` over a `ProcessPoolExecutor` with the `spawn` start method — necessary because the agent's HTTP client and logging are not fork-safe, so each task gets a clean process). It supports `--filter` (by category, difficulty, or id glob), `--repeats K` (for pass@k), `--resume` (incremental JSONL means an interrupted run is lossless), `--agent-timeout`, and `--temperature`. Results stream to `eval/results/<timestamp>.jsonl` plus a Markdown summary broken down by category and difficulty. A task **passes** iff `pytest` exits 0 after the agent finishes (hitting `max_iters` counts as a fail).
+
+**Honest scoring — hidden tests.** This is the subtle part. For the benchmark tasks (HumanEval/MBPP), the test file is **hidden** from the agent while it works — the `task.md` shows `## Tests: hidden` — and is restored only at grading time. Otherwise a model could simply read the assertions and hard-code the expected outputs, scoring 100% while learning nothing. The debug/refactor curated tasks deliberately keep their tests *visible*, because there the test suite is the feedback signal the agent is supposed to iterate against. Grading is an independent `pytest` invocation, and the harness does a recursive snapshot/restore of the task directory so each repeat starts from a pristine copy.
+
+**The no-tool-call guardrail.** A recurring failure mode of instruction-tuned models is to *describe* the fix in prose and never call a tool — the agent "talks about" editing the file without editing it. The loop guards against this: if the model returns a turn with no `tool_calls`, it is nudged to take a concrete action (up to twice); if it still refuses, the run is recorded with `finish_reason="no_action"` rather than being silently scored as a non-answer. This keeps "did nothing" distinct from "tried and failed."
+
+**The validation gate — `eval/validate_tasks.py`.** Before a task is allowed into the suite, it must be *proven real*: the reference solution must pass its tests **and** the stub/buggy starting state must fail them. Tasks that don't satisfy both are quarantined (`tasks/_quarantine`). This catches broken specs, trivially-passing stubs, and flaky tests before they pollute the score.
+
+**Provenance — `eval/convert_benchmark.py`.** The HumanEval/MBPP tasks are regenerated by a converter that pulls from the public datasets using only `huggingface_hub` + `requests` (no heavyweight eval framework as a dependency). Sources and licenses are recorded in `eval/LICENSES.md` (HumanEval MIT, MBPP CC-BY-4.0, EvalPlus Apache-2.0).
+
+**Pass rate.** The authoritative clean run is produced by `eval/run.py`; see the latest `eval/results/<timestamp>.md` for the current pass rate by category and difficulty rather than a number frozen into this prose. (As the README notes, `eval/results/` is gitignored — the summary is generated locally per run.)
+
+### 11.7 Phase 2 / Phase 3 roadmap
 
 **Phase 2 — Capability parity with mid-tier production agents.** Most of this phase has now **shipped** (§3.9, §10):
 
@@ -2246,7 +2264,7 @@ Concrete sub-steps:
 
 This is the **research thesis** hiding inside the project. Building the agent is Phase 1's deliverable; making it learn from its own use is the senior-thesis / publishable contribution.
 
-### 11.7 Glossary
+### 11.8 Glossary
 
 Every term used across the deep-dive, alphabetized, with section reference.
 
@@ -2274,7 +2292,7 @@ Every term used across the deep-dive, alphabetized, with section reference.
 | **PagedAttention** | vLLM's KV-cache layout that allocates GPU memory in fixed-size pages instead of contiguous slabs | 5 |
 | **ReAct** | "Reasoning + Acting" pattern: model alternates thought→action→observation→thought until done | 4 |
 | **Reasoning trace** | The `<think>...</think>` content model emits before its final answer or tool call | 6 |
-| **REPL** | Read-Eval-Print Loop; the `chat() while True` in `06_chat.py` | 9 |
+| **REPL** | Read-Eval-Print Loop; the `chat() while True` in `cli/chat.py` | 9 |
 | **Sandbox** | Constraint that limits which paths/commands the agent may touch; ours is `_safe_path` + workspace resolution | 8 |
 | **`spawn_subagent`** | Delegation tool: runs a child agent (its own ReAct loop) in an isolated subprocess bounded by a 300 s timeout and `max_iters`=8, returning only the child's final answer | 3 |
 | **SSE (Server-Sent Events)** | HTTP streaming protocol where server pushes `data: {...}\n\n` chunks | 2 |
@@ -2286,9 +2304,9 @@ Every term used across the deep-dive, alphabetized, with section reference.
 | **Tool result** | The `role: "tool"` message replying to specific `tool_call_id` with function's output | 3 |
 | **TypedDict** | Python typing construct for declaring dicts with fixed key schema | 1 |
 | **vLLM** | High-throughput LLM serving engine; speaks OpenAI API on the wire, uses PagedAttention internally | 5 |
-| **Workspace** | The resolved `Path("demo_repo/")` that bounds every file operation | 8 |
+| **Workspace** | The resolved sandbox directory (e.g. `demo_repo/`) that bounds every file operation; passed explicitly as a parameter, not a global | 8 |
 
-### 11.8 Authoritative sources / further reading
+### 11.9 Authoritative sources / further reading
 
 **Agent architecture & design**
 - Anthropic. *Building Effective Agents.* [anthropic.com/research/building-effective-agents](https://anthropic.com/research/building-effective-agents)
@@ -2358,7 +2376,7 @@ If vLLM down: `bash scripts/start_vllm.sh` in a tmux session, wait for "Applicat
 
 ### Demo flow (10 minutes)
 ```bash
-python examples/06_chat.py
+python cli/chat.py
 ```
 
 REPL displays banner. Try in order:

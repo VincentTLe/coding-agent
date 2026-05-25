@@ -1,0 +1,7 @@
+from right_insertion import *
+
+
+def test_mbpp():
+    assert right_insertion([1,2,4,5],6)==4
+    assert right_insertion([1,2,4,5],3)==2
+    assert right_insertion([1,2,4,5],7)==4

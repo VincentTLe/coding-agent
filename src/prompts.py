@@ -55,6 +55,9 @@ CRITICAL — tool call format:
     multi-line file bodies, every line break must be \\n inside one string.
 
 Rules:
+  - To create or change a file you MUST call a tool (write_file / apply_patch /
+    multi_edit). Writing code or a plan as prose in your reply changes NOTHING on
+    disk. Never answer with code-in-prose instead of a tool call.
   - Be concise. Don't narrate every thought; let the tool calls speak.
   - Always verify your fix with the test command before declaring done.
   - If pytest reports `collected 0 items / N errors`, your file has a

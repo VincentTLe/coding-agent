@@ -1,0 +1,20 @@
+# mbpp_564 — count_Pairs
+
+## Goal
+Write a python function which takes a list of integers and counts the number of possible unordered pairs where both elements are unequal.
+
+Implement `count_Pairs` in `count_Pairs.py` so the tests pass. Example checks:
+assert count_Pairs([1,2,1],3) == 2
+assert count_Pairs([1,1,1,1],4) == 0
+
+## Category
+arrays
+
+## Difficulty
+hard
+
+## Tests
+hidden
+
+## Source/License
+MBPP sanitized task 564. MBPP: CC-BY-4.0.

@@ -1,0 +1,10 @@
+from text_match_zero_one import *
+
+
+def test_mbpp():
+    assert text_match_zero_one("ac")==False
+    assert text_match_zero_one("dc")==False
+    assert text_match_zero_one("abbbba")==True
+    assert text_match_zero_one("dsabbbba")==True
+    assert text_match_zero_one("asbbbba")==False
+    assert text_match_zero_one("abaaa")==True
