@@ -24,3 +24,7 @@ eval/.cache/
 *.docx
 Transcript*.pdf
 Resume*.pdf
+
+# Local session/handoff logs and timestamped backups — not source.
+.agent/
+*.bak-*

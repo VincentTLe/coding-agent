@@ -29,18 +29,49 @@ WHEN DONE
   (Or use examples/05_agent_loop.py for the prettier demo CLI.)
 """
 
+# `from __future__ import annotations` là dòng đặc biệt giúp Python 3.9 hiểu
+# kiểu dữ liệu mới hơn viết trong type hints (ví dụ: float | None thay vì
+# Union[float, None]). Nó KHÔNG thay đổi logic chương trình, chỉ ảnh hưởng
+# đến cách Python đọc các chú thích kiểu dữ liệu (type hints).
+# Phải đặt ở dòng đầu tiên của file (sau docstring).
 from __future__ import annotations
 
+# `import logging` — nhập (import) module logging sẵn có trong Python.
+# "Module" là một file Python chứa các hàm và lớp ta có thể dùng lại.
+# `import` = "hãy tải module này vào, tôi muốn dùng nó".
 # `logging` thay cho `print()` — sau này có thể redirect log vào file để
 # thu thập trace cho fine-tuning ở Phase 3. Đây là Rule C trong AGENTS.md.
 import logging
+
+# `import os` — nhập module os (operating system).
+# Module này cho phép tương tác với hệ điều hành: đọc biến môi trường,
+# kiểm tra file tồn tại không, v.v.
 import os
+
+# `import time` — nhập module time.
+# Dùng để đo thời gian (time.monotonic() trả về số giây kể từ một điểm
+# tham chiếu cố định — dùng để tính xem đã chạy bao nhiêu giây).
 import time
+
+# `from pathlib import Path` — từ module pathlib, chỉ lấy lớp Path.
+# Cú pháp `from X import Y` = "từ module X, chỉ nhập phần Y".
+# Path là cách Python hiện đại xử lý đường dẫn file/thư mục —
+# thay vì viết chuỗi như "/home/user/demo_repo", ta dùng Path("/home/user/demo_repo")
+# và có các phương thức tiện lợi như .resolve(), .exists(), .name, v.v.
 from pathlib import Path
 
+# `from dotenv import load_dotenv` — nhập hàm load_dotenv từ thư viện python-dotenv.
+# Hàm này đọc file .env (chứa cấu hình bí mật như API key, URL) và nạp
+# các cặp KEY=VALUE vào os.environ (từ điển biến môi trường của tiến trình).
 # Đọc biến môi trường từ .env (BASE_URL, MODEL_NAME, API_KEY) — y hệt 01_chat.py.
 from dotenv import load_dotenv
 
+# `from openai import OpenAI, OpenAIError` — từ thư viện openai, nhập 2 thứ:
+#   - OpenAI: lớp (class) để tạo client kết nối với API. Ta sẽ gọi
+#     OpenAI(base_url=..., api_key=...) để tạo đối tượng client.
+#   - OpenAIError: lớp cơ sở (base class) của MỌI lỗi SDK — khi kết nối
+#     thất bại, server trả 5xx, hay context quá dài (400), Python sẽ
+#     "throw" (ném ra) một OpenAIError. Ta "bắt" nó bằng try/except.
 # OpenAI SDK — bao bọc HTTP/JSON, cho phép swap backend bằng cách đổi base_url.
 # `OpenAIError` là base class của MỌI lỗi SDK (timeout, 5xx, kết nối rớt, 400 do
 # context tràn). Bắt nó ở vòng lặp để 1 lỗi transient không kill cả run_agent —
@@ -49,6 +80,8 @@ from openai import OpenAI, OpenAIError
 
 # TypedDict cho 1 message — chỉ dùng type hint giúp Pylance không kêu
 # "list[dict] không phải Iterable[ChatCompletionMessageParam]" khi truyền vào create().
+# ChatCompletionMessageParam là kiểu dữ liệu đặc biệt mô tả hình dạng của 1 message:
+# phải có 'role' và 'content'. Dùng để IDE kiểm tra ta không gõ sai key.
 from openai.types.chat import ChatCompletionMessageParam
 
 # Lấy 2 thứ từ tools.py:
@@ -58,6 +91,8 @@ from openai.types.chat import ChatCompletionMessageParam
 # thẳng vào execute_tool() ở mỗi lời gọi (xem run_agent), không phải global.
 from src.tools import TOOL_SCHEMAS, execute_tool
 
+# `from src.prompts import SYSTEM_PROMPT` — nhập biến SYSTEM_PROMPT từ file
+# src/prompts.py. Đây là chuỗi dài mô tả cách agent phải hoạt động.
 # System prompt — tách ra file riêng để sau này dễ versioning cho training data.
 from src.prompts import SYSTEM_PROMPT
 
@@ -69,21 +104,49 @@ from src.prompts import SYSTEM_PROMPT
 
 # Mỗi mã ANSI là chuỗi đặc biệt báo terminal "đổi màu chữ kể từ đây".
 # `\033[XXm` = bắt đầu màu. `\033[0m` = reset về mặc định.
+#
+# `class Color:` — định nghĩa một LỚP (class) tên Color.
+# Class là "khuôn mẫu" gom nhóm dữ liệu liên quan lại với nhau.
+# Ở đây ta không dùng class để tạo đối tượng phức tạp — chỉ dùng như
+# "namespace" (không gian tên) để gom các hằng số màu vào 1 chỗ.
+# Thay vì viết COLOR_HEADER = "..." rải rác, ta gom vào Color.HEADER,
+# Color.TOOL, v.v. — rõ ràng và dễ tìm hơn.
 class Color:
+    # Các dòng bên trong class đều được thụt vào 4 dấu cách — Python dùng
+    # thụt đầu dòng (indentation) để xác định phạm vi (scope).
+    # Mỗi biến bên trong class (không có def) gọi là "class attribute"
+    # (thuộc tính lớp) — dùng bằng cách viết Color.HEADER, Color.TOOL, v.v.
+
     HEADER = "\033[1;34m"   # bold blue — cho dòng "=== Turn N ==="
     TOOL = "\033[1;32m"     # bold green — cho dòng "[tool] tool_name(...)"
     RESULT = "\033[33m"     # yellow — cho dòng "[tool result]"
     ASSISTANT = "\033[1;35m"  # bold magenta — cho "[assistant] ..."
     FINISH = "\033[1;36m"   # bold cyan — cho "Agent finished."
     WARN = "\033[1;31m"     # bold red — cho cảnh báo
-    RESET = "\033[0m"       # tắt mọi màu
+    RESET = "\033[0m"       # tắt mọi màu — phải có sau mỗi đoạn màu
 
 
+# `def cprint(color: str, text: str) -> None:` — định nghĩa HÀM tên cprint.
+# `def` là từ khóa Python dùng để khai báo hàm. Cú pháp:
+#   def <tên_hàm>(<tham_số_1>: <kiểu_1>, <tham_số_2>: <kiểu_2>) -> <kiểu_trả_về>:
+# Hàm là đoạn code được đặt tên, có thể gọi đi gọi lại.
+# `color: str` = tham số color phải là chuỗi ký tự (str = string).
+# `text: str` = tham số text cũng là chuỗi.
+# `-> None` = hàm này KHÔNG trả về giá trị gì (None = "không có gì").
 def cprint(color: str, text: str) -> None:
     """In ra text có màu. Dùng `log.info` thay vì `print` để consistent.
 
     Tại sao tách hàm này? — Tránh lặp `{Color.X}...{Color.RESET}` ở 5 chỗ.
     """
+    # `log.info(...)` — gọi phương thức info trên đối tượng log.
+    # Phương thức (method) là hàm "gắn liền" với một đối tượng, gọi bằng dấu chấm.
+    # log.info() in ra một dòng log với mức độ INFO.
+    #
+    # `f"{color}{text}{Color.RESET}"` — đây là f-string (formatted string).
+    # f-string = chuỗi bắt đầu bằng chữ f trước dấu nháy.
+    # Bên trong f-string, mọi thứ nằm trong {} sẽ được tính toán và chèn vào chuỗi.
+    # Ví dụ: f"Xin chào {name}" với name="An" → "Xin chào An"
+    # Ở đây: {color} chèn mã màu ANSI, {text} chèn nội dung, {Color.RESET} tắt màu.
     log.info(f"{color}{text}{Color.RESET}")
 
 
@@ -102,20 +165,42 @@ def cprint(color: str, text: str) -> None:
 # => `import src.agent` giờ KHÔNG dựng client, KHÔNG cần env, KHÔNG đụng logging.
 # ---------------------------------------------------------------------------
 
+# `log = logging.getLogger("agent")` — lấy (hoặc tạo) một logger có tên "agent".
+# Logger là đối tượng dùng để ghi log. Nếu gọi getLogger("agent") 2 lần,
+# Python trả về cùng 1 đối tượng — getLogger không tạo mới, chỉ tra cứu.
 # `log` chỉ là một logger object — lấy logger KHÔNG có side-effect (không cấu
 # hình gì), nên để ở module level vẫn an toàn. Việc CẤU HÌNH (basicConfig) mới
 # là thứ phải hoãn lại tới run_agent.
 log = logging.getLogger("agent")
 
+# `_client: OpenAI | None = None`
+# Khai báo biến _client với kiểu dữ liệu là "OpenAI HOẶC None".
+# `OpenAI | None` = union type — biến này có thể chứa một OpenAI object,
+# hoặc có thể là None (không có gì). Ban đầu gán = None vì client chưa được tạo.
+# Dấu gạch dưới đầu (_client) là quy ước Python nghĩa là "biến nội bộ,
+# không dùng từ bên ngoài module này".
 # Singleton client — None cho tới lần get_client() đầu tiên. `global` cho phép
 # gán lại biến module-level từ trong hàm.
 _client: OpenAI | None = None
 
+# `_logging_ready = False`
+# Biến boolean (đúng/sai) — False = chưa cấu hình logging.
+# Sau khi _setup_logging() chạy lần đầu, nó sẽ đặt biến này = True
+# để không bao giờ gọi basicConfig() thêm lần nào nữa.
 # Đã cấu hình logging chưa — guard để _setup_logging() chỉ basicConfig 1 lần,
 # tránh giẫm lên cấu hình của caller ở những lần run_agent sau.
 _logging_ready = False
 
 
+# `def get_client() -> OpenAI:` — hàm trả về một OpenAI object (không None).
+# Đây là ví dụ điển hình của pattern "LAZY SINGLETON":
+#   - SINGLETON = chỉ có DUY NHẤT MỘT instance của client trong toàn chương trình.
+#     Lần đầu gọi get_client() → tạo mới. Mọi lần sau → trả về cái cũ.
+#     Tại sao? Vì tạo HTTP connection tốn thời gian; không cần tạo đi tạo lại.
+#   - LAZY = "lười biếng" — KHÔNG tạo client khi file được import.
+#     Chỉ tạo khi thực sự cần (lần đầu gọi get_client()).
+#     Tại sao? Vì `import src.agent` có thể xảy ra trong test/eval mà không
+#     cần .env — nếu tạo client ngay lúc import sẽ crash vì thiếu API key.
 def get_client() -> OpenAI:
     """Trả về OpenAI client (singleton), dựng lười ở lần gọi đầu tiên.
 
@@ -126,28 +211,78 @@ def get_client() -> OpenAI:
     Đọc 3 biến cấu hình ở đây (không phải lúc import). Thiếu BASE_URL hay MODEL
     → crash ngay (fail fast). API_KEY có default vì vLLM không enforce auth.
     """
+    # `global _client` — từ khóa global cho phép hàm này GÁN LẠI biến _client
+    # được khai báo ở cấp module (bên ngoài mọi hàm).
+    # Trong Python, hàm có thể ĐỌC biến module-level mà không cần khai báo gì.
+    # Nhưng nếu muốn GÁN LẠI (_client = ...) biến đó, PHẢI khai báo `global _client`
+    # trước — không thì Python sẽ tạo một biến LOCAL (nội bộ hàm) mới tên _client,
+    # không liên quan đến biến module-level. Đây là quirk nổi tiếng của Python.
     global _client
+
+    # `if _client is None:` — kiểm tra xem _client có đang là None không.
+    # `if` là câu lệnh điều kiện: nếu điều kiện đúng, chạy khối thụt vào bên dưới.
+    # `is None` = so sánh "có phải None không?" (dùng `is` chứ không phải `==`
+    # vì None là singleton — chỉ có đúng 1 đối tượng None trong Python).
     if _client is None:
+        # Khối này chỉ chạy khi _client chưa được tạo (lần đầu gọi get_client).
+
+        # `load_dotenv()` — gọi hàm load_dotenv (đã import ở trên).
+        # Hàm này đọc file .env trong thư mục hiện tại và nạp các biến
+        # như VLLM_BASE_URL=http://localhost:8000 vào os.environ.
         # Đọc file .env vào os.environ. Có file ./.env thì auto detect.
         load_dotenv()
+
+        # `os.environ["VLLM_BASE_URL"]` — đọc biến môi trường tên VLLM_BASE_URL.
+        # os.environ là một dictionary (từ điển) chứa tất cả biến môi trường.
+        # Truy cập bằng cú pháp dictionary: environ["TÊN_BIẾN"].
+        # Nếu biến không tồn tại → Python ném KeyError (crash ngay — fail fast).
         base_url = os.environ["VLLM_BASE_URL"]
+
+        # `os.environ.get("VLLM_API_KEY", "not-needed")` — tương tự đọc biến
+        # môi trường, nhưng dùng .get() thay vì []. Khác biệt:
+        # - environ["KEY"] → crash nếu KEY không có
+        # - environ.get("KEY", "default") → trả về "default" nếu KEY không có
+        # vLLM chạy local không cần API key thật → "not-needed" là giá trị giả.
         api_key = os.environ.get("VLLM_API_KEY", "not-needed")
+
+        # `OpenAI(base_url=base_url, api_key=api_key)` — tạo một instance (đối
+        # tượng) của lớp OpenAI. Giống như gọi "constructor" trong OOP.
+        # `base_url=base_url` = tham số có tên (keyword argument): đặt URL máy chủ.
+        # Tại sao truyền tên tham số? — Vì OpenAI có rất nhiều tham số tùy chọn;
+        # dùng tên tham số giúp rõ ràng hơn.
         # Tạo OpenAI client trỏ vào vLLM. Đây chính là pattern "portability" — chỉ
         # cần đổi base_url trong .env là chạy được với GPT-4 cloud, Ollama, ...
         _client = OpenAI(base_url=base_url, api_key=api_key)
+
+    # `return _client` — trả về giá trị cho bên gọi hàm.
+    # `return` là từ khóa kết thúc hàm và trả về giá trị.
+    # Dù đây là lần đầu hay lần thứ 100 gọi get_client(), đều trả về cùng
+    # một _client (singleton).
     return _client
 
 
+# `def get_model() -> str:` — hàm trả về tên model dưới dạng chuỗi.
+# Đọc MODEL lười từ env (gọi sau khi get_client đã load_dotenv, hoặc tự đọc).
+# Tách riêng khỏi get_client để chỗ gọi API đọc tên model rõ ràng. load_dotenv
+# là idempotent nên gọi ở đây cũng an toàn nếu vì lý do gì client chưa dựng.
 def get_model() -> str:
     """Đọc MODEL lười từ env (gọi sau khi get_client đã load_dotenv, hoặc tự đọc).
 
     Tách riêng khỏi get_client để chỗ gọi API đọc tên model rõ ràng. load_dotenv
     là idempotent nên gọi ở đây cũng an toàn nếu vì lý do gì client chưa dựng.
     """
+    # load_dotenv() là "idempotent" = gọi bao nhiêu lần cũng an toàn, kết quả
+    # luôn như nhau. Nếu .env đã được load rồi, gọi lại không làm gì thêm.
     load_dotenv()
+    # Trả về tên model — ví dụ: "Qwen/Qwen2.5-Coder-7B-Instruct"
+    # Dấu [] sẽ crash nếu VLLM_MODEL_NAME không có trong .env — đây là
+    # "fail fast": phát hiện lỗi cấu hình sớm thay vì âm thầm dùng giá trị sai.
     return os.environ["VLLM_MODEL_NAME"]
 
 
+# `def _setup_logging() -> None:` — hàm cấu hình hệ thống logging.
+# Dấu gạch dưới đầu (_setup_logging) báo hiệu đây là hàm "private" —
+# chỉ dùng trong file này, không dùng từ bên ngoài.
 def _setup_logging() -> None:
     """Cấu hình logging 1 lần duy nhất (có guard), gọi từ run_agent.
 
@@ -155,9 +290,22 @@ def _setup_logging() -> None:
     gọn cho demo. Level INFO = thấy mọi log.info(). Guard `_logging_ready` để
     không basicConfig lại ở các lần run_agent sau (tránh giẫm cấu hình caller).
     """
+    # `global _logging_ready` — cần gán lại biến module-level này.
     global _logging_ready
+
+    # `if not _logging_ready:` — kiểm tra "nếu CHƯA sẵn sàng".
+    # `not` là toán tử phủ định: lật ngược giá trị boolean.
+    # not False = True, not True = False.
+    # Vậy: if not _logging_ready = "nếu _logging_ready là False" = "nếu chưa cấu hình".
     if not _logging_ready:
+        # `logging.basicConfig(...)` — cấu hình toàn bộ hệ thống logging.
+        # `level=logging.INFO` = chỉ in log từ mức INFO trở lên (INFO, WARNING, ERROR).
+        #   Các mức: DEBUG < INFO < WARNING < ERROR < CRITICAL
+        # `format="%(message)s"` = chỉ in nội dung message, không kèm timestamp.
+        #   Ví dụ format đầy đủ hơn: "%(asctime)s - %(levelname)s - %(message)s"
         logging.basicConfig(level=logging.INFO, format="%(message)s")
+        # Đánh dấu đã cấu hình xong — lần sau gọi _setup_logging() sẽ không
+        # chạy basicConfig nữa (tránh ghi đè cấu hình logging của caller).
         _logging_ready = True
 
 
@@ -165,6 +313,18 @@ def _setup_logging() -> None:
 # THE AGENT LOOP — trái tim của hệ thống
 # ---------------------------------------------------------------------------
 
+# `def run_agent(goal: str, workspace: Path, max_iters: int = 15,`
+# `              time_budget_s: float | None = None,`
+# `              temperature: float | None = None) -> dict:`
+#
+# Khai báo hàm run_agent với 5 tham số:
+#   - goal: str          — nhiệm vụ dạng text ("Fix the failing tests...")
+#   - workspace: Path    — thư mục sandbox agent được phép đọc/ghi
+#   - max_iters: int = 15 — số vòng lặp tối đa; "= 15" = có giá trị mặc định
+#                           nếu không truyền vào thì mặc định là 15
+#   - time_budget_s: float | None = None — ngân sách thời gian (giây), None = không giới hạn
+#   - temperature: float | None = None — độ "sáng tạo" của model; None = dùng mặc định
+# `-> dict` = hàm trả về một dictionary (từ điển key→value).
 def run_agent(goal: str, workspace: Path, max_iters: int = 15,
               time_budget_s: float | None = None,
               temperature: float | None = None) -> dict:
@@ -187,13 +347,47 @@ def run_agent(goal: str, workspace: Path, max_iters: int = 15,
     Callers that ignore the return value (the REPL, the CLI) are unaffected.
 
     time_budget_s: optional wall-clock cap, checked BETWEEN turns (None = no cap).
+
+    === 5 GIÁ TRỊ finish_reason VÀ NHÁNH NÀO RETURN CHÚNG ===
+      "finished"   — model tự nguyện dừng gọi tool SAU KHI đã gọi ít nhất 1 tool.
+                     Đây là kết thúc "hạnh phúc" — agent hoàn thành nhiệm vụ.
+      "no_action"  — model trả lời text mà KHÔNG gọi tool nào cả (nói mà không làm),
+                     kể cả sau khi nhắc (nudge). Agent thất bại kiểu "báo cáo miệng".
+      "max_iters"  — đã dùng hết max_iters turn mà model vẫn còn muốn gọi tool thêm.
+                     Safety net chống loop vô tận.
+      "api_error"  — lỗi kết nối/HTTP khi gọi API (timeout, 5xx, context quá dài).
+      "timeout"    — đã vượt quá time_budget_s giây (ngân sách thời gian).
     """
+    # `_setup_logging()` — gọi hàm _setup_logging đã định nghĩa ở trên.
+    # Gọi hàm trong Python: viết tên hàm theo sau là dấu () (có thể truyền tham số
+    # vào trong ngoặc). Ở đây không có tham số.
     # Cấu hình logging 1 lần (lười — không chạy lúc import). Phải gọi TRƯỚC mọi
     # cprint/log.info bên dưới để output hiện ra.
     _setup_logging()
+
+    # `client = get_client()` — gọi hàm get_client() và lưu kết quả vào biến client.
+    # Dấu = là gán: biến client bây giờ chứa OpenAI client object.
     # Dựng client lười + đọc tên model lười (không có gì xảy ra lúc import module).
     client = get_client()
+
+    # `model = get_model()` — đọc tên model từ biến môi trường.
+    # Ví dụ: model = "Qwen/Qwen2.5-Coder-7B-Instruct"
     model = get_model()
+
+    # `messages: list[ChatCompletionMessageParam] = [...]`
+    # Khai báo biến messages là một LIST (danh sách) chứa các message.
+    # LIST trong Python:
+    #   - Được tạo bằng cặp ngoặc vuông: [item1, item2, ...]
+    #   - Có thứ tự (phần tử 0, 1, 2, ...)
+    #   - Có thể thêm phần tử vào cuối bằng .append()
+    #   - Có thể chứa nhiều kiểu dữ liệu khác nhau
+    # `list[ChatCompletionMessageParam]` = type hint: list này chứa các message objects.
+    #
+    # Ban đầu có 2 message:
+    #   1. {"role": "system", "content": SYSTEM_PROMPT} — lệnh nền cho model
+    #   2. {"role": "user", "content": goal}            — nhiệm vụ của người dùng
+    # role = "system" | "user" | "assistant" | "tool" — quy ước của OpenAI API.
+    #
     # Khởi tạo "cuốn sổ ký ức" (messages list) — y hệt 01_chat.py, nhưng nay
     # chứa cả system prompt VÀ goal của user (2 message ban đầu).
     # Dùng OpenAI TypedDict để Pylance pass-through; dict literal vẫn assign được
@@ -203,31 +397,77 @@ def run_agent(goal: str, workspace: Path, max_iters: int = 15,
         {"role": "user", "content": goal},
     ]
 
-    # Vòng lặp giới hạn `max_iters` turn — safety net để agent không loop vô tận.
-    # Mỗi turn = 1 round-trip với model + thực thi tool nếu có.
+    # `start = time.monotonic()` — ghi lại thời điểm bắt đầu (tính bằng giây).
+    # time.monotonic() trả về một số thực (float) = số giây kể từ một điểm
+    # tham chiếu cố định. Dùng để tính "đã chạy bao lâu?" bằng cách trừ:
+    #   elapsed = time.monotonic() - start
+    # "monotonic" = đồng hồ chỉ đi tới, không nhảy ngược (khác system clock
+    # có thể bị điều chỉnh bởi NTP).
     start = time.monotonic()
+
     # Guardrail "nói mà không làm": ~30% lần model trả prose (mô tả/viết code dạng
     # text) ngay turn đầu mà KHÔNG gọi tool nào → loop tưởng "xong" → task fail oan.
     #   made_tool_call: đã gọi tool lần nào chưa (chốt phân biệt "xong thật" vs "bail").
     #   nudges_used:    đã nhắc bao nhiêu lần; chặn ở MAX_NUDGES để không loop vô tận.
+
+    # `made_tool_call = False` — cờ boolean, ban đầu False (chưa gọi tool lần nào).
     made_tool_call = False
+
+    # `nudges_used = 0` — đếm số lần đã nhắc model "hãy gọi tool đi".
     nudges_used = 0
+
+    # `MAX_NUDGES = 2` — tối đa nhắc 2 lần, sau đó từ bỏ.
+    # Tên viết HOA = hằng số (không thay đổi trong suốt hàm).
     MAX_NUDGES = 2
+
+    # NUDGE là chuỗi nhắc nhở gửi cho model khi nó trả lời text mà không gọi tool.
+    # `(` mở ngoặc để nối nhiều chuỗi liên tiếp trên nhiều dòng (Python tự ghép).
     NUDGE = ("You replied with text but called no tool, so nothing has actually changed "
              "on disk and the task is NOT done. If the task needs a file created or edited, "
              "call write_file / apply_patch / multi_edit now — do not just describe the code. "
              "Only stop without a tool call once the work is truly complete.")
+
+    # `for i in range(1, max_iters + 1):` — vòng lặp FOR.
+    # `for` là từ khóa bắt đầu vòng lặp. Cú pháp: for <biến> in <dãy giá trị>:
+    # `range(1, max_iters + 1)` — tạo dãy số nguyên từ 1 đến max_iters (bao gồm).
+    #   range(start, stop) tạo dãy: start, start+1, ..., stop-1  (KHÔNG bao gồm stop)
+    #   Ví dụ: range(1, 4) = [1, 2, 3]
+    #   range(1, max_iters + 1) với max_iters=15 → range(1, 16) = [1, 2, ..., 15]
+    # Biến `i` lần lượt nhận giá trị 1, 2, 3, ..., max_iters (số turn hiện tại).
+    # Vòng lặp giới hạn `max_iters` turn — safety net để agent không loop vô tận.
+    # Mỗi turn = 1 round-trip với model + thực thi tool nếu có.
     for i in range(1, max_iters + 1):
         # Hết ngân sách thời gian (nếu eval truyền vào) → dừng gọn. Chỉ check GIỮA
         # các turn: không ngắt được 1 tool đang chạy dở, nhưng mỗi tool đã có timeout
         # riêng (run_bash 600s, run_python/pytest 60s) nên thời gian bị chặn trên.
+
+        # `if time_budget_s is not None and time.monotonic() - start > time_budget_s:`
+        # Điều kiện phức hợp với `and`:
+        #   - `time_budget_s is not None`: kiểm tra có giới hạn thời gian không.
+        #     `is not None` = "không phải None" = "có giá trị cụ thể".
+        #     Nếu không có giới hạn thời gian (None) → SKIP kiểm tra này (tiết kiệm
+        #     tính toán — đây là "short-circuit evaluation": nếu vế trái `and` là
+        #     False, Python KHÔNG tính vế phải nữa vì cả AND đã chắc là False).
+        #   - `time.monotonic() - start > time_budget_s`: tính thời gian đã trôi qua
+        #     (giây hiện tại trừ giây bắt đầu), so sánh với ngân sách.
+        #     `>` = "lớn hơn". Nếu đúng = đã hết thời gian.
+        # `and` = toán tử AND: cả hai vế phải đúng thì điều kiện mới đúng.
+        #   SHORT-CIRCUIT: nếu vế trái đã sai → Python bỏ qua vế phải NGAY LẬP TỨC.
+        #   Ví dụ: False and <bất kỳ> → kết quả luôn là False, không cần tính <bất kỳ>.
         if time_budget_s is not None and time.monotonic() - start > time_budget_s:
             cprint(Color.WARN, f"\nAgent hit time budget {time_budget_s:.0f}s on turn {i}.")
+            # `return {"finish_reason": "timeout", "iters_used": i}` — kết thúc hàm
+            # và trả về dictionary.
+            # `return` kết thúc hàm ngay lập tức — bất kể còn bao nhiêu code phía sau.
+            # `{"finish_reason": "timeout", "iters_used": i}` = dict với 2 cặp key:value.
             # `iters_used: i` (KHÔNG phải i-1) cho NHẤT QUÁN với mọi nhánh return
             # khác — tất cả đều báo `i` (1-based số turn đã bước vào). Bug cũ trả
             # i-1 khiến eval đếm lệch 1 ở case timeout.
             return {"finish_reason": "timeout", "iters_used": i}
+
         # Header phân tách từng turn — dễ nhìn khi demo.
+        # `len(messages)` = độ dài (số phần tử) của list messages.
+        # `len()` là hàm built-in của Python, trả về số nguyên.
         cprint(Color.HEADER, f"\n=== Turn {i} (history: {len(messages)} messages) ===")
 
         # -----------------------------------------------------------------------
@@ -238,6 +478,29 @@ def run_agent(goal: str, workspace: Path, max_iters: int = 15,
         # ("required" sẽ ép gọi tool mỗi turn — không phù hợp vì cần model có
         # khả năng "kết thúc" bằng cách trả về content trần)
         # -----------------------------------------------------------------------
+
+        # `create_kwargs = dict(...)` — tạo dictionary chứa các tham số cho API call.
+        # `dict(key=value, ...)` = cách tạo dictionary bằng hàm dict() với keyword args.
+        # Tương đương với {"model": model, "messages": messages, ...}
+        # Tại sao dùng biến riêng thay vì truyền thẳng vào create()? Vì ta cần
+        # thêm "temperature" có điều kiện (chỉ khi temperature != None) — dễ hơn
+        # khi có dict riêng để .update() hoặc thêm key.
+        #
+        # CÁC THAM SỐ CHO API:
+        #   model=model           — tên model cần gọi (đọc từ .env)
+        #   messages=messages     — lịch sử hội thoại (system + user + mọi turn trước)
+        #   tools=TOOL_SCHEMAS    — danh sách JSON schema mô tả 10 tools;
+        #                           model đọc đây để biết có thể gọi tool gì,
+        #                           với tham số gì, và tham số đó có nghĩa gì.
+        #   tool_choice="auto"    — "auto" = model tự quyết định có gọi tool không.
+        #                           Các lựa chọn khác:
+        #                             "none"     = cấm gọi tool (chỉ trả content)
+        #                             "required" = ép phải gọi tool (dùng khi muốn
+        #                                          force structured output)
+        #                           "auto" phù hợp nhất vì cần model tự biết khi
+        #                           nào xong để dừng.
+        #   max_tokens=2048       — giới hạn số token trong 1 lần trả lời.
+        #                           1 token ≈ 0.75 từ tiếng Anh.
         # type:ignore: TOOL_SCHEMAS là list[dict] (xem tools.py), không exact
         # match OpenAI TypedDict ChatCompletionToolUnionParam. Runtime hợp lệ vì
         # dict shape khớp schema OpenAI mong đợi.
@@ -261,12 +524,44 @@ def run_agent(goal: str, workspace: Path, max_iters: int = 15,
             tool_choice="auto",
             max_tokens=2048,
         )
+
+        # `if temperature is not None:` — chỉ thêm key "temperature" vào dict
+        # khi caller truyền giá trị cụ thể (không phải None).
+        # Tại sao? Vì khi gửi temperature=None lên API sẽ bị lỗi — API muốn
+        # hoặc không có key này, hoặc có key với giá trị hợp lệ (số thực 0.0-2.0).
         if temperature is not None:
+            # `create_kwargs["temperature"] = temperature` — thêm key mới vào dict.
+            # dict["key"] = value thêm hoặc cập nhật key trong dictionary.
             create_kwargs["temperature"] = temperature
+
+        # `try:` ... `except OpenAIError as e:` — cấu trúc xử lý lỗi (exception handling).
+        # `try:` = "thử chạy đoạn code này".
+        # `except OpenAIError as e:` = "nếu xảy ra lỗi loại OpenAIError, bắt nó vào
+        #   biến e và chạy đoạn code bên dưới".
+        # Nếu không có lỗi → khối except bị bỏ qua.
+        # Nếu có lỗi không phải OpenAIError → lỗi tiếp tục "bọc lên" (bubble up)
+        #   tới caller mà không bị bắt ở đây.
         try:
+            # `client.chat.completions.create(**create_kwargs)` — gọi API OpenAI.
+            # `client.chat.completions.create(...)` = gọi phương thức create()
+            # thông qua chuỗi thuộc tính: client → chat → completions → create().
+            # Đây là cách OpenAI SDK tổ chức API — mỗi cấp là một namespace.
+            #
+            # `**create_kwargs` — toán tử "double star" (unpacking).
+            # `**dict` = "mở gói" dictionary thành các keyword arguments.
+            # Ví dụ: create(**{"model": "abc", "max_tokens": 100})
+            #   = create(model="abc", max_tokens=100)
+            # Dùng khi muốn build dict tham số rồi truyền vào — linh hoạt hơn
+            # viết thẳng vào lời gọi hàm.
+            #
+            # Lời gọi này BLOCK (chặn) chương trình cho đến khi nhận được phản hồi
+            # từ model — có thể mất vài giây đến vài chục giây.
             resp = client.chat.completions.create(**create_kwargs)  # type: ignore[arg-type]
         except OpenAIError as e:
+            # `e` là biến chứa thông tin lỗi — có thể in ra để debug.
+            # `f"\nAPI error on turn {i}: {e}. Stopping."` = f-string chèn i và e vào.
             cprint(Color.WARN, f"\nAPI error on turn {i}: {e}. Stopping.")
+            # Trả về ngay với finish_reason="api_error" — không thử lại.
             return {"finish_reason": "api_error", "iters_used": i}
 
         # -----------------------------------------------------------------------
@@ -274,6 +569,11 @@ def run_agent(goal: str, workspace: Path, max_iters: int = 15,
         # resp.choices là list — nếu n=1 (default), index 0 là câu trả lời duy nhất.
         # msg là Pydantic object có .content, .role, .tool_calls, .reasoning, ...
         # -----------------------------------------------------------------------
+
+        # `resp.choices[0].message` — truy cập phần tử đầu tiên (index 0) của
+        # list choices, rồi lấy thuộc tính message.
+        # `[0]` = lấy phần tử đầu tiên của list (Python đếm từ 0: [0], [1], [2], ...).
+        # `.message` = thuộc tính chứa nội dung phản hồi của model.
         msg = resp.choices[0].message
 
         # -----------------------------------------------------------------------
@@ -289,9 +589,32 @@ def run_agent(goal: str, workspace: Path, max_iters: int = 15,
         # verify: exclude_none GIỮ NGUYÊN mảng tool_calls + id + function, nên
         # bất biến ghép cặp vẫn toàn vẹn — chỉ rụng các field thừa làm API khó chịu.
         # -----------------------------------------------------------------------
-        # model_dump trả về dict[str, Any], không exact-match TypedDict
-        # ChatCompletionMessageParam → type:ignore. Runtime hoàn toàn ổn vì
-        # dict shape khớp schema OpenAI; chỉ type checker khó tính.
+
+        # `msg.model_dump(exclude_none=True)`
+        # msg là Pydantic object (đối tượng từ thư viện Pydantic — dùng để validate
+        # và parse dữ liệu có cấu trúc). Pydantic objects có phương thức model_dump():
+        #   - .model_dump() → chuyển đổi object thành dict Python thông thường.
+        #     Ví dụ: msg.model_dump() có thể trả về:
+        #       {"role": "assistant", "content": None, "tool_calls": [...], "audio": None}
+        #   - exclude_none=True → loại bỏ các key có giá trị None.
+        #     Sau khi exclude_none: {"role": "assistant", "tool_calls": [...]}
+        # TẠI SAO QUAN TRỌNG?
+        #   OpenAI API rất nhạy cảm: nếu gửi `{"content": None}` thay vì bỏ key content
+        #   hoàn toàn, một số version API sẽ từ chối với lỗi 400 (bad request).
+        #   exclude_none=True đảm bảo chỉ gửi các field có giá trị thực sự.
+        # TẠI SAO KHÔNG APPEND THỦ CÔNG {"role": "assistant", "content": msg.content}?
+        #   Vì làm vậy sẽ MẤT field tool_calls! Khi model gọi tool, msg.content = None
+        #   nhưng msg.tool_calls = [{"id": "call_abc", "function": {...}}]. Nếu không
+        #   giữ tool_calls trong message history, lần sau gửi lên API, nó sẽ thấy
+        #   tool result message (role="tool") mà không có assistant message kèm
+        #   tool_calls → lỗi 400 "tool call id not found".
+
+        # `messages.append(...)` — thêm phần tử vào CUỐI list messages.
+        # .append() là phương thức của list: list.append(phần_tử_mới).
+        # Sau mỗi turn, messages ngày càng dài ra:
+        #   [system, user, assistant1, tool1, assistant2, tool2, ...]
+        # Đây chính là "bộ nhớ" của agent — toàn bộ lịch sử được gửi lên API
+        # mỗi turn để model "nhớ" đã làm gì.
         messages.append(msg.model_dump(exclude_none=True))  # type: ignore[arg-type]
 
         # -----------------------------------------------------------------------
@@ -299,6 +622,13 @@ def run_agent(goal: str, workspace: Path, max_iters: int = 15,
         # Content có thể None khi model chỉ gọi tool không nói gì.
         # Khi có content, đây là lúc model "narrate" (giải thích nó đang làm gì).
         # -----------------------------------------------------------------------
+
+        # `if msg.content:` — kiểm tra "nếu content có giá trị".
+        # Trong Python, `if x:` là True khi x:
+        #   - Không phải None
+        #   - Không phải chuỗi rỗng ""
+        #   - Không phải 0, False, [], {}, ...
+        # Vậy `if msg.content:` = "nếu model có trả lời text (không phải None/rỗng)".
         if msg.content:
             cprint(Color.ASSISTANT, f"[assistant] {msg.content}")
 
@@ -307,29 +637,54 @@ def run_agent(goal: str, workspace: Path, max_iters: int = 15,
         # Quy ước ReAct: model dừng gọi tool = model nghĩ task xong → mình tin nó.
         # `not msg.tool_calls` true khi tool_calls là None HOẶC list rỗng.
         # -----------------------------------------------------------------------
+
+        # `if not msg.tool_calls:` — kiểm tra "nếu KHÔNG có tool calls".
+        # `not` đảo ngược giá trị boolean:
+        #   - `not None`  = True  (None là falsy trong Python)
+        #   - `not []`    = True  (list rỗng là falsy)
+        #   - `not [...]` = False (list có phần tử là truthy)
+        # Vậy `if not msg.tool_calls:` đúng khi:
+        #   - msg.tool_calls là None (model không có tool calls field), HOẶC
+        #   - msg.tool_calls là [] (list rỗng — model không muốn gọi tool nào)
+        # Cả hai trường hợp đều có nghĩa: model không muốn thực hiện hành động nào.
         if not msg.tool_calls:
             # Đã hành động ít nhất 1 lần → tin agent đã xong thật (giữ nguyên hành vi
             # ReAct cũ, bảo toàn quyền kết thúc hợp lệ của agent đã làm việc xong).
+
+            # `if made_tool_call:` — nếu đã gọi tool ít nhất 1 lần trước đó.
+            # made_tool_call là biến boolean đặt = True ở BƯỚC 6 khi chạy tool.
+            # Logic: nếu model ĐÃ gọi tool + bây giờ không gọi nữa = thực sự xong.
             if made_tool_call:
                 cprint(Color.FINISH, "\nAgent finished.")
+                # Trả về "finished" — kết thúc thành công.
                 return {"finish_reason": "finished", "iters_used": i}
+
             # Chưa đụng tool lần nào mà đã "xong" → gần như chắc là trả prose suông.
             # Còn quota nhắc VÀ còn turn để model phản hồi nudge thì nhắc rồi loop lại.
             # An toàn pairing: assistant vừa append KHÔNG có tool_calls nên messages
             # đang hợp lệ; thêm 1 user nudge sau nó OK.
             #
-            # `and i < max_iters`: CHỈ nhắc khi VẪN CÒN turn phía sau để model đáp lại
-            # nudge. Nếu đây là turn cuối (i == max_iters), nudge cũng vô nghĩa (loop
-            # sẽ dừng ngay, model không kịp đọc) → rơi thẳng xuống no_action bên dưới.
-            # Đây là fix cho ca biên max_iters <= MAX_NUDGES: trước đây cứ còn quota là
-            # nudge + continue, nên turn cuối append nudge rồi vòng lặp kết thúc và HÀM
-            # RƠI XUỐNG nhánh max_iters ở cuối → báo nhầm "max_iters" thay vì "no_action".
+            # `nudges_used < MAX_NUDGES and i < max_iters`
+            # Điều kiện kép với `and`:
+            #   - `nudges_used < MAX_NUDGES`: còn quota nhắc (<= 2 lần).
+            #     `<` = "nhỏ hơn". nudges_used=0, MAX_NUDGES=2 → 0 < 2 = True.
+            #   - `i < max_iters`: còn ít nhất 1 turn nữa sau turn hiện tại.
+            #     Nếu i == max_iters (đây là turn cuối), nhắc rồi cũng vô nghĩa
+            #     vì vòng lặp sẽ kết thúc ngay — model không kịp đọc nudge.
+            # `and` = short-circuit: nếu vế trái sai, vế phải KHÔNG được tính.
             if nudges_used < MAX_NUDGES and i < max_iters:
+                # `nudges_used += 1` — tăng biến nudges_used lên 1.
+                # `+=` là cú pháp rút gọn: `x += 1` = `x = x + 1`.
                 nudges_used += 1
                 cprint(Color.WARN,
                        f"\nModel answered without calling a tool; nudging ({nudges_used}/{MAX_NUDGES}).")
+                # Thêm message nhắc nhở vào lịch sử — model sẽ đọc ở turn sau.
                 messages.append({"role": "user", "content": NUDGE})
+                # `continue` — bỏ qua phần còn lại của vòng lặp, nhảy ngay sang
+                # lần lặp tiếp theo (tăng i lên 1 và kiểm tra lại điều kiện for).
+                # Không có continue thì code sẽ tiếp tục chạy các bước bên dưới.
                 continue
+
             # Hết quota (hoặc đây là turn cuối) mà vẫn không act → dừng, đánh dấu
             # no_action để harness phân biệt với "finished" thật (fail kiểu "nói mà
             # không làm"). Return TẠI ĐÂY (iters_used=i) thay vì để rơi xuống nhánh
@@ -344,30 +699,60 @@ def run_agent(goal: str, workspace: Path, max_iters: int = 15,
         # phí công — tệ hơn, có thể là write_file/apply_patch làm thay đổi đĩa mà
         # model không kịp verify. Dừng tại đây và rơi xuống cảnh báo max_iters.
         # -----------------------------------------------------------------------
+
+        # `if i == max_iters:` — `==` là so sánh BẰNG (khác với = là gán).
+        # Nếu đây là turn cuối cùng được phép → dừng, không chạy tool nữa.
         if i == max_iters:
+            # `break` — thoát khỏi vòng lặp for ngay lập tức.
+            # Không chạy thêm bất kỳ lần lặp nào. Code tiếp tục sau dấu } của for.
             break
 
         # -----------------------------------------------------------------------
         # BƯỚC 6: NẾU CÓ TOOL_CALLS, CHẠY TỪNG CÁI VÀ TRẢ KẾT QUẢ VỀ
         # Có thể có >1 tool_call trong 1 turn (model parallel calls).
         # -----------------------------------------------------------------------
+
         # Tới đây chắc chắn sẽ chạy tool (đã qua BƯỚC 5.5 break) → đánh dấu agent
         # đã THỰC SỰ hành động (tắt guardrail "nói mà không làm" cho các turn sau).
+        # `= True` gán giá trị True cho biến made_tool_call.
         made_tool_call = True
+
+        # `for tc in msg.tool_calls:` — vòng lặp for lồng nhau (nested loop).
+        # Lặp qua từng tool call trong list msg.tool_calls.
+        # Biến `tc` (tool call) lần lượt nhận mỗi phần tử trong list.
+        # Model có thể yêu cầu nhiều tool cùng lúc (parallel calls) → cần xử lý
+        # từng cái.
         for tc in msg.tool_calls:
             # type:ignore: msg.tool_calls có thể chứa ChatCompletionMessageCustomToolCall
             # (không có .function). Hiện model chỉ emit function calls (Hermes parser)
             # nên runtime ổn — Pylance khó tính.
+
+            # `tc.function.name` — đọc tên function cần gọi.
+            # `tc.function.arguments` — đọc chuỗi JSON chứa các tham số.
+            # Ví dụ: tc.function.name = "write_file"
+            #        tc.function.arguments = '{"path": "hello.py", "content": "print(1)"}'
             # Log tên tool + arguments TRƯỚC khi chạy → debug được tool nào hang.
             cprint(Color.TOOL, f"[tool] {tc.function.name}({tc.function.arguments})")  # type: ignore[union-attr]
 
+            # `execute_tool(tc.function.name, tc.function.arguments, workspace)`
+            # Gọi hàm execute_tool từ src/tools.py với 3 tham số:
+            #   1. tên tool (string)
+            #   2. tham số JSON (string chứa JSON)
+            #   3. workspace (Path — thư mục sandbox)
             # execute_tool tự parse JSON args + dispatch theo name. Nó luôn trả
             # về string (kể cả khi có lỗi — string bắt đầu bằng "ERROR:").
             # `workspace` truyền tường minh xuống dispatcher (không còn global).
             result = execute_tool(tc.function.name, tc.function.arguments, workspace)  # type: ignore[union-attr]
 
+            # `len(result) < 500` — so sánh độ dài chuỗi với 500.
+            # `len(result)` = số ký tự trong chuỗi result.
             # Cắt bớt khi log để khỏi spam terminal. Model vẫn nhận FULL kết quả
             # qua append messages bên dưới.
+            # `result if len(result) < 500 else result[:500] + "...[truncated]"`
+            # Đây là TERNARY EXPRESSION (biểu thức ba ngôi) của Python:
+            #   <giá_trị_nếu_đúng> if <điều_kiện> else <giá_trị_nếu_sai>
+            # Nếu chuỗi ngắn hơn 500 ký tự → dùng nguyên. Nếu dài hơn → cắt 500 đầu.
+            # `result[:500]` = slice (cắt) list/string: lấy từ đầu đến index 500 (không gồm 500).
             preview = result if len(result) < 500 else result[:500] + "...[truncated]"
             cprint(Color.RESULT, f"[tool result]\n{preview}")
 
@@ -375,17 +760,29 @@ def run_agent(goal: str, workspace: Path, max_iters: int = 15,
             #   role: "tool"
             #   tool_call_id: phải khớp với tc.id để API biết kết quả này thuộc call nào
             #   content: chuỗi kết quả (model đọc chuỗi này ở turn sau)
+            # `tc.id` = ID duy nhất của tool call này — ví dụ "call_abc123".
+            # API yêu cầu mỗi tool result message phải có tool_call_id khớp với
+            # một tool_calls[].id trong assistant message trước đó. Đây là cách
+            # API biết kết quả nào thuộc về lời gọi tool nào (khi có parallel calls).
             messages.append({
                 "role": "tool",
                 "tool_call_id": tc.id,
                 "content": result,
             })
         # Hết for — loop sang turn tiếp theo, model sẽ "thấy" tool results vừa append.
+        # Vòng lặp for bên trong (for tc in msg.tool_calls) kết thúc.
+        # Vòng lặp for bên ngoài (for i in range(...)) tiếp tục turn i+1.
 
     # Rơi xuống đây = đã dùng hết max_iters turn mà model vẫn còn muốn gọi tool
     # (chưa chịu trả content trần để báo "xong"). Đây là safety net chống loop
     # vô tận — không hẳn là bug, nhưng dấu hiệu task quá khó hoặc model bị kẹt.
+    #
+    # Tại sao rơi xuống đây thay vì return bên trong vòng lặp?
+    #   Vì ở BƯỚC 5.5, khi i == max_iters và model vẫn gọi tool, ta `break` thoát
+    #   khỏi vòng lặp for. Code tiếp tục chạy các dòng SAU vòng lặp for — tức là
+    #   dòng cprint và return bên dưới này.
     cprint(Color.WARN, f"\nAgent hit max_iters={max_iters} without finishing.")
+    # Trả về "max_iters" — đã hết số lượt cho phép.
     return {"finish_reason": "max_iters", "iters_used": max_iters}
 
 
@@ -394,35 +791,76 @@ def run_agent(goal: str, workspace: Path, max_iters: int = 15,
 # (Để gọn, examples/05_agent_loop.py là CLI wrapper "đẹp hơn" cho demo)
 # ---------------------------------------------------------------------------
 
+# `if __name__ == "__main__":` — điều kiện đặc biệt trong Python.
+# Khi chạy file TRỰC TIẾP (python src/agent.py), Python đặt biến đặc biệt
+# __name__ = "__main__". Khi file được IMPORT từ file khác, __name__ = "src.agent".
+# Vậy: code bên trong `if __name__ == "__main__":` CHỈ chạy khi file được
+# chạy trực tiếp, KHÔNG chạy khi bị import. Đây là pattern chuẩn Python để
+# viết code "chỉ chạy khi là file chính".
 if __name__ == "__main__":
+    # `import argparse` — nhập module argparse để xử lý tham số dòng lệnh.
+    # Đặt import ở đây (thay vì đầu file) vì argparse chỉ cần khi chạy trực tiếp,
+    # không cần khi import module này từ file khác.
     import argparse
 
     # argparse thay cho việc bóc sys.argv thủ công — cho phép --workspace (chốt
     # sandbox file ops) + --max-iters tùy chọn, và tự sinh usage/-h.
+
+    # `argparse.ArgumentParser(description=...)` — tạo parser xử lý tham số dòng lệnh.
+    # `description=` = mô tả hiển thị khi dùng --help.
     parser = argparse.ArgumentParser(
         description="ReAct coding agent. Example: "
                     "python -m src.agent 'Fix the failing tests in demo_repo/'")
+
+    # `parser.add_argument("goal", nargs="+", help=...)` — thêm tham số bắt buộc.
+    # "goal" = tên tham số (positional — không cần dấu --).
+    # `nargs="+"` = nhận 1 hoặc nhiều từ (+ = "một hoặc nhiều").
+    #   Ví dụ: python -m src.agent Fix the failing tests
+    #   → args.goal = ["Fix", "the", "failing", "tests"]
     # positional `goal` với nargs="+" → gom MỌI từ user gõ thành 1 list, rồi
     # join lại thành câu hoàn chỉnh (giữ hành vi cũ: gõ không cần đóng ngoặc kép).
     parser.add_argument("goal", nargs="+", help="natural-language task description")
+
+    # `parser.add_argument("--workspace", default="demo_repo", help=...)` — tham số tùy chọn.
+    # "--workspace" bắt đầu bằng -- → tùy chọn (có thể bỏ qua, dùng default).
+    # `default="demo_repo"` = nếu không truyền --workspace, mặc định là "demo_repo".
     # --workspace: thư mục sandbox agent được phép đọc/ghi. Default demo_repo/ —
     # agent không "đi lạc" sang sửa src/agent.py của chính mình (self-modification
     # là Phase 4, chưa phải bây giờ).
     parser.add_argument("--workspace", default="demo_repo",
                         help="sandbox directory the agent may read/write (default: demo_repo)")
+
+    # `type=int` = tự động chuyển chuỗi từ command line thành số nguyên.
+    # `default=None` = nếu không truyền, giá trị là None (sẽ dùng default của run_agent).
     # --max-iters tùy chọn: bỏ trống thì dùng default của run_agent (15).
     parser.add_argument("--max-iters", type=int, default=None,
                         help="max ReAct turns (default: run_agent's 15)")
+
+    # `args = parser.parse_args()` — đọc và phân tích tham số từ sys.argv.
+    # Sau lệnh này, args.goal, args.workspace, args.max_iters có giá trị từ CLI.
     args = parser.parse_args()
 
+    # `" ".join(args.goal)` — nối list thành chuỗi, phân cách bằng dấu cách.
+    # `" ".join(["Fix", "the", "tests"])` = "Fix the tests"
     # Join các từ goal thành 1 câu. Path(...).resolve() biến --workspace thành
     # đường dẫn tuyệt đối trước khi đưa vào run_agent (tool ops chốt vào đây).
     task = " ".join(args.goal)
+
+    # `Path(args.workspace).resolve()` — tạo Path object rồi chuyển thành đường
+    # dẫn tuyệt đối. resolve() = "tính toán đường dẫn đầy đủ từ thư mục hiện tại".
+    # Ví dụ: Path("demo_repo").resolve() → Path("/home/user/code/project/demo_repo")
     workspace = Path(args.workspace).resolve()
 
     cprint(Color.HEADER, f"GOAL: {task}\n")
+
+    # `if args.max_iters is not None:` — kiểm tra user có truyền --max-iters không.
+    # Nếu có → truyền vào run_agent. Nếu không → dùng default của hàm (15).
     # Chỉ truyền max_iters khi user có chỉ định → nếu không, dùng default của hàm.
     if args.max_iters is not None:
+        # `run_agent(task, workspace=workspace, max_iters=args.max_iters)` — gọi hàm
+        # run_agent với 3 tham số.
+        # `workspace=workspace` là keyword argument — tên tham số = giá trị.
         run_agent(task, workspace=workspace, max_iters=args.max_iters)
     else:
+        # Không truyền max_iters → run_agent dùng default = 15.
         run_agent(task, workspace=workspace)

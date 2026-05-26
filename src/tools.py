@@ -17,21 +17,44 @@ Design note: adding a tool = append the function to TOOLS and its JSON schema
 to TOOL_SCHEMAS — agent.py needs no changes (extensible registry pattern).
 """
 
+# `from __future__ import annotations` — câu lệnh đặc biệt cho Python, bật
+# một tính năng mới: cho phép dùng type hint (kiểu dữ liệu) như `Path` trong
+# khai báo hàm mà không cần import ở top. Luôn đặt ở dòng đầu tiên của file
+# nếu dùng.
 from __future__ import annotations
 
-# `json` để parse arguments mà model gửi (model gửi arguments dưới dạng JSON string,
-# không phải dict — đây là quy ước của OpenAI tool calling API).
+# `import` = "mang thư viện vào". Python có hàng nghìn thư viện sẵn (built-in)
+# và hàng triệu thư viện bên ngoài (cài qua pip). Khi import, Python tìm file
+# thư viện đó, chạy nó 1 lần, rồi gắn nó vào tên bạn đặt.
+
+# `json` — thư viện xử lý định dạng JSON (JavaScript Object Notation).
+# JSON là định dạng văn bản để truyền dữ liệu, ví dụ: {"name": "Alice", "age": 30}
+# Model (AI) gửi arguments cho tool dưới dạng chuỗi JSON, không phải dict Python
+# thực sự — đây là quy ước của OpenAI tool calling API.
 import json
 
-# `logging` thay cho print — consistent với agent.py, có thể redirect ra file.
+# `logging` — thư viện ghi log (thay cho print). Khác print ở chỗ:
+# - Có cấp độ: DEBUG, INFO, WARNING, ERROR
+# - Có thể redirect ra file log thay vì màn hình
+# - Consistent với cách agent.py đang dùng
 import logging
 
-# `subprocess` để chạy lệnh shell từ Python. Có timeout, capture stdout/stderr.
+# `subprocess` — thư viện để chạy lệnh shell từ bên trong Python.
+# Ví dụ: chạy `ls`, `pytest`, `pip install` như khi gõ trên terminal.
+# Có thể đặt timeout (giới hạn thời gian), bắt stdout/stderr (kết quả lệnh).
 import subprocess
 
-# `pathlib.Path` để xử lý đường dẫn an toàn (thay cho string concat dễ lỗi).
+# `from pathlib import Path` — từ thư viện pathlib, lấy class Path.
+# `class` là "khuôn mẫu" để tạo đối tượng. Path đại diện cho đường dẫn file/thư mục.
+# Dùng Path thay cho string nối tay (`"/home/user" + "/" + "file.txt"`) vì:
+# - An toàn hơn (tự xử lý "/" trên Linux vs "\" trên Windows)
+# - Có nhiều method tiện lợi: .exists(), .read_text(), .write_text(), .parent, ...
 from pathlib import Path
 
+# `logging.getLogger(__name__)` — tạo một "logger" riêng cho file này.
+# `__name__` là biến đặc biệt của Python, chứa tên module hiện tại
+# (vd: "src.tools"). Mỗi module có logger riêng để biết log đến từ đâu.
+# Kết quả gán vào biến `log` — ta sẽ gọi log.info(...) để ghi thông tin.
 log = logging.getLogger(__name__)
 
 # workspace = "sandbox dir" — giới hạn nơi agent được phép đọc/ghi.
@@ -41,6 +64,11 @@ log = logging.getLogger(__name__)
 # (vd subagent) chạy với workspace khác nhau trong cùng process.
 
 
+# `def` = "define" = định nghĩa hàm. Hàm là khối code có tên, nhận tham số,
+# chạy khi được gọi, có thể trả về giá trị.
+# Cú pháp: def tên_hàm(tham_số_1: kiểu, tham_số_2: kiểu) -> kiểu_trả_về:
+# Phần sau `:` (dấu hai chấm) là "type hint" — gợi ý kiểu dữ liệu, không bắt buộc
+# nhưng giúp đọc code dễ hơn. Python không tự kiểm tra type hint lúc chạy.
 def _safe_path(path: str, workspace: Path) -> Path:
     """Resolve path relative to `workspace` and refuse to escape it.
 
@@ -50,15 +78,48 @@ def _safe_path(path: str, workspace: Path) -> Path:
     `workspace` được truyền vào (positional) thay cho global cũ — caller (mỗi
     tool function) đã có sẵn workspace từ keyword arg của nó.
     """
-    # Ghép workspace + path → resolve → đường dẫn tuyệt đối.
+    # `workspace / path` — toán tử `/` với Path KHÔNG phải chia số.
+    # Path ghi đè (override) toán tử `/` để có nghĩa là "nối đường dẫn".
+    # Ví dụ: Path("/home/user") / "docs/file.txt"  →  Path("/home/user/docs/file.txt")
+    # Đây gọi là "operator overloading" trong Python — class tự định nghĩa lại
+    # hành vi của toán tử.
+    #
+    # `.resolve()` — method của Path, chuyển đường dẫn sang dạng tuyệt đối thực sự:
+    # - Giải quyết `..` (lên thư mục cha): "/a/b/../c" → "/a/c"
+    # - Giải quyết symlink (liên kết tượng trưng): đi theo link đến đích thật
+    # - Kết quả luôn bắt đầu bằng "/" (tuyệt đối, không phải tương đối)
+    # Tại sao cần resolve()? Vì model có thể gửi path như "../../etc/passwd" —
+    # nếu không resolve, kiểm tra `in p.parents` sẽ bị qua mặt.
     p = (workspace / path).resolve()
 
-    # Kiểm tra path có nằm trong workspace không. `p.parents` là list các thư
-    # mục cha của p (vd: /a/b/c.txt → /a/b, /a, /). Nếu workspace KHÔNG nằm
-    # trong list cha → p đang ở ngoài sandbox → reject.
-    # `p != workspace` để cho phép case `path = "."` (chính workspace).
+    # `if` = "nếu". Cú pháp: if điều_kiện: (thụt lề) khối_code_nếu_đúng
+    # Nếu điều kiện SAI (False), Python bỏ qua khối thụt lề và đi tiếp.
+    #
+    # `p.parents` — thuộc tính của Path, trả về tất cả thư mục cha của p.
+    # Ví dụ: Path("/a/b/c.txt").parents  →  [Path("/a/b"), Path("/a"), Path("/")]
+    # Đây là một iterable (có thể lặp qua), không phải list thực sự, nhưng `in`
+    # vẫn hoạt động (Python kiểm tra từng phần tử).
+    #
+    # `workspace not in p.parents` — kiểm tra workspace có KHÔNG nằm trong danh
+    # sách thư mục cha của p không.
+    # Nếu p = /workspace/subdir/file.txt → parents = [/workspace/subdir, /workspace, /]
+    # → workspace CÓ trong parents → check này PASS (False) → không raise
+    # Nếu p = /etc/passwd → parents = [/etc, /] → workspace KHÔNG trong parents
+    # → check này FAIL (True) → raise ValueError
+    #
+    # `p != workspace` — cho phép trường hợp path = "." tức p chính là workspace.
+    # Trong trường hợp đó, workspace không trong parents (bởi vì parents không bao
+    # gồm chính nó), nhưng p == workspace → điều kiện toàn phần là False → OK.
     if workspace not in p.parents and p != workspace:
+        # `raise ValueError(...)` — "ném" (throw) ra một ngoại lệ (exception).
+        # `ValueError` là loại exception chuẩn của Python: "giá trị không hợp lệ".
+        # `raise` dừng hàm ngay lập tức và báo lỗi lên caller.
+        # f"..." là f-string: chuỗi có thể nhúng biểu thức Python vào giữa {}.
+        # {p} và {workspace} sẽ được thay bằng giá trị thực của biến đó.
         raise ValueError(f"path {p} escapes workspace {workspace}")
+
+    # `return` — trả về giá trị từ hàm. Sau dòng này hàm kết thúc.
+    # Caller sẽ nhận được Path object p.
     return p
 
 
@@ -66,20 +127,38 @@ def _safe_path(path: str, workspace: Path) -> Path:
 # Tool implementations — các hàm Python thật sự chạy khi model gọi tool
 # ---------------------------------------------------------------------------
 
+# `*` trong danh sách tham số: mọi tham số SAU dấu `*` phải được gọi theo tên
+# (keyword argument), không thể truyền theo vị trí. Ví dụ:
+#   read_file("myfile.txt", workspace=my_workspace)  ← đúng
+#   read_file("myfile.txt", my_workspace)             ← lỗi
+# Tại sao? Vì `workspace` là tham số "nội bộ" — model không bao giờ gửi nó,
+# chỉ execute_tool() mới inject. Dấu `*` làm rõ sự phân biệt đó.
 def read_file(path: str, *, workspace: Path) -> str:
     """Return the full contents of a text file inside the workspace."""
-    # Resolve path qua _safe_path để chắc chắn nằm trong workspace.
+    # Gọi hàm _safe_path để kiểm tra và chuyển đổi path.
+    # Kết quả là một Path object tuyệt đối, đã được xác nhận nằm trong workspace.
+    # Nếu path thoát khỏi workspace, _safe_path sẽ raise ValueError — ngoại lệ
+    # đó sẽ bubble lên execute_tool() và được bắt ở đó, convert thành error string.
     p = _safe_path(path, workspace)
 
-    # Kiểm tra file tồn tại — nếu không, trả về error string (model sẽ thấy).
+    # `p.exists()` — method của Path, trả về True nếu file/thư mục tồn tại,
+    # False nếu không. Dấu `not` đảo ngược: `not p.exists()` = "nếu KHÔNG tồn tại".
     # KHÔNG raise exception → vì exception sẽ bubble lên agent.py và crash agent.
     # Trả error string cho model tự đọc và quyết định làm gì tiếp.
     if not p.exists():
+        # f-string: {path} được thay bằng giá trị biến `path`.
         return f"ERROR: file not found: {path}"
 
-    # `errors="replace"` = nếu file có ký tự không decode được, thay bằng "?"
-    # thay vì crash. An toàn cho file binary lẫn vào.
+    # `p.read_text(encoding="utf-8", errors="replace")` — method của Path,
+    # đọc toàn bộ nội dung file và trả về string.
+    # `encoding="utf-8"` — dùng bảng mã UTF-8 để giải mã byte thành ký tự.
+    #   UTF-8 là chuẩn phổ biến nhất, hỗ trợ tiếng Việt, tiếng Trung, emoji,...
+    # `errors="replace"` — nếu gặp byte KHÔNG hợp lệ trong UTF-8 (ví dụ file binary
+    #   bị lẫn vào), thay bằng ký tự "?" thay vì crash toàn bộ hàm.
+    #   Lựa chọn an toàn cho môi trường sandbox không kiểm soát được file type.
     text = p.read_text(encoding="utf-8", errors="replace")
+
+    # Trả về nội dung file dưới dạng string. Model sẽ đọc chuỗi này.
     return text
 
 
@@ -89,17 +168,30 @@ def write_file(path: str, content: str, *, workspace: Path) -> str:
     The agent MUST send the full new content — there is no patch/diff format
     in this version. Keep files small for the demo.
     """
+    # Sandbox check — xem _safe_path ở trên để hiểu tại sao.
     p = _safe_path(path, workspace)
 
-    # `mkdir(parents=True, exist_ok=True)` = tạo parent dirs nếu chưa có,
-    # không crash nếu đã tồn tại. Cho phép agent tạo file ở subdir mới.
+    # `p.parent` — thuộc tính của Path, trả về thư mục chứa file.
+    # Ví dụ: Path("/a/b/c.txt").parent  →  Path("/a/b")
+    #
+    # `.mkdir(parents=True, exist_ok=True)` — tạo thư mục.
+    # `parents=True` — tạo tất cả thư mục cha nếu chưa có.
+    #   Ví dụ: p = "/ws/new/deep/file.txt", nếu "/ws/new/deep/" chưa tồn tại,
+    #   Python sẽ tạo luôn "new/" rồi "deep/" trong đó thay vì báo lỗi.
+    # `exist_ok=True` — không báo lỗi nếu thư mục đã tồn tại.
+    #   Không có flag này: nếu thư mục đã có → FileExistsError.
+    #   Với flag này: bỏ qua silently. An toàn để gọi nhiều lần.
     p.parent.mkdir(parents=True, exist_ok=True)
 
-    # `write_text` overwrite hoàn toàn (không phải append) — agent phải gửi
-    # FULL new content. Phase 2 có thể thêm tool patch_file kiểu diff cho hiệu quả.
+    # `p.write_text(content, encoding="utf-8")` — ghi chuỗi `content` vào file.
+    # OVERWRITE hoàn toàn — nội dung cũ bị xóa, thay bằng `content`.
+    # Không có chế độ append (nối vào cuối) ở đây — agent phải gửi FULL content.
+    # Phase 2 có thể thêm tool patch_file kiểu diff cho hiệu quả hơn.
     p.write_text(content, encoding="utf-8")
 
-    # Trả về 1 chuỗi xác nhận cho model — model biết tool đã hoàn thành.
+    # `len(content)` — hàm built-in của Python, đếm số ký tự (characters) trong
+    # chuỗi `content`. Ví dụ: len("hello") = 5.
+    # Trả về chuỗi xác nhận cho model — model biết tool đã hoàn thành.
     return f"wrote {len(content)} chars to {path}"
 
 
@@ -109,16 +201,41 @@ def run_bash(command: str, timeout: int = 600, *, workspace: Path) -> str:
     Default timeout 600s (10 phút) — đủ cho pytest, pip install, build nhỏ.
     Nếu cần lâu hơn, model có thể tự pass `timeout` lớn hơn (có trong JSON schema).
     """
+    # `log.info(...)` — ghi một dòng log cấp INFO.
+    # f-string: {command} được thay bằng nội dung biến command.
+    # Dòng này giúp developer thấy mỗi lệnh bash nào được chạy trong console.
     log.info(f"[tools] bash> {command}")
+
+    # `try:` — bắt đầu khối "thử chạy". Nếu code trong đây raise exception,
+    # Python nhảy xuống `except` tương ứng thay vì crash toàn bộ chương trình.
+    # Cặp `try/except` tương đương try/catch trong Java/JavaScript.
     try:
-        # subprocess.run = chạy command đồng bộ, đợi xong mới return.
-        # shell=True → command là chuỗi 1 dòng (cho phép pipe, redirect, etc.)
-        # cwd=workspace → CWD của subprocess = workspace, nên `ls` ra files
-        # trong demo_repo, không phải project root.
-        # capture_output=True → stdout/stderr không in ra terminal, lưu vào result.
-        # text=True → stdout/stderr là string thay vì bytes.
-        # timeout=600 → giết command sau 10 phút nếu chưa xong (chống hang vĩnh viễn,
-        # nhưng vẫn đủ thoáng cho pytest/install). Model có thể override qua args.
+        # `subprocess.run(...)` — chạy một lệnh bên ngoài Python và đợi nó xong.
+        # Trả về một object `result` chứa: returncode, stdout, stderr.
+        #
+        # `command` (tham số đầu tiên) — lệnh shell cần chạy, ví dụ: "ls -la".
+        #
+        # `shell=True` — truyền command cho shell (/bin/sh) thay vì chạy trực tiếp.
+        #   Cần thiết để hỗ trợ: pipe (|), redirect (>), && (và), || (hoặc),
+        #   biến môi trường ($VAR), wildcard (*.py)...
+        #   Trade-off: tiềm ẩn shell injection nếu `command` đến từ input không
+        #   tin cậy, nhưng ở đây model đang bị sandbox bởi workspace rồi.
+        #
+        # `cwd=workspace` — đặt "current working directory" cho subprocess.
+        #   Khi subprocess chạy `ls`, nó list file trong workspace, không phải
+        #   trong thư mục của project Python này. Nếu không set, `ls` sẽ list
+        #   file của project (không đúng).
+        #
+        # `capture_output=True` — bắt stdout và stderr vào biến, không in ra terminal.
+        #   Tương đương: stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        #
+        # `text=True` — tự động decode bytes thành str (dùng encoding hệ thống).
+        #   Không có flag này: stdout/stderr là bytes (b"hello\n"), không dùng
+        #   được trực tiếp như string.
+        #
+        # `timeout=timeout` — giết subprocess sau `timeout` giây nếu chưa xong.
+        #   Mặc định 600 (10 phút). Nếu không có timeout, lệnh bị hang vĩnh viễn
+        #   sẽ block agent mãi mãi.
         result = subprocess.run(
             command,
             shell=True,
@@ -128,15 +245,33 @@ def run_bash(command: str, timeout: int = 600, *, workspace: Path) -> str:
             timeout=timeout,
         )
     except subprocess.TimeoutExpired:
-        # Trả error string, không raise. Model đọc string này và quyết định.
+        # `except SubLoaiException:` — bắt chỉ exception thuộc loại đó.
+        # `subprocess.TimeoutExpired` được raise khi timeout quá hạn.
+        # Trả error string, không raise lại. Model đọc string này và quyết định tiếp.
         return f"ERROR: command timed out after {timeout}s"
 
-    # Ghép kết quả thành 1 string đẹp cho model đọc: exit code + stdout + stderr.
+    # Tạo list `parts` để chứa từng phần của output.
+    # `[]` trong Python = list rỗng. List là mảng có thứ tự, có thể chứa bất kỳ
+    # loại dữ liệu nào, kích thước tự động tăng khi thêm phần tử.
+    # Ví dụ: ["apple", "banana", 42, True] là list hợp lệ.
     parts = [f"exit_code: {result.returncode}"]
+    # `result.returncode` — exit code của lệnh: 0 = thành công, khác 0 = lỗi.
+    # Quy ước Unix: mọi chương trình trả về số nguyên khi kết thúc.
+
+    # `if result.stdout:` — kiểm tra stdout có nội dung không.
+    # Trong Python, chuỗi rỗng "" là "falsy" (tương đương False trong điều kiện).
+    # Vì vậy `if result.stdout` = "nếu stdout không rỗng".
     if result.stdout:
+        # `parts.append(...)` — thêm một phần tử vào cuối list `parts`.
+        # Sau dòng này, parts = ["exit_code: 0", "stdout:\n..."]
         parts.append(f"stdout:\n{result.stdout}")
+
     if result.stderr:
         parts.append(f"stderr:\n{result.stderr}")
+
+    # `"\n".join(parts)` — ghép các phần tử của list thành một chuỗi duy nhất,
+    # ngăn cách bởi "\n" (ký tự xuống dòng).
+    # Ví dụ: "\n".join(["a", "b", "c"])  →  "a\nb\nc"
     return "\n".join(parts)
 
 
@@ -176,12 +311,15 @@ def apply_patch(path: str, old_text: str, new_text: str, *, workspace: Path) -> 
     if not p.exists():
         return f"ERROR: file not found: {path}"
 
-    # errors="replace" = nếu file có byte không decode được UTF-8 (vd file binary
-    # lẫn vào), thay bằng ký tự "?" thay vì crash. Edge case hiếm nhưng có.
+    # Đọc toàn bộ nội dung file vào biến `content` (một chuỗi dài).
+    # `errors="replace"` — an toàn khi file có byte không decode được UTF-8.
     content = p.read_text(encoding="utf-8", errors="replace")
 
-    # count() = đếm số lần substring xuất hiện. O(n) scan. Đủ nhanh cho file
-    # vài trăm KB; với file MB phải dùng str.find loop nhưng overkill ở đây.
+    # `content.count(old_text)` — method của string, đếm số lần chuỗi `old_text`
+    # xuất hiện trong `content`. Trả về số nguyên.
+    # Ví dụ: "abcabc".count("ab")  →  2
+    # Ví dụ: "hello".count("xyz")  →  0
+    # O(n) = tốc độ tỉ lệ tuyến tính với kích thước file. Đủ nhanh cho vài trăm KB.
     count = content.count(old_text)
 
     # CASE 0: không tìm thấy. Lý do thường gặp:
@@ -198,15 +336,22 @@ def apply_patch(path: str, old_text: str, new_text: str, *, workspace: Path) -> 
         return (f"ERROR: old_text matches {count} places in {path}. "
                 "Add more context (surrounding lines) to make it unique.")
 
-    # CASE 1 (happy path): replace với count=1 (third arg) để chỉ thay 1 lần.
+    # CASE 1 (happy path): thay thế `old_text` bằng `new_text`.
+    # `content.replace(old_text, new_text, 1)` — method của string:
+    #   - Tìm `old_text` trong `content`
+    #   - Thay bằng `new_text`
+    #   - Số `1` (tham số thứ ba) = chỉ thay lần xuất hiện ĐẦU TIÊN, bỏ qua các lần sau
+    #   Ví dụ: "aa".replace("a", "b", 1)  →  "ba"  (không phải "bb")
     # Mặc dù đã verify count==1, vẫn pass count=1 cho str.replace để defensive
     # (nếu code bị refactor sau này mà bỏ qua check, replace vẫn an toàn).
     new_content = content.replace(old_text, new_text, 1)
 
-    # write_text overwrite hoàn toàn — atomic ở mức Python (1 syscall write).
-    # Không có half-written state vì OS guarantee atomic write cho file nhỏ.
+    # `p.write_text(new_content, encoding="utf-8")` — ghi `new_content` ra file,
+    # OVERWRITE hoàn toàn nội dung cũ. Đây là bước thực sự thay đổi file trên đĩa.
+    # Atomic ở mức Python: 1 syscall write, không có trạng thái "nửa ghi xong".
     p.write_text(new_content, encoding="utf-8")
 
+    # `len(old_text)` — số ký tự của old_text. `len(new_text)` — số ký tự new_text.
     # Verbose success message giúp model verify tool đã làm gì.
     # Format: "patched X.py: replaced N chars with M chars" — model có thể
     # so sánh N với M để biết delta size (vd N=20, M=200 = thay 1 line bằng
@@ -242,6 +387,10 @@ def multi_edit(path: str, edits: list, *, workspace: Path) -> str:
     if not p.exists():
         return f"ERROR: file not found: {path}"
 
+    # `isinstance(edits, list)` — hàm built-in kiểm tra kiểu dữ liệu.
+    # Trả về True nếu `edits` là một list, False nếu không.
+    # `not isinstance(edits, list)` = "nếu edits KHÔNG phải list".
+    # `or not edits` — `or` là "hoặc". `not edits` = "edits rỗng" (list rỗng là falsy).
     # Defensive type check — model có thể emit edits dạng dict thay vì list,
     # hoặc list rỗng (no-op should be explicit error, not silent success).
     if not isinstance(edits, list) or not edits:
@@ -250,23 +399,34 @@ def multi_edit(path: str, edits: list, *, workspace: Path) -> str:
     # Read 1 lần. Tất cả replace ops sẽ chạy trên biến `content` (in-memory).
     content = p.read_text(encoding="utf-8", errors="replace")
 
-    # Lưu original_len cho success message (so sánh size trước/sau).
+    # Lưu độ dài ban đầu của file để báo cáo khi thành công.
+    # `len(content)` đếm số ký tự trong chuỗi `content`.
     original_len = len(content)
 
-    # Loop apply từng edit. enumerate(edits, 1) = đánh số từ 1 (human-friendly
-    # cho error message: "edit #1" thay vì "edit #0").
+    # `for i, edit in enumerate(edits, 1):` — vòng lặp "for" duyệt qua từng phần tử.
+    # Cú pháp cơ bản: `for biến in iterable:` — lặp qua từng item, gán vào `biến`.
+    # `enumerate(edits, 1)` — bọc list edits lại, trả về cặp (số_thứ_tự, phần_tử).
+    #   Tham số `1` = bắt đầu đếm từ 1 (thay vì 0 mặc định của Python).
+    #   Mỗi lần lặp: `i` = số thứ tự (1, 2, 3,...), `edit` = phần tử tương ứng.
+    # `i, edit` — "tuple unpacking": Python tự tách cặp (i, edit) ra thành 2 biến.
     for i, edit in enumerate(edits, 1):
         # Defensive: từng edit phải là dict (model có thể emit list/string nhầm).
+        # `dict` là kiểu dữ liệu "từ điển" trong Python: ánh xạ key → value.
+        # Ví dụ: {"old_text": "foo", "new_text": "bar"} là dict.
         if not isinstance(edit, dict):
             return f"ERROR: edit #{i} not a dict (file not modified)"
 
-        # .get() với default "" để không raise KeyError nếu field thiếu.
+        # `edit.get("old_text", "")` — method của dict, lấy giá trị theo key.
+        # Nếu key `"old_text"` TỒN TẠI trong dict → trả về giá trị đó.
+        # Nếu key KHÔNG tồn tại → trả về giá trị mặc định `""` (chuỗi rỗng).
+        # An toàn hơn `edit["old_text"]` vì cái sau raise KeyError nếu thiếu key.
         # Validation sẽ xảy ra ngay sau (empty old_text → error).
         old = edit.get("old_text", "")
         new = edit.get("new_text", "")
 
-        # Empty old_text = invalid (không có gì để search). Note: empty new_text
-        # vẫn OK — đó là delete operation hợp lệ.
+        # `not old` — chuỗi rỗng "" là "falsy" trong Python, nên `not old` = True
+        # khi old là chuỗi rỗng hoặc None. Empty old_text = invalid (không có gì để search).
+        # Note: empty new_text vẫn OK — đó là delete operation hợp lệ.
         if not old:
             return f"ERROR: edit #{i} has empty old_text (file not modified)"
 
@@ -279,16 +439,20 @@ def multi_edit(path: str, edits: list, *, workspace: Path) -> str:
         if count > 1:
             return f"ERROR: edit #{i}: old_text matches {count} places (file not modified)"
 
-        # Mutate `content` in-place (well, immutable string reassignment).
-        # Lưu ý: NẾU loop break sau dòng này do edit sau fail, `content` đã
-        # chứa partial edits, NHƯNG ta CHƯA write ra đĩa — atomicity preserved.
+        # `content = content.replace(old, new, 1)` — tạo chuỗi MỚI với old thay bằng new.
+        # Lưu ý kỹ thuật: string trong Python là IMMUTABLE (bất biến) — không thể
+        # sửa trực tiếp. `str.replace` trả về chuỗi MỚI, không sửa chuỗi gốc.
+        # `content = ...` gán chuỗi mới vào lại biến `content` (ghi đè tham chiếu cũ).
+        # NẾU loop break sau dòng này do edit sau fail, `content` đã chứa partial edits,
+        # NHƯNG ta CHƯA write ra đĩa — atomicity preserved (file gốc an toàn).
         content = content.replace(old, new, 1)
 
-    # Reach here = tất cả edits passed uniqueness check. Commit 1 lần ra đĩa.
+    # Reach here = tất cả edits passed uniqueness check (vòng for không bị return sớm).
+    # Commit 1 lần ra đĩa — đây là điểm duy nhất file vật lý bị thay đổi.
     p.write_text(content, encoding="utf-8")
 
-    # Success: report số edits + size delta. Size delta giúp model sanity-check
-    # (vd 10 edits xóa code mà file lớn hơn → suspicious).
+    # `len(edits)` — số phần tử trong list edits.
+    # Success: report số edits + size delta.
     return f"applied {len(edits)} edits to {path} ({original_len} → {len(content)} chars)"
 
 
@@ -322,61 +486,82 @@ def grep_files(pattern: str, path: str = ".", file_glob: str = "", *, workspace:
     if not p.exists():
         return f"ERROR: path not found: {path}"
 
-    # Build grep command với flags:
-    #   -r = recursive (walk subdirs)
-    #   -n = include line numbers in output
-    #   -E = extended regex (default trong nhiều grep version, nhưng explicit
-    #        cho cross-version consistency)
+    # `cmd = ["grep", "-rnE"]` — list chứa các phần của câu lệnh shell.
+    # Khi truyền list (không phải string) cho subprocess.run, mỗi phần tử là
+    # một argument riêng — tránh shell parsing, an toàn hơn với ký tự đặc biệt.
+    # Flags grep:
+    #   -r = recursive (duyệt qua tất cả subdirectory)
+    #   -n = in số dòng kèm theo mỗi match (ví dụ: "file.py:42:def foo")
+    #   -E = Extended Regex: cho phép dùng +, ?, |, () không cần backslash
     cmd = ["grep", "-rnE"]
 
+    # `if file_glob:` — True nếu file_glob không rỗng (khác "" và None).
+    # `cmd.extend([...])` — thêm nhiều phần tử vào cuối list `cmd`.
+    #   Khác `.append()` (thêm 1 phần tử) — extend "trải phẳng" list được truyền vào.
+    #   Ví dụ: [1,2].extend([3,4])  →  [1,2,3,4]  (không phải [1,2,[3,4]])
     # --include filter chỉ scan file matching glob. Truyền RIÊNG (không gộp
     # vào pattern) vì grep `--include=*.py` vs `--include *.py` cùng work.
     # Nếu file_glob rỗng, BỎ flag — không pass --include "" (sẽ match nothing).
     if file_glob:
         cmd.extend(["--include", file_glob])
 
-    # Search target = path RELATIVE to workspace, và chạy grep với cwd=workspace.
-    # Lý do: nếu pass absolute str(p), grep in ra absolute path trong mỗi dòng
-    # match (vd `/home/.../ws/a.py:1:...`) — vừa noisy vừa SAI so với docstring
-    # (hứa relative path) vừa khó cho model tái sử dụng path. Dùng relative
-    # target → output là `a.py:1:...` / `sub/b.py:1:...` đúng như tài liệu.
+    # `p.relative_to(workspace)` — tính đường dẫn TƯƠNG ĐỐI của p so với workspace.
+    # Ví dụ: p = Path("/ws/src/tools.py"), workspace = Path("/ws")
+    #   → p.relative_to(workspace) = Path("src/tools.py")
+    # Lý do dùng relative: nếu pass absolute str(p), grep in ra absolute path trong
+    # mỗi dòng match — noisy và khó tái sử dụng trong các tool call sau.
     rel = p.relative_to(workspace)
+    # `str(rel)` — chuyển Path object thành string thông thường.
+    # `if str(rel) != "." else "."` — toán tử ternary của Python:
+    #   value_if_true if condition else value_if_false
+    #   Tương đương: if str(rel) != ".": target = str(rel) else: target = "."
     target = str(rel) if str(rel) != "." else "."
 
-    # `--` separator — đảm bảo pattern không bị parse là option flag nếu
-    # pattern bắt đầu bằng `-` (vd `-foo`). subprocess thì pass arg list nên
-    # ít vấn đề, nhưng vẫn để defensive cho mọi grep variant.
+    # `--` separator — quy ước POSIX: mọi argument sau `--` là operand (tên file/dir),
+    # không phải option flag. Phòng trường hợp pattern bắt đầu bằng `-` (ví dụ "-foo")
+    # bị grep hiểu nhầm là flag.
+    # `cmd.extend(["--", pattern, target])` thêm 3 phần tử cuối vào cmd:
+    #   ["grep", "-rnE", "--include", "*.py", "--", "def foo", "src/"]
     cmd.extend(["--", pattern, target])
 
-    # Subprocess execution với timeout = 30s. Grep với regex evil có thể
+    # Subprocess với timeout = 30s. Grep với regex evil có thể gây
     # ReDoS (catastrophic backtracking) nhưng 30s đủ để fail-safe.
-    # cwd=workspace để grep emit path relative to workspace (xem comment trên).
+    # cwd=workspace để grep emit path relative to workspace.
     try:
         result = subprocess.run(cmd, cwd=workspace, capture_output=True, text=True, timeout=30)
     except subprocess.TimeoutExpired:
         return "ERROR: grep timed out after 30s"
 
-    # Grep exit codes:
-    #   0 = matches found
-    #   1 = no matches (NOT an error from our perspective)
-    #   2 = real error (invalid regex, permission denied, etc.)
+    # Grep exit codes (quy ước POSIX):
+    #   0 = ít nhất 1 match được tìm thấy
+    #   1 = không có match nào (KHÔNG phải lỗi — grep báo "không tìm thấy" qua exit code)
+    #   2 = lỗi thật sự (regex không hợp lệ, permission denied, ...)
     if result.returncode == 1:
         return f"no matches for pattern: {pattern}"
     if result.returncode != 0:
-        # stderr.strip() để loại bỏ trailing newline, dễ đọc hơn.
+        # `result.stderr.strip()` — `strip()` là method của string, xóa whitespace
+        # (space, tab, newline) ở đầu và cuối chuỗi. Làm sạch error message.
         return f"ERROR: grep failed (exit {result.returncode}): {result.stderr.strip()}"
 
-    # splitlines() split theo \n, \r\n, \r — robust cross-platform.
+    # `result.stdout.splitlines()` — method của string, tách chuỗi thành list các dòng.
+    # `splitlines()` xử lý được cả \n (Unix), \r\n (Windows), \r (old Mac) —
+    # robust hơn `.split("\n")` chỉ xử lý được Unix newline.
+    # Ví dụ: "a\nb\nc".splitlines()  →  ["a", "b", "c"]
     lines = result.stdout.splitlines()
 
     # Truncation: 50 lines là sweet spot — đủ context cho model nhưng không
     # blow up token budget (50 lines × ~80 chars ≈ 4K tokens worst case).
-    # Nếu model cần hơn, có thể narrow pattern hoặc giới hạn file_glob.
+    # `len(lines) > 50` — True nếu có nhiều hơn 50 dòng.
     if len(lines) > 50:
+        # `lines[:50]` — "slice" của list: lấy các phần tử từ index 0 đến 49 (không gồm 50).
+        # Cú pháp slice: list[start:stop] — start (inclusive), stop (exclusive).
+        # Ví dụ: [1,2,3,4,5][:3]  →  [1,2,3]
+        # `lines[50:]` sẽ lấy từ index 50 đến hết.
         return "\n".join(lines[:50]) + f"\n... [truncated, {len(lines) - 50} more matches]"
 
-    # Empty stdout với exit 0 cực kỳ rare (grep -r với 0 lines stdout thường
-    # = no match = exit 1), nhưng handle defensive.
+    # `lines if lines else "no matches"` — toán tử ternary:
+    # Nếu lines không rỗng: dùng lines. Nếu rỗng: trả về "no matches".
+    # Empty stdout với exit 0 cực kỳ rare nhưng handle defensive.
     return "\n".join(lines) if lines else "no matches"
 
 
@@ -410,38 +595,50 @@ def glob_files(pattern: str, path: str = ".", *, workspace: Path) -> str:
     if not p.exists():
         return f"ERROR: path not found: {path}"
 
-    # pathlib.Path.glob() trả generator của Path objects. sorted() ép realize
-    # toàn bộ thành list + sort alphabetical (giúp output deterministic, dễ
-    # diff giữa các lần chạy).
-    # Bao catch-all Exception vì glob pattern xấu (vd unclosed `[`) raise
-    # các loại exception khác nhau (ValueError, OSError) tùy Python version.
+    # `p.glob(pattern)` — method của Path, trả về generator các Path objects khớp pattern.
+    # Generator là kiểu đặc biệt: lazily computed (tính từng phần tử khi cần),
+    # không load hết vào memory cùng lúc. Tốt cho thư mục lớn.
+    #
+    # `sorted(...)` — hàm built-in, nhận bất kỳ iterable (kể cả generator) và
+    # trả về LIST đã sắp xếp theo thứ tự. Cụ thể, Path được so sánh theo string
+    # đường dẫn → sắp xếp alphabetical. Output deterministic (không phụ thuộc OS).
+    #
+    # `try/except Exception as e:` — bắt MỌI loại exception (vì `Exception` là
+    # base class của hầu hết exception trong Python). Glob pattern xấu (vd "[abc")
+    # thiếu dấu "]") có thể raise ValueError hoặc OSError tùy Python version.
+    # `as e` — gán exception object vào biến `e` để in ra message lỗi.
     try:
         matches = sorted(p.glob(pattern))
     except Exception as e:
         return f"ERROR: invalid glob pattern: {e}"
 
-    # Edge case: pattern hợp lệ nhưng không match gì. Message rõ ràng giúp
-    # model biết phải đổi pattern (vd thử '**/*.py' thay vì '*.py' nếu file
-    # nằm dưới subdirectory).
+    # `not matches` — list rỗng là falsy, nên `not matches` = True nếu không có match.
     if not matches:
         return f"no files match {pattern} in {path}"
 
-    # Convert sang relative-to-workspace path — gọn hơn absolute path
-    # (vd "src/agent.py" thay vì "/home/tle/.../coding-agent/src/agent.py").
-    # Nếu vì lý do nào đó match nằm ngoài workspace (không nên xảy ra vì
-    # _safe_path đã check), fallback dùng str(m) absolute.
+    # `rel = []` — tạo list rỗng để chứa đường dẫn tương đối.
     rel = []
+
+    # `for m in matches:` — vòng lặp qua từng Path object trong list `matches`.
     for m in matches:
+        # Bao từng lần gọi relative_to trong try/except riêng vì có thể fail
+        # nếu m nằm ngoài workspace (hiếm nhưng phòng thủ).
         try:
+            # `m.relative_to(workspace)` — tính đường dẫn tương đối so với workspace.
+            # `str(...)` — chuyển Path object thành string thông thường.
+            # `rel.append(...)` — thêm string này vào cuối list `rel`.
             rel.append(str(m.relative_to(workspace)))
         except ValueError:
-            # relative_to raises ValueError nếu m không phải descendant của
-            # workspace. Defensive — không nên trigger trong practice.
+            # `relative_to` raises ValueError nếu m không phải descendant của workspace.
+            # Defensive — không nên trigger trong practice vì _safe_path đã check.
+            # Fallback: dùng absolute path string thay vì relative.
             rel.append(str(m))
 
     # Same truncation policy as grep_files: 50 là sweet spot cho token budget.
     if len(rel) > 50:
         return "\n".join(rel[:50]) + f"\n... [truncated, {len(rel) - 50} more]"
+
+    # `"\n".join(rel)` — ghép tất cả đường dẫn thành chuỗi, mỗi đường dẫn 1 dòng.
     return "\n".join(rel)
 
 
@@ -475,47 +672,60 @@ def list_dir(path: str = ".", *, workspace: Path) -> str:
     if not p.exists():
         return f"ERROR: path not found: {path}"
 
-    # is_dir() check tách biệt với exists() vì user có thể truyền path đến
-    # 1 file (vd "calculator.py") — đó không phải là use case của list_dir.
+    # `p.is_dir()` — method của Path, trả về True nếu p là thư mục (directory),
+    # False nếu là file hoặc không tồn tại. Tách biệt với exists() vì user có thể
+    # truyền path đến 1 file (vd "calculator.py") — đó không phải use case của list_dir.
     if not p.is_dir():
         return f"ERROR: {path} is not a directory"
 
-    # Tách 2 list để sort dirs-first trong output, vẫn alphabetical trong từng nhóm.
+    # Tạo 2 list rỗng để chứa entries theo loại.
+    # Tách 2 list để sort dirs-first trong output.
     dirs = []
     files = []
 
-    # iterdir() trả generator các Path child. sorted() ép realize + sort theo
-    # name (default sort key cho Path là str(path)). Deterministic output.
+    # `p.iterdir()` — method của Path, trả về generator các Path objects là
+    # con trực tiếp của thư mục p (không đệ quy). Bao gồm cả file và thư mục con.
+    #
+    # `sorted(p.iterdir())` — ép generator thành list và sắp xếp alphabetical.
+    # Sort key mặc định cho Path là string path của nó.
     for child in sorted(p.iterdir()):
-        # Skip hidden files (dot-prefix). Model có thể list_dir(".git") explicit
-        # nếu cần inspect — đây chỉ là default behavior cho clutter reduction.
+        # `child.name` — thuộc tính của Path, chỉ lấy tên file/thư mục cuối cùng.
+        # Ví dụ: Path("/a/b/file.txt").name  →  "file.txt"
+        # `child.name.startswith(".")` — method của string, True nếu chuỗi bắt đầu bằng ".".
+        # Dùng để skip hidden files (dot-prefix như .git, .venv, .env).
         if child.name.startswith("."):
+            # `continue` — bỏ qua phần còn lại của vòng lặp, nhảy sang phần tử tiếp theo.
+            # Tương đương "next" trong một số ngôn ngữ khác.
             continue
 
         if child.is_dir():
-            # Trailing "/" giúp model phân biệt visually directory với file.
+            # Trailing "/" sau tên giúp model nhận ra đây là thư mục (không phải file).
             dirs.append(f"  dir   {child.name}/")
         else:
-            # File: include size để model có sense về kích thước trước khi
-            # read_file (vd file 50KB có thể overflow context, model nên grep
-            # thay vì read full).
+            # `child.stat()` — lấy metadata của file (kích thước, ngày tạo, permissions,...).
+            # `.st_size` — thuộc tính trong metadata, kích thước file tính bằng bytes.
+            # Bao trong try/except vì có thể fail với symlink bị hỏng hoặc permission denied.
             try:
                 size = child.stat().st_size
                 file_entry = f"  file  {child.name}  ({size} bytes)"
             except OSError:
-                # Permission denied hoặc symlink broken — vẫn list được tên
-                # nhưng không lấy được size. Defensive fallback.
+                # `OSError` — exception chuẩn cho lỗi liên quan đến hệ điều hành/file system.
+                # Bao gồm: permission denied, broken symlink, file đang bị lock,...
+                # Fallback: vẫn list được tên nhưng không lấy được size.
                 file_entry = f"  file  {child.name}"
             files.append(file_entry)
 
-    # Merge: dirs trước, files sau (visual hierarchy).
+    # `dirs + files` — nối 2 list lại. Trong Python, `+` với list = ghép thành list mới.
+    # Ví dụ: [1, 2] + [3, 4]  →  [1, 2, 3, 4]
+    # Dirs trước, files sau (visual hierarchy: structure trước content).
     items = dirs + files
 
-    # Edge case: thư mục rỗng. Explicit message tốt hơn empty string.
+    # `not items` — True nếu items là list rỗng. Explicit message tốt hơn empty string.
     if not items:
         return f"{path}/ is empty"
 
     # Header line "path/" + indent body cho readable formatting.
+    # `"\n".join(items)` — ghép tất cả entries thành chuỗi, mỗi entry 1 dòng.
     return f"{path}/\n" + "\n".join(items)
 
 
@@ -548,15 +758,22 @@ def run_python(code: str, timeout: int = 60, *, workspace: Path) -> str:
       Default 60s = ngắn hơn run_bash (600s) vì snippets không nên long-running.
       Nếu cần lâu hơn, model có thể pass timeout cao hơn.
     """
-    # sys import local (không top-level) vì chỉ run_python và spawn_subagent
-    # cần sys.executable. Giữ top-level imports tối thiểu — marginal choice,
-    # import sys lần 2 gần như free vì module đã nằm trong sys.modules cache.
+    # `import sys` — import ở đây (bên trong hàm) thay vì top-level file.
+    # Python cache module sau lần import đầu tiên trong `sys.modules` —
+    # import thứ 2, 3,... không đọc lại file, gần như miễn phí.
+    # Chỉ run_python và spawn_subagent cần sys.executable — giữ top-level tối thiểu.
     import sys
 
     try:
-        # subprocess.run với list args (không shell=True) = SAFE từ injection.
-        # `code` được pass thẳng vào Python interpreter as `-c` argument,
-        # không qua shell parsing → no command injection risk.
+        # Chạy Python interpreter với flag `-c code` — tương đương gõ:
+        #   python -c "print('hello')"  trên terminal
+        # Truyền list args (không phải shell=True) = SAFE khỏi shell injection.
+        # `code` được pass thẳng vào Python interpreter, không qua shell parsing.
+        #
+        # `sys.executable` — biến trong module `sys`, chứa đường dẫn tuyệt đối
+        # đến Python interpreter hiện tại. Ví dụ: "/home/user/.venv/bin/python3".
+        # Quan trọng khi dùng virtual environment (venv) — đảm bảo subprocess
+        # dùng CÙNG Python + libraries, không phải Python khác trên hệ thống.
         result = subprocess.run(
             [sys.executable, "-c", code],
             cwd=workspace,           # CWD = sandbox dir, không phải project root
@@ -565,7 +782,7 @@ def run_python(code: str, timeout: int = 60, *, workspace: Path) -> str:
             timeout=timeout,         # giết process sau N giây nếu chưa xong
         )
     except subprocess.TimeoutExpired:
-        # Timeout = code có infinite loop hoặc network hang. Trả error rõ ràng.
+        # Timeout = code có infinite loop hoặc network hang.
         return f"ERROR: python timed out after {timeout}s"
 
     # Format output: 3 sections (exit_code, stdout, stderr) — same shape as
@@ -575,7 +792,8 @@ def run_python(code: str, timeout: int = 60, *, workspace: Path) -> str:
         # Conditional include: nếu rỗng thì bỏ section để output gọn.
         parts.append(f"stdout:\n{result.stdout}")
     if result.stderr:
-        # stderr có thể chứa tracebacks (Python crash) → quan trọng cho debug.
+        # stderr có thể chứa Python tracebacks (stack trace khi crash) →
+        # rất quan trọng để debug lỗi trong snippet.
         parts.append(f"stderr:\n{result.stderr}")
     return "\n".join(parts)
 
@@ -607,7 +825,7 @@ def spawn_subagent(goal: str, max_iters: int = 8, *, workspace: Path) -> str:
       Không expose timeout param vì model có thể abuse (set 1 giờ).
 
     RETURN VALUE:
-      Last 2000 chars of stdout+stderr. Tail (not head) vì assistant final
+      Last 2000 chars của stdout+stderr. Tail (not head) vì assistant final
       message + "Agent finished" line nằm ở cuối.
     """
     import sys
@@ -618,26 +836,41 @@ def spawn_subagent(goal: str, max_iters: int = 8, *, workspace: Path) -> str:
     # thư mục `src/` chứa `agent.py`. `workspace` thường là `demo_repo/`
     # (descendant của project root), nên phải walk lên tới khi tìm.
     # ─────────────────────────────────────────────────────────────────
+
+    # `project_root = None` — khởi tạo biến với giá trị None (không có gì).
+    # None là giá trị đặc biệt trong Python = "không có giá trị" (như null/nil).
     project_root = None
+
+    # `cur = workspace` — gán workspace vào biến `cur` (current).
+    # Sẽ walk lên từng thư mục cha để tìm project root.
     cur = workspace
 
-    # Safeguard: max 10 levels up. Tránh infinite loop nếu filesystem bị
-    # corrupt hoặc symlink loop. Realistic depth ≤ 5.
+    # `for _ in range(10):` — lặp đúng 10 lần.
+    # `range(10)` tạo dãy số 0,1,2,...,9 (10 phần tử, không gồm 10).
+    # `_` là tên biến đặc biệt trong Python = "tôi không cần dùng biến vòng lặp".
+    # Quy ước: dùng `_` khi muốn bỏ qua giá trị nhưng Python yêu cầu có biến.
     for _ in range(10):
-        # Marker: src/agent.py phải tồn tại = đây là project root.
+        # `(cur / "src" / "agent.py").exists()` — kiểm tra file tồn tại tại đường dẫn đó.
+        # Nối path: cur / "src" / "agent.py" = /current_dir/src/agent.py
+        # Nếu tìm thấy = đây là project root.
         if (cur / "src" / "agent.py").exists():
             project_root = cur
+            # `break` — thoát khỏi vòng lặp ngay lập tức, không chờ hết 10 lần.
             break
 
-        # Reached filesystem root: cur.parent == cur (/, hoặc Windows C:\).
-        # Không lên được nữa.
+        # `cur == cur.parent` — kiểm tra đã đến gốc filesystem chưa.
+        # Ở đường dẫn gốc "/" (Linux) hoặc "C:\" (Windows), parent chính là nó.
+        # Path("/").parent == Path("/") → True → đã đến đỉnh, không lên được nữa.
         if cur == cur.parent:
             break
 
+        # `cur = cur.parent` — di chuyển lên thư mục cha 1 cấp.
+        # Ví dụ: /home/user/project → /home/user → /home → /
         cur = cur.parent
 
+    # `if project_root is None:` — kiểm tra có tìm được project root không.
+    # `is None` (không phải `== None`) là cách Pythonic để so sánh với None.
     if project_root is None:
-        # Không nên xảy ra trong production setup, nhưng defensive.
         return "ERROR: cannot find src/agent.py (project root not located)"
 
     # ─────────────────────────────────────────────────────────────────
@@ -648,6 +881,9 @@ def spawn_subagent(goal: str, max_iters: int = 8, *, workspace: Path) -> str:
     # `--workspace str(workspace)` để child sandbox đúng chỗ parent đang làm.
     # ─────────────────────────────────────────────────────────────────
     try:
+        # `-m src.agent` — chạy module `src.agent` như script (gọi __main__).
+        # Tương đương cd project_root && python -m src.agent "goal text" --workspace /path
+        # `str(workspace)` — chuyển Path object thành string để truyền vào command line.
         result = subprocess.run(
             [sys.executable, "-m", "src.agent", goal, "--workspace", str(workspace)],
             cwd=project_root,        # cwd phải là project root để Python tìm thấy package `src`
@@ -656,7 +892,7 @@ def spawn_subagent(goal: str, max_iters: int = 8, *, workspace: Path) -> str:
             timeout=300,             # 5 phút hard limit
         )
     except subprocess.TimeoutExpired:
-        # Subagent stuck. Trả error rõ ràng. Process đã bị SIGKILL bởi subprocess.run.
+        # Subagent stuck. Process đã bị SIGKILL bởi subprocess.run.
         return "ERROR: subagent timed out after 300s"
 
     # ─────────────────────────────────────────────────────────────────
@@ -667,16 +903,22 @@ def spawn_subagent(goal: str, max_iters: int = 8, *, workspace: Path) -> str:
     #   - Assistant final message ("All tests pass" hoặc tương tự)
     #   - "Agent finished." marker
     # ─────────────────────────────────────────────────────────────────
-    # Concatenate stdout + stderr — agent.py dùng logging.info nên có thể
-    # vào stderr tùy logging config. Concat safer than picking 1.
+
+    # `result.stdout or ""` — nếu stdout là None (không capture được), dùng "".
+    # Toán tử `or` trong Python: trả về vế trái nếu "truthy", vế phải nếu không.
+    # None là falsy → `None or ""` trả về "".
+    # `(a or "") + (b or "")` — ghép chuỗi. Toán tử `+` với string = nối chuỗi.
     output = (result.stdout or "") + (result.stderr or "")
 
     if len(output) > 2000:
-        # Prefix "... [truncated]" để model biết có nội dung trước đó bị bỏ.
+        # `output[-2000:]` — slice từ phần tử cuối lùi về 2000 ký tự.
+        # Index âm trong Python: -1 = ký tự cuối, -2 = áp cuối,...
+        # Cú pháp: chuỗi[-n:] = lấy n ký tự CUỐI của chuỗi.
+        # Ví dụ: "hello"[-3:]  →  "llo"
         output = "... [truncated, showing last 2000 chars]\n" + output[-2000:]
 
-    # Final format: exit code + output. Exit code 0 = subagent finished
-    # normally; non-zero = crash/timeout/abort.
+    # Final format: exit code + output.
+    # Exit code 0 = subagent finished normally; non-zero = crash/timeout/abort.
     return f"subagent exit_code: {result.returncode}\n{output}"
 
 
@@ -684,7 +926,14 @@ def spawn_subagent(goal: str, max_iters: int = 8, *, workspace: Path) -> str:
 # Registry + JSON schemas
 # ---------------------------------------------------------------------------
 
-# TOOLS dict: name -> Python function. execute_tool() lookup ở đây.
+# `TOOLS` — một dict (từ điển) map tên tool → hàm Python tương ứng.
+# `dict` trong Python: tập hợp cặp key → value.
+# Cú pháp: {key1: value1, key2: value2, ...}
+# Ví dụ: {"name": "Alice", "age": 30} — key là chuỗi, value là bất kỳ thứ gì.
+# Ở đây: key = tên tool (string), value = hàm Python (function object — trong Python,
+# hàm cũng là object, có thể gán vào biến, truyền làm tham số, lưu trong dict).
+#
+# `execute_tool()` sẽ lookup ở đây: TOOLS["read_file"] → hàm read_file.
 # Phase 2+ có thể thêm new tools vào dict này MÀ KHÔNG cần sửa agent.py.
 # Đó là pattern "extensible registry" — design choice quan trọng cho self-evolution.
 TOOLS = {
@@ -701,14 +950,24 @@ TOOLS = {
     "spawn_subagent": spawn_subagent,
 }
 
-# TOOL_SCHEMAS: danh sách JSON schema mô tả từng tool cho model.
-# Format này là chuẩn OpenAI — cùng schema model GPT-4, Claude, vLLM, Ollama đều hiểu.
-# Mỗi schema có:
-#   type: "function" (OpenAI define)
-#   function:
-#     name: tên gọi tool (phải khớp với key trong TOOLS)
-#     description: model đọc cái này để hiểu tool dùng vào việc gì
-#     parameters: JSON Schema mô tả các tham số (type + required + description)
+# `TOOL_SCHEMAS` — một list (danh sách) các dict mô tả schema của từng tool.
+# `list` trong Python: mảng có thứ tự, ký hiệu bằng [...].
+# Ví dụ: [1, "hello", True, {"key": "val"}] — list có thể chứa mọi kiểu.
+# Ở đây: mỗi phần tử là 1 dict mô tả 1 tool theo format OpenAI.
+#
+# Format OpenAI "function calling" schema — chuẩn được GPT-4, Claude, vLLM,
+# Ollama và nhiều model khác hỗ trợ. Mỗi entry gồm:
+#   "type": "function"           — loại tool (OpenAI định nghĩa, hiện chỉ có "function")
+#   "function": {                — nested dict mô tả chi tiết hàm:
+#     "name": "..."              — tên tool, PHẢI khớp với key trong TOOLS dict
+#     "description": "..."      — model đọc đây để hiểu tool dùng vào việc gì
+#     "parameters": {           — JSON Schema mô tả các tham số được phép gửi
+#       "type": "object"        — tham số luôn là JSON object (dict)
+#       "properties": {...}     — từng field: tên → {"type": kiểu, "description": ...}
+#       "required": [...]       — list tên field BẮT BUỘC (không có default)
+#     }
+#   }
+# Model đọc TOOL_SCHEMAS để biết: tool này tên gì, làm gì, nhận tham số nào.
 TOOL_SCHEMAS = [
     {
         "type": "function",
@@ -878,9 +1137,32 @@ TOOL_SCHEMAS = [
 # Lưu ý: `workspace` CỐ TÌNH không có trong TOOL_SCHEMAS — model không bao giờ
 # truyền nó. execute_tool() tự inject `workspace=...` vào mỗi call.
 
-# Import-time invariant: tên trong TOOLS phải khớp CHÍNH XÁC tên trong
-# TOOL_SCHEMAS. Nếu lệch (vd thêm tool vào dict mà quên schema, hoặc đổi tên
-# 1 bên), fail NGAY lúc import thay vì lỗi mơ hồ lúc runtime.
+# `assert` — câu lệnh kiểm tra điều kiện, chạy lúc IMPORT (load module), không phải
+# lúc gọi hàm. Nếu điều kiện SAI → AssertionError được raise ngay lập tức,
+# chương trình không chạy được. Đây là "fail fast" pattern.
+#
+# MỤC ĐÍCH: đảm bảo TOOLS dict và TOOL_SCHEMAS list không bị "drift" (lệch nhau).
+# Trường hợp drift xảy ra khi:
+#   - Thêm hàm vào TOOLS nhưng quên thêm schema vào TOOL_SCHEMAS
+#   - Đổi tên tool trong TOOLS nhưng quên đổi tên trong TOOL_SCHEMAS
+#   - Xóa tool khỏi 1 nơi nhưng không xóa nơi kia
+#
+# `set(TOOLS)` — `set()` chuyển dict thành tập hợp (set) các KEY.
+#   set({"a": 1, "b": 2})  →  {"a", "b"}
+#   Set = tập hợp không có thứ tự, không có phần tử trùng lặp.
+#   Dùng set để so sánh "có cùng phần tử không" bất kể thứ tự.
+#
+# `{s["function"]["name"] for s in TOOL_SCHEMAS}` — "set comprehension":
+#   Cú pháp ngắn gọn để tạo set từ iterable.
+#   `for s in TOOL_SCHEMAS` — duyệt qua từng schema dict trong list.
+#   `s["function"]["name"]` — lấy tên tool từ nested dict.
+#   `{...}` bao ngoài — tạo set từ tất cả tên đó.
+#   Kết quả: {"read_file", "write_file", "run_bash", ...}
+#
+# `==` — so sánh bằng. Với set: so sánh có cùng phần tử không (bất kể thứ tự).
+# Nếu hai set KHÔNG bằng nhau → assert thất bại → AssertionError với message "TOOLS vs TOOL_SCHEMAS drift".
+# Thông báo lỗi ngay lúc import thay vì lỗi mơ hồ lúc runtime (ví dụ: model
+# gọi tool mà schema không tồn tại).
 assert set(TOOLS) == {s["function"]["name"] for s in TOOL_SCHEMAS}, "TOOLS vs TOOL_SCHEMAS drift"
 
 
@@ -892,34 +1174,73 @@ def execute_tool(name: str, arguments: str, workspace: Path) -> str:
     `workspace` is injected by the caller (run_agent) — the model never sends it;
     we append it as a keyword arg to every tool call.
     """
-    # 1. Validate tool name. Nếu model gọi tool không tồn tại, trả error string.
+    # BƯỚC 1: Kiểm tra tên tool có hợp lệ không.
+    # `name not in TOOLS` — `in` kiểm tra key có tồn tại trong dict không.
+    # `not in` = ngược lại: "nếu tên KHÔNG có trong dict".
     if name not in TOOLS:
+        # `list(TOOLS)` — chuyển dict thành list các key (tên tool) để hiển thị.
+        # Giúp model biết có thể gọi tool nào hợp lệ.
         return f"ERROR: unknown tool {name}. Available: {list(TOOLS)}"
 
-    # 2. Parse arguments JSON. Nếu rỗng → dict rỗng (cho tools không args).
-    # Nếu malformed JSON → trả error string cho model thấy (model có thể sửa).
+    # BƯỚC 2: Parse arguments từ JSON string → dict Python.
+    # Model gửi arguments dưới dạng chuỗi JSON, ví dụ: '{"path": "file.py"}'
+    # Phải convert thành dict Python để có thể gọi hàm với `**args`.
+    #
+    # `json.loads(arguments)` — hàm của module json.
+    #   "loads" = "load from string" (khác "load" đọc từ file).
+    #   Chuyển chuỗi JSON → đối tượng Python tương ứng:
+    #     '{"key": "val"}' → {"key": "val"}  (dict)
+    #     '[1, 2, 3]'       → [1, 2, 3]       (list)
+    #     '"hello"'          → "hello"          (string)
+    #
+    # `if arguments else {}` — toán tử ternary:
+    #   Nếu arguments không rỗng/None: parse JSON.
+    #   Nếu rỗng/None: trả về dict rỗng {} (tool không cần args, vd list_dir mặc định).
     try:
         args = json.loads(arguments) if arguments else {}
     except json.JSONDecodeError as e:
+        # `json.JSONDecodeError` — exception được raise khi chuỗi không phải JSON hợp lệ.
+        # Ví dụ: json.loads("{bad json}") → JSONDecodeError.
+        # Trả error string cho model thấy và sửa.
         return f"ERROR: bad JSON arguments: {e}"
 
-    # 3. Gọi function với args (`**args` = unpack dict thành keyword args),
-    # cộng thêm `workspace=workspace` (keyword-only) mà ta inject — model không
-    # gửi workspace, nó là state của caller.
-    # Try/except để bắt mọi exception, convert thành error string.
-    # Tại sao? Vì exception trong tool sẽ crash agent.py loop. Mình muốn agent
-    # được "thấy" error qua tool result và tự sửa, không crash.
+    # BƯỚC 3: Gọi hàm tool với arguments đã parse.
+    #
+    # `TOOLS[name]` — lookup hàm từ dict theo tên. Ví dụ:
+    #   TOOLS["read_file"] → <function read_file at 0x...> (function object)
+    #
+    # `**args` — "double star unpacking" hay "kwargs unpacking".
+    #   Nếu args = {"path": "file.py", "content": "hello"}, thì:
+    #   func(**args) tương đương func(path="file.py", content="hello")
+    #   Python tự "trải phẳng" dict thành keyword arguments.
+    #
+    # `workspace=workspace` — inject workspace vào mỗi tool call.
+    #   Model không gửi workspace (không có trong TOOL_SCHEMAS),
+    #   nhưng mọi tool function đều cần nó (keyword-only arg `*, workspace: Path`).
+    #   execute_tool() thêm nó vào như một phụ gia tự động.
+    #
+    # Try/except để bắt mọi exception từ bên trong tool function.
+    # Tại sao? Exception trong tool sẽ crash agent.py loop nếu không bắt.
+    # Mình muốn agent được "thấy" error qua tool result string và tự sửa,
+    # không crash toàn bộ chương trình.
     try:
         result = TOOLS[name](**args, workspace=workspace)
     except TypeError as e:
-        # TypeError thường = sai args (vd thiếu required, hoặc type không đúng).
+        # `TypeError` — exception được raise khi gọi hàm với sai arguments:
+        #   - Thiếu required arg (vd quên truyền `path`)
+        #   - Truyền extra arg không có trong signature hàm
+        #   - Truyền giá trị sai kiểu (vd truyền list thay vì string)
         return f"ERROR: bad args for {name}: {e}"
     except Exception as e:
-        # Catch-all cho mọi loại exception khác (FileNotFoundError, etc.).
+        # `Exception` là base class của hầu hết exception trong Python.
+        # `except Exception` = bắt MỌI loại exception khác (FileNotFoundError,
+        # PermissionError, ValueError từ _safe_path, OSError, ...).
+        # `e` là exception object — có message mô tả lỗi khi convert sang string.
         return f"ERROR: {name} crashed: {e}"
 
-    # 4. Trả về kết quả. Contract: mọi tool function PHẢI return str (model chỉ
-    # đọc được string). Tất cả tool hiện tại đều khai báo `-> str` và thoả
-    # contract, nên bỏ wrap `str(result)` cho gọn. Nếu sau này thêm tool return
-    # non-str, coerce ở chính tool đó — không phải ở dispatcher.
+    # BƯỚC 4: Trả về kết quả.
+    # Contract: mọi tool function PHẢI return str (model chỉ đọc được string).
+    # Tất cả tool hiện tại đều khai báo `-> str` và thỏa contract,
+    # nên không cần wrap str(result). Nếu sau này thêm tool return non-str,
+    # coerce ở chính tool đó — không phải ở dispatcher này.
     return result
