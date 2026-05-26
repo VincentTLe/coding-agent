@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="vi"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pi vs. Của chúng ta — triết lý & cách lắp ráp</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+<style>
+  :root{--bg:#0f1117;--bg2:#161922;--bg3:#1f2330;--fg:#e7ecef;--fg-dim:#9aa5b1;--accent:#7bdcb5;--cyan:#7bf0ff;--magenta:#ff8aff;--result:#ffd966;--red:#ff7b7b;--border:#2a3040;--shadow:0 4px 24px rgba(0,0,0,.4);}
+  *{box-sizing:border-box;} html{scroll-behavior:smooth;}
+  body{margin:0;background:var(--bg);color:var(--fg);font-family:'Inter',-apple-system,'Segoe UI',Roboto,sans-serif;line-height:1.7;font-size:16px;}
+  a{color:var(--accent);text-decoration:none;} a:hover{color:var(--cyan);}
+  code{font-family:'JetBrains Mono',ui-monospace,monospace;background:var(--bg3);color:var(--cyan);padding:.08em .35em;border-radius:4px;font-size:.86em;}
+  pre{margin:1em 0;background:var(--bg3)!important;border:1px solid var(--border);border-radius:10px;padding:1em 1.2em;font-size:.84em;line-height:1.55;overflow:auto;}
+  pre code{background:none;padding:0;font-size:1em;}
+  .sidebar{position:fixed;top:0;left:0;width:262px;height:100vh;background:var(--bg2);border-right:1px solid var(--border);padding:24px 16px;overflow-y:auto;z-index:100;}
+  .sidebar .brand{font-weight:800;font-size:16px;margin:0 0 3px;}
+  .sidebar .brand .g{background:linear-gradient(90deg,var(--accent),var(--cyan),var(--magenta));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+  .sidebar .sub{color:var(--fg-dim);font-size:12px;margin:0 0 18px;}
+  .sidebar nav a{display:block;color:var(--fg-dim);font-size:13.5px;padding:7px 10px;border-radius:7px;border-left:2px solid transparent;margin:2px 0;}
+  .sidebar nav a:hover{background:var(--bg3);color:var(--fg);}
+  .sidebar nav a.active{color:var(--accent);border-left-color:var(--accent);background:var(--bg3);}
+  .sidebar nav a .n{color:var(--accent);font-weight:700;margin-right:7px;}
+  .progress{position:fixed;top:0;left:262px;right:0;height:3px;background:var(--bg3);z-index:99;}
+  .progress-bar{height:100%;width:0;background:linear-gradient(90deg,var(--cyan),var(--accent));}
+  main{margin-left:262px;}
+  .section{max-width:900px;margin:0 auto;padding:56px 46px;border-bottom:1px solid var(--border);}
+  .section h2{font-size:28px;font-weight:800;letter-spacing:-.02em;margin:0 0 6px;color:var(--accent);}
+  .section h2 .n{color:var(--fg-dim);font-weight:600;font-size:.66em;margin-right:.5em;}
+  .section h3{font-size:18px;color:var(--cyan);margin:1.5em 0 .4em;font-weight:600;}
+  .lead{font-size:18px;color:var(--fg-dim);margin:0 0 1.3em;}
+  p{margin:.7em 0;} ul,ol{margin:.6em 0 1em 1.3em;} li{margin:.4em 0;}
+  strong{color:var(--fg);font-weight:700;} em{color:var(--cyan);font-style:normal;}
+  .hero{max-width:900px;margin:0 auto;padding:80px 46px 44px;border-bottom:1px solid var(--border);}
+  .hero h1{font-size:46px;font-weight:800;letter-spacing:-.03em;margin:0 0 .2em;line-height:1.1;background:linear-gradient(90deg,var(--accent) 0%,var(--cyan) 45%,var(--magenta) 85%,var(--accent) 100%);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:flow 9s ease-in-out infinite;}
+  @keyframes flow{0%,100%{background-position:0% 50%;}50%{background-position:100% 50%;}}
+  .hero .tagline{font-size:19px;color:var(--fg);margin:.3em 0;}
+  .hero .meta{color:var(--fg-dim);font-size:14px;margin-top:1em;}
+  .card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin:.6em 0;box-shadow:var(--shadow);}
+  .card .t{font-weight:700;color:var(--fg);margin:0 0 .3em;font-size:15px;}
+  .grid{display:grid;gap:13px;margin:1em 0;} .grid.c2{grid-template-columns:1fr 1fr;} .grid.c3{grid-template-columns:1fr 1fr 1fr;}
+  @media(max-width:780px){.grid.c2,.grid.c3{grid-template-columns:1fr;} .sidebar{display:none;} main{margin-left:0;} .progress{left:0;}}
+  .callout{border-left:3px solid var(--accent);background:var(--bg2);padding:13px 17px;border-radius:0 10px 10px 0;margin:1.1em 0;}
+  .callout.warn{border-left-color:var(--result);} .callout.key{border-left-color:var(--magenta);}
+  .callout .lbl{display:block;font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--accent);font-weight:700;margin-bottom:3px;}
+  .callout.warn .lbl{color:var(--result);} .callout.key .lbl{color:var(--magenta);}
+  .diagram{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:11px;margin:1.3em 0;padding:18px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;}
+  .dbox{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 14px;text-align:center;min-width:84px;}
+  .dbox.hl{border-color:var(--accent);} .dbox.bad{border-color:var(--red);} .dbox.good{border-color:var(--accent);}
+  .dbox .s{display:block;color:var(--fg-dim);font-size:11.5px;margin-top:3px;}
+  .darrow{color:var(--accent);font-size:21px;} .dcol{display:flex;flex-direction:column;gap:9px;}
+  .stats{display:flex;gap:16px;flex-wrap:wrap;margin:1.1em 0;}
+  .stat{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:13px 19px;text-align:center;}
+  .stat .v{font-size:27px;font-weight:800;color:var(--accent);} .stat .l{color:var(--fg-dim);font-size:12.5px;}
+  table{width:100%;border-collapse:collapse;margin:1em 0;font-size:14px;}
+  th{background:var(--bg2);color:var(--accent);text-align:left;padding:9px 11px;border-bottom:2px solid var(--border);}
+  td{padding:8px 11px;border-bottom:1px solid var(--border);vertical-align:top;}
+  .tag{display:inline-block;background:var(--bg3);border:1px solid var(--border);color:var(--cyan);border-radius:20px;padding:2px 10px;font-size:12px;margin:2px;}
+  .dim{color:var(--fg-dim);} .ok{color:var(--accent);font-weight:700;} .no{color:var(--red);font-weight:700;}
+  .rank{display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;border-radius:50%;background:var(--accent);color:#0f1117;font-weight:800;font-size:13px;margin-right:8px;}
+  .src{font-size:13px;color:var(--fg-dim);} .src a{word-break:break-all;}
+  .pillar{display:grid;grid-template-columns:34px 1fr;gap:14px;align-items:start;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin:.7em 0;box-shadow:var(--shadow);}
+  .pillar .num{width:34px;height:34px;line-height:34px;text-align:center;border-radius:9px;background:var(--bg3);border:1px solid var(--accent);color:var(--accent);font-weight:800;font-size:16px;}
+  .pillar .h{font-weight:700;color:var(--fg);font-size:16px;margin:0 0 .25em;}
+  .bk{display:grid;grid-template-columns:1fr 1fr 1fr;gap:13px;margin:1.2em 0;}
+  @media(max-width:780px){.bk{grid-template-columns:1fr;}}
+  .bk .col{border:1px solid var(--border);border-radius:12px;padding:14px 16px;background:var(--bg2);}
+  .bk .col.borrow{border-top:3px solid var(--cyan);}
+  .bk .col.keep{border-top:3px solid var(--accent);}
+  .bk .col.decline{border-top:3px solid var(--red);}
+  .bk .col h4{margin:.1em 0 .5em;font-size:15px;}
+  .bk .col.borrow h4{color:var(--cyan);} .bk .col.keep h4{color:var(--accent);} .bk .col.decline h4{color:var(--red);}
+  .bk .col ul{margin:.3em 0 0 1.1em;} .bk .col li{font-size:13.5px;margin:.45em 0;}
+  .star{color:var(--result);font-weight:800;}
+</style></head>
+<body>
+<div class="sidebar">
+  <p class="brand"><span class="g">Pi vs. Của chúng ta</span></p>
+  <p class="sub">Triết lý "harness mỏng" và cách hai agent lắp ráp khác nhau</p>
+  <nav id="toc">
+    <a href="#pi"><span class="n">01</span>Pi là gì — triết lý</a>
+    <a href="#pillars"><span class="n">02</span>5 trụ cột của Pi</a>
+    <a href="#ours"><span class="n">03</span>Agent của chúng ta</a>
+    <a href="#compare"><span class="n">04</span>Bảng so sánh</a>
+    <a href="#lessons"><span class="n">05</span>Borrow / Keep / Decline</a>
+    <a href="#truth"><span class="n">06</span>Sự thật quan trọng</a>
+    <a href="#sources"><span class="n">07</span>Nguồn chính thống</a>
+  </nav>
+</div>
+<div class="progress"><div class="progress-bar" id="pbar"></div></div>
+<main>
+<div class="hero">
+  <h1>Pi khác chúng ta ở chỗ nào?</h1>
+  <p class="tagline">Một bài học từ <em>ý tưởng</em> xuống tới <em>cách lắp ráp cụ thể</em>: Pi đặt cược vào "harness mỏng, năng lực lắp ngoài"; agent của bạn đi đường khác — <strong>local-first, có sandbox, đo trung thực</strong>. Hiểu rõ chỗ khác nhau để biết cái gì nên <strong>mượn</strong>, cái gì phải <strong>giữ</strong>.</p>
+  <div class="callout"><span class="lbl">Đọc thế nào</span> Đây là tài liệu <strong>học</strong>, không phải tài liệu tiếp thị. Mọi con số đều có nguồn (mục 07) hoặc đo trực tiếp từ code của bạn. Khi mình nói "agent của chúng ta", nghĩa là repo <code>coding-agent</code> bạn đang xây — ReAct from-scratch bằng Python, chạy Qwen3-14B local qua vLLM.</div>
+  <p class="meta">Pi = <code>badlogic/pi-mono</code> (Mario Zechner, MIT, TypeScript) · Của chúng ta = Qwen3-14B / vLLM · 2× RTX A6000 · Knox 361</p>
+</div>
+
+<section id="pi" class="section">
+  <h2><span class="n">01</span>Pi là gì — triết lý "harness mỏng, năng lực lắp ngoài"</h2>
+  <p class="lead">Lõi cực nhỏ. Mọi năng lực thêm vào nằm <em>BÊN NGOÀI</em> lõi, qua Skills / Extensions / Packages.</p>
+
+  <p>Pi (repo <code>badlogic/pi-mono</code> của <strong>Mario Zechner</strong> — cũng là cha đẻ libGDX) là một coding agent open-source, giấy phép <strong>MIT</strong>, viết bằng <strong>TypeScript</strong>. Triết lý trung tâm của nó là: <em>cái harness (bộ khung điều khiển vòng lặp agent) nên mỏng đến mức gần như không có gì</em>. Lõi chỉ lo một việc: chạy vòng lặp "model gọi tool → thực thi → đưa kết quả lại cho model". Tất cả những gì không thiết yếu — sandbox, sub-agent, MCP, kỹ năng chuyên biệt — <strong>không nằm trong lõi</strong>.</p>
+
+  <div class="diagram">
+    <div class="dbox bad" style="border-color:var(--accent)">LÕI Pi<span class="s">vòng lặp + 4 tool + prompt ~400 token</span></div>
+    <div class="darrow">⇠ lắp ngoài ⇢</div>
+    <div class="dcol">
+      <div class="dbox">Skills<span class="s">năng lực nạp theo nhu cầu</span></div>
+      <div class="dbox">Extensions<span class="s">bám vào 25 event của loop</span></div>
+      <div class="dbox">Packages<span class="s">đóng gói & chia sẻ</span></div>
+    </div>
+  </div>
+
+  <p>Hệ quả của triết lý này rất rõ: muốn Pi làm được nhiều hơn, bạn <strong>không sửa lõi</strong> — bạn cắm thêm một extension hoặc một skill ở ngoài. Lõi giữ nguyên bé tí, dễ đọc, dễ tin. Đây là kiểu thiết kế "Unix-y": làm một việc và làm tốt, còn lại để ghép.</p>
+
+  <div class="callout key"><span class="lbl">Ý chính</span> Pi không cố giỏi bằng cách <em>nhồi</em> năng lực vào trong. Nó giỏi bằng cách giữ lõi sạch và đẩy mọi thứ phức tạp ra ngoài rìa — nơi bạn có thể thêm/bớt mà không động vào tim của hệ thống. So với chúng ta: chúng ta nhồi 10 tool vào một registry duy nhất bên trong — đơn giản hơn để bắt đầu, nhưng kém "mở" hơn.</div>
+</section>
+
+<section id="pillars" class="section">
+  <h2><span class="n">02</span>5 trụ cột cụ thể của Pi</h2>
+  <p class="lead">Triết lý ở trên biến thành 5 lựa chọn thiết kế rất cụ thể. Đây là phần "cách lắp ráp".</p>
+
+  <div class="pillar">
+    <div class="num">1</div>
+    <div>
+      <p class="h">4 tool mặc định — mọi thứ khác ủy thác cho <code>bash</code></p>
+      <p>Pi chỉ ship <strong>4 tool lõi</strong>: <code>read</code>, <code>write</code>, <code>edit</code>, <code>bash</code>. Không có <code>run_python</code>, không <code>multi_edit</code>, không <code>spawn_subagent</code> trong mặc định — vì <strong>Pi cố ý không có sub-agent</strong>. Cần chạy Python? → <code>bash python ...</code>. Cần grep? → <code>bash grep ...</code>. Triết lý: <em>shell đã là một "tool vạn năng"</em>, nên đừng nhân bản nó thành chục tool riêng.</p>
+      <p>Điểm tinh tế: tool <code>edit</code> nhận <strong>một MẢNG (array) các edit</strong> trong một lần gọi — sửa nhiều chỗ trong một file mà không cần một tool <code>multi_edit</code> tách biệt. Một tool, nhiều thao tác.</p>
+<pre><code class="language-json">// edit của Pi: một lời gọi, mảng nhiều thay đổi
+{
+  "path": "src/app.ts",
+  "edits": [
+    { "oldText": "const x = 1", "newText": "const x = 2" },
+    { "oldText": "foo()",       "newText": "bar()" }
+  ]
+}</code></pre>
+    </div>
+  </div>
+
+  <div class="pillar">
+    <div class="num">2</div>
+    <div>
+      <p class="h">System prompt ~400 token — <em>sinh ra</em> theo tool đang bật</p>
+      <p>Prompt hệ thống của Pi chỉ khoảng <strong>~400 token</strong>. Quan trọng hơn cả độ ngắn: nó được <strong>sinh động (generated)</strong> tùy theo những tool nào đang được bật. Mỗi tool mang theo một dòng mô tả ngắn — gọi là <code>promptSnippet</code>. Khi build prompt, Pi nối các snippet của những tool đang bật lại. <strong>Tool nào bị tắt → tốn 0 token</strong> trong prompt.</p>
+<pre><code class="language-typescript">// mỗi tool tự khai báo một dòng prompt của riêng nó
+const bashTool = {
+  name: "bash",
+  promptSnippet: "Use `bash` to run shell commands...",
+  // ...
+};
+// system-prompt.ts nối snippet của các tool ĐANG BẬT → prompt cuối cùng</code></pre>
+      <p>Đây là một ý đẹp: prompt không phải một khối tĩnh khổng lồ, mà là <em>tổng của các mảnh, chỉ tính phí cho cái đang dùng</em>.</p>
+    </div>
+  </div>
+
+  <div class="pillar">
+    <div class="num">3</div>
+    <div>
+      <p class="h"><code>models.json</code> — tách model/provider khỏi vòng lặp</p>
+      <p>Pi không hardcode model trong code logic. Việc "dùng model nào, provider nào, endpoint ở đâu" nằm trong một <strong>file dữ liệu</strong> (<code>models.json</code>). Đổi model = <strong>sửa một file data, không sửa code</strong>. Vì endpoint là OpenAI-compatible nên cũng chính cơ chế đó cho phép trỏ vào Ollama, LM Studio, hay vLLM local.</p>
+<pre><code class="language-json">// ~/.pi/agent/models.json — đổi model là đổi data, không phải code
+{
+  "models": [
+    { "id": "my-local", "provider": "openai-compatible",
+      "baseUrl": "http://localhost:8000/v1", "model": "Qwen3-14B" }
+  ]
+}</code></pre>
+    </div>
+  </div>
+
+  <div class="pillar">
+    <div class="num">4</div>
+    <div>
+      <p class="h">Không sandbox ("YOLO") — cô lập đẩy ra NGOÀI process</p>
+      <p>Pi <strong>không có sandbox bên trong</strong> tool layer. Một lệnh <code>bash</code> chạy thẳng. Triết lý: an toàn không phải việc của agent harness — nếu bạn cần cô lập, hãy bọc <em>cả tiến trình Pi</em> trong một container hoặc một phiên tmux. Cô lập là một tầng <strong>bên ngoài</strong>, không nhét vào trong từng tool.</p>
+      <p>Hệ quả: lõi đơn giản hơn (không có code kiểm tra đường dẫn), nhưng đặt trách nhiệm an toàn lên người chạy. Đây chính là chỗ agent của chúng ta đi <em>ngược lại</em> — xem trụ cột tương ứng ở mục 03.</p>
+    </div>
+  </div>
+
+  <div class="pillar">
+    <div class="num">5</div>
+    <div>
+      <p class="h">Một "session object" — phiên là cây JSONL (fork / branch / clone)</p>
+      <p>Vòng lặp của Pi xoay quanh <strong>một đối tượng session duy nhất</strong>. Lịch sử hội thoại được lưu thành <strong>cây JSONL</strong>: bạn có thể <em>fork</em> một phiên, <em>branch</em> ra hướng khác, hay <em>clone</em> để thử nghiệm — mà không phá nhánh gốc. Khi context dài quá, Pi <strong>compaction</strong> (nén lại) để vừa cửa sổ ngữ cảnh. Tất cả gói trong <em>một</em> vòng lặp, không có vòng lặp song song hay sub-agent thứ hai.</p>
+    </div>
+  </div>
+
+  <div class="callout"><span class="lbl">Tóm lại 5 trụ cột</span> 4 tool (mọi thứ khác → bash; <code>edit</code> nhận mảng; không sub-agent) · prompt ~400 token sinh động theo tool · <code>models.json</code> tách model khỏi code · không sandbox (cô lập ở ngoài) · một session = cây JSONL có fork/branch + compaction.</div>
+</section>
+
+<section id="ours" class="section">
+  <h2><span class="n">03</span>Agent của chúng ta — đường đi khác</h2>
+  <p class="lead">ReAct from-scratch bằng Python, chạy model local, có rào an toàn trong process, và đo bằng eval thật.</p>
+
+  <p>Agent của bạn cũng theo tinh thần tối giản, nhưng <em>các lựa chọn cụ thể</em> khác Pi ở nhiều chỗ — và mỗi chỗ khác đều có lý do:</p>
+
+  <div class="grid c2">
+    <div class="card">
+      <p class="t">Model local: Qwen3-14B qua vLLM</p>
+      <p>Không "bring-your-own cloud key" như Pi. Agent của bạn chạy <strong>Qwen3-14B local</strong> trên 2× A6000 — minh bạch hoàn toàn, không phụ thuộc API ngoài, và là sân để fine-tune sau này.</p>
+    </div>
+    <div class="card">
+      <p class="t">10 tool trong một registry</p>
+      <p><code>read_file</code>, <code>write_file</code>, <code>run_bash</code>, <code>apply_patch</code>, <code>multi_edit</code>, <code>grep_files</code>, <code>glob_files</code>, <code>list_dir</code>, <code>run_python</code>, <code>spawn_subagent</code> — tất cả trong <code>TOOLS</code> / <code>TOOL_SCHEMAS</code>. Nhiều hơn Pi gấp 2.5×, vì chúng ta cho model nhỏ những tool chuyên biệt rõ ràng thay vì dồn hết vào bash.</p>
+    </div>
+    <div class="card">
+      <p class="t"><code>_safe_path</code> — sandbox trong process</p>
+      <p>Mỗi tool đụng file đều đi qua <code>_safe_path()</code> — chặn <strong>path-traversal (CWE-22)</strong>: không cho thoát khỏi workspace bằng <code>../../</code>. Đây là rào an toàn nằm <em>bên trong</em> tool layer — ngược hẳn với "YOLO" của Pi.</p>
+    </div>
+    <div class="card">
+      <p class="t">Prompt ~1K token, viết tay</p>
+      <p>System prompt của chúng ta (<code>SYSTEM_PROMPT</code> trong <code>prompts.py</code>) là một khối <strong>viết tay ~1K token</strong> (đo được ~862 token theo char-count), không sinh động theo tool như Pi.</p>
+    </div>
+  </div>
+
+  <h3>Đo bằng eval thật — đây là điểm tự hào</h3>
+  <div class="stats">
+    <div class="stat"><div class="v">627</div><div class="l">task hidden-test eval</div></div>
+    <div class="stat"><div class="v">79.9%</div><div class="l">pass (501/627)</div></div>
+    <div class="stat"><div class="v">~92%</div><div class="l">khi đã gọi tool</div></div>
+    <div class="stat"><div class="v">84</div><div class="l">ca no_action</div></div>
+  </div>
+  <p>Pi <strong>không công bố con số eval</strong> nào. Agent của bạn được đo trung thực trên <strong>627 task</strong> với hidden test: <strong>79.9% (501/627)</strong>, lên <strong>~92% khi model thực sự chịu gọi tool</strong>. Khoảng cách đó chính là phát hiện <code>no_action</code> — <strong>84 ca</strong> model trả lời prose mà không gọi tool nào. Đây là một phát hiện empirical <em>của riêng bạn</em>.</p>
+
+  <h3>Hai điểm cần thành thật về code hiện tại</h3>
+  <div class="callout warn"><span class="lbl">⚠️ Nợ kỹ thuật #1 — hai vòng lặp ReAct trùng nhau</span>
+  Hiện có <strong>HAI</strong> vòng lặp ReAct riêng biệt: <code>run_agent()</code> trong <code>src/agent.py</code> (dùng cho eval/solve) và vòng lặp tương tác trong <code>cli/chat.py</code> (<code>chat()</code> + <code>stream_one_turn()</code>). Chúng làm gần như cùng một việc nhưng là hai bản code song song → dễ lệch nhau. Pi chỉ có <em>một</em> vòng lặp session.</div>
+  <div class="callout warn"><span class="lbl">⚠️ Nợ kỹ thuật #2 — guardrail no_action chỉ có ở một loop</span>
+  Việc phát hiện và xử lý <code>no_action</code> <strong>chỉ tồn tại trong <code>agent.py</code></strong> (xem dòng ~689–693). Vòng lặp <code>chat.py</code> không có nó. Nghĩa là chính cái guardrail giá trị nhất của bạn lại không được dùng nhất quán ở cả hai chỗ — một lý do nữa để gộp hai loop làm một.</div>
+</section>
+
+<section id="compare" class="section">
+  <h2><span class="n">04</span>Bảng so sánh Pi ↔ Chúng ta</h2>
+  <p class="lead">Cùng một trục, hai lựa chọn. Ô có <span class="star">★</span> là điểm khác biệt / lợi thế riêng của chúng ta.</p>
+  <table>
+    <thead><tr><th>Trục</th><th>Pi</th><th>Của chúng ta</th></tr></thead>
+    <tbody>
+      <tr><td>Ngôn ngữ</td><td>TypeScript</td><td>Python (from-scratch ReAct)</td></tr>
+      <tr><td>Model</td><td>BYO — cloud/local tùy key</td><td><span class="ok">★ local Qwen3-14B (vLLM)</span></td></tr>
+      <tr><td>Số tool</td><td>4 (read/write/edit/bash)</td><td>10 (registry đầy đủ)</td></tr>
+      <tr><td>Sandbox</td><td><span class="no">không (YOLO)</span></td><td><span class="ok">★ <code>_safe_path</code> (chặn CWE-22)</span></td></tr>
+      <tr><td>System prompt</td><td>~400 token, sinh động theo tool</td><td>~1K token, viết tay (~862 đo được)</td></tr>
+      <tr><td>Cấu hình model</td><td><code>models.json</code> (data, không code)</td><td><code>.env</code> + <code>max_tokens=2048</code> hardcode</td></tr>
+      <tr><td>Mở rộng</td><td>extension bus 25 event + Skills/Packages</td><td>một registry <code>TOOLS</code>/<code>TOOL_SCHEMAS</code></td></tr>
+      <tr><td>Vòng lặp</td><td>1 session object (cây JSONL, fork/branch)</td><td>2 loop trùng nhau (<code>agent.py</code> + <code>chat.py</code>)</td></tr>
+      <tr><td>Sub-agent</td><td>không có (cố ý)</td><td>có <code>spawn_subagent</code> trong registry</td></tr>
+      <tr><td>Đo lường</td><td>không công bố eval</td><td><span class="ok">★ eval 627 task, 79.9% (501/627)</span></td></tr>
+      <tr><td>Guardrail <code>no_action</code></td><td>không có</td><td><span class="ok">★ có (chỉ ở <code>agent.py</code>)</span></td></tr>
+    </tbody>
+  </table>
+  <div class="callout key"><span class="lbl">Đọc bảng</span> Pi thắng ở <em>độ gọn của lõi</em> và <em>khả năng mở rộng từ ngoài</em>. Chúng ta thắng ở <em>4 thứ có <span class="star">★</span></em>: model local, sandbox <code>_safe_path</code>, eval trung thực, và guardrail <code>no_action</code>. Đây không phải "ai hơn ai" tuyệt đối — mà là <strong>hai bộ đánh đổi khác nhau</strong> cho hai mục tiêu khác nhau.</div>
+</section>
+
+<section id="lessons" class="section">
+  <h2><span class="n">05</span>Bài học: BORROW / KEEP / DECLINE</h2>
+  <p class="lead">Không phải cái gì của Pi cũng nên copy. Chia làm ba nhóm rõ ràng.</p>
+
+  <div class="bk">
+    <div class="col borrow">
+      <h4>↓ BORROW — mượn từ Pi</h4>
+      <ul>
+        <li><strong>Gộp 2 loop → 1.</strong> Một vòng lặp session duy nhất, dùng chung cho cả eval lẫn chat. Hết cảnh hai bản code lệch nhau; <code>no_action</code> guardrail tự động có mặt ở mọi nơi.</li>
+        <li><strong>Thu gọn tool 10 → ~5.</strong> Để <code>edit</code> hấp thụ <code>apply_patch</code> + <code>multi_edit</code> (mảng edit như Pi); gập <code>run_python</code> vào <code>bash</code>; đặt cổng (gate) cho <code>spawn_subagent</code>.</li>
+        <li><strong><code>models.json</code>.</strong> Tách model/provider khỏi code; bỏ <code>max_tokens=2048</code> hardcode ra file data.</li>
+        <li><strong>Snippet-per-tool prompt.</strong> Mỗi tool mang một dòng <code>promptSnippet</code>; prompt sinh động theo tool đang bật → tool tắt tốn 0 token.</li>
+      </ul>
+    </div>
+    <div class="col keep">
+      <h4>= KEEP — giữ lợi thế của mình</h4>
+      <ul>
+        <li><strong><code>_safe_path</code> sandbox.</strong> Đừng "Pi hoá" thành YOLO. Rào CWE-22 trong process là điểm hơn — giữ.</li>
+        <li><strong>Local-first Qwen3-14B.</strong> Đây là cả lý do tồn tại của dự án; minh bạch + sân fine-tune.</li>
+        <li><strong>Eval 627 task trung thực.</strong> Thứ Pi không có. Giữ làm tín hiệu thật, đừng đánh đổi lấy "đẹp".</li>
+        <li><strong>Guardrail <code>no_action</code>.</strong> Phát hiện empirical của riêng bạn — giữ và nhân rộng ra cả loop hợp nhất.</li>
+      </ul>
+    </div>
+    <div class="col decline">
+      <h4>✕ DECLINE — không mượn</h4>
+      <ul>
+        <li><strong>Extension bus 25 event.</strong> Sẽ làm chúng ta <em>phức tạp hơn</em>, không đơn giản hơn. Một registry là đủ cho quy mô một người.</li>
+        <li><strong>No-sandbox / YOLO.</strong> Đi ngược điểm mạnh; bỏ <code>_safe_path</code> là tự bắn vào chân.</li>
+        <li><strong>Multi-provider registry.</strong> Chúng ta chạy <em>một</em> model local. Hạ tầng đa-provider là gánh nặng không dùng tới.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout"><span class="lbl">Nguyên tắc lọc</span> Mượn thứ làm code <em>đơn giản hơn và nhất quán hơn</em> (gộp loop, gọn tool, models.json, snippet prompt). Từ chối thứ chỉ "giống Pi" nhưng làm ta <em>phức tạp hơn</em> (event bus, đa provider) hoặc <em>yếu đi</em> (bỏ sandbox).</div>
+</section>
+
+<section id="truth" class="section">
+  <h2><span class="n">06</span>Sự thật quan trọng — code của bạn KHÔNG phình</h2>
+  <p class="lead">Trước khi nghĩ tới "viết lại cho gọn như Pi": hãy nhìn con số thật. "To" ở đây phần lớn là <em>chú thích dạy học</em>, không phải logic thừa.</p>
+
+  <p>Đo trực tiếp trên repo của bạn hôm nay:</p>
+  <div class="diagram">
+    <div class="dbox">tools.py<span class="s">1246 dòng tổng</span></div>
+    <div class="darrow">=</div>
+    <div class="dcol">
+      <div class="dbox good">~558 dòng code + schema<span class="s">logic ~300–350 + registry/schema</span></div>
+      <div class="dbox" style="border-color:var(--result)">~542 dòng chú thích tiếng Việt<span class="s">cố ý — để dạy học</span></div>
+      <div class="dbox dim">~146 dòng trống</div>
+    </div>
+  </div>
+
+  <p>Tương tự, vòng lặp ReAct trong <code>run_agent()</code> trải dài ~470 dòng <em>văn bản</em>, nhưng phần lớn là chú thích: chỉ khoảng <strong>~90–195 dòng code thực</strong> (đo strict không-chú-thích-không-trống ≈ 93 dòng). Nói cách khác:</p>
+
+  <div class="callout key"><span class="lbl">Kết luận thành thật</span> File <code>tools.py</code> "to" không phải vì logic rối — mà vì có <strong>~540 dòng chú thích tiếng Việt cố ý</strong> để dạy. Bỏ chú thích ra, logic chỉ ~300–350 dòng; vòng lặp ReAct chỉ ~90–195 dòng code thật. Cho nên <strong>"gọn như Pi" KHÔNG cần một cuộc viết lại</strong> — nó là <em>vài nước đi nhắm đích</em>: gộp 2 loop, gọn 10 tool xuống ~5, đẩy config ra <code>models.json</code>, prompt theo snippet. Đừng đập đi xây lại; chỉ cần tỉa đúng chỗ.</div>
+
+  <p class="dim">(Con số đo bằng <code>wc -l</code> + đếm dòng chú thích/trống trên repo ngày 2026-05-26; logic "thực" là ước lượng sau khi trừ comment và blank.)</p>
+</section>
+
+<section id="sources" class="section">
+  <h2><span class="n">07</span>Nguồn chính thống</h2>
+  <p class="lead">Các facts về Pi trong tài liệu này dựa trên repo và docs chính thức của <code>badlogic/pi-mono</code>.</p>
+  <p class="src">
+    Repo Pi: <a href="https://github.com/badlogic/pi-mono">github.com/badlogic/pi-mono</a><br>
+    Extensions (25-event bus, Skills, Packages): <a href="https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/extensions.md">docs/extensions.md</a><br>
+    Models (<code>models.json</code>, OpenAI-compatible, vLLM): <a href="https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/models.md">docs/models.md</a><br>
+    SDK (session object, JSONL tree, fork/branch/clone, compaction): <a href="https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/sdk.md">docs/sdk.md</a><br>
+    System prompt sinh động + <code>promptSnippet</code>: <a href="https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/src/core/system-prompt.ts">src/core/system-prompt.ts</a>
+  </p>
+  <p class="dim" style="margin-top:1.4em">Các con số về agent của chúng ta (10 tool, prompt ~1K token, eval 627 task, 79.9% = 501/627, ~92% khi gọi tool, 84 ca no_action, hai loop, <code>_safe_path</code>, <code>max_tokens=2048</code>) đo / kiểm trực tiếp trên repo <code>coding-agent</code> ngày 2026-05-26.</p>
+</section>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+<script>
+  const pbar=document.getElementById('pbar');
+  addEventListener('scroll',()=>{const h=document.documentElement;pbar.style.width=(h.scrollTop/(h.scrollHeight-h.clientHeight)*100)+'%';},{passive:true});
+  const links=[...document.querySelectorAll('#toc a')];
+  const secs=links.map(a=>document.querySelector(a.getAttribute('href')));
+  addEventListener('scroll',()=>{let i=secs.findIndex(s=>s&&s.getBoundingClientRect().top>120);if(i===-1)i=secs.length;i=Math.max(0,i-1);links.forEach((a,k)=>a.classList.toggle('active',k===i));},{passive:true});
+</script>
+</body></html>
