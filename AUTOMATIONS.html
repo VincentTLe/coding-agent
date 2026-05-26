@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code Automations — coding-agent</title>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0f1117; --bg2:#161922; --bg3:#1f2330; --fg:#e7ecef; --fg-dim:#9aa5b1;
+    --accent:#7bdcb5; --cyan:#7bf0ff; --magenta:#ff8aff; --tool:#7bff7b; --result:#ffd966; --red:#ff7b7b;
+    --border:#2a3040; --shadow:0 4px 24px rgba(0,0,0,.4);
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{margin:0; background:var(--bg); color:var(--fg);
+    font-family:'Inter',-apple-system,'Segoe UI',Roboto,sans-serif; line-height:1.7; font-size:16px;}
+  a{color:var(--accent); text-decoration:none;} a:hover{color:var(--cyan);}
+  code{font-family:'JetBrains Mono',monospace; background:var(--bg3); color:var(--cyan);
+    padding:.08em .35em; border-radius:4px; font-size:.88em;}
+  pre{margin:1em 0;} pre[class*="language-"]{background:var(--bg3)!important; border:1px solid var(--border);
+    border-radius:10px; padding:1em 1.2em; font-size:.84em; line-height:1.55; overflow:auto;}
+  pre[class*="language-"] code{background:none; padding:0; font-size:inherit;}
+
+  /* sidebar TOC */
+  .sidebar{position:fixed; top:0; left:0; width:268px; height:100vh; background:var(--bg2);
+    border-right:1px solid var(--border); padding:26px 18px; overflow-y:auto; z-index:100;}
+  .sidebar .brand{font-weight:800; font-size:17px; letter-spacing:-.02em; margin:0 0 4px;}
+  .sidebar .brand .g{background:linear-gradient(90deg,var(--accent),var(--cyan),var(--magenta));
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;}
+  .sidebar .sub{color:var(--fg-dim); font-size:12px; margin:0 0 20px;}
+  .sidebar nav a{display:block; color:var(--fg-dim); font-size:13.5px; padding:7px 11px; border-radius:7px;
+    border-left:2px solid transparent; transition:all .15s; margin:3px 0;}
+  .sidebar nav a:hover{background:var(--bg3); color:var(--fg);}
+  .sidebar nav a.active{color:var(--accent); border-left-color:var(--accent); background:var(--bg3);}
+  .sidebar nav a .n{color:var(--accent); font-weight:700; margin-right:7px;}
+
+  /* progress + content */
+  .progress{position:fixed; top:0; left:268px; right:0; height:3px; background:var(--bg3); z-index:99;}
+  .progress-bar{height:100%; width:0; background:linear-gradient(90deg,var(--cyan),var(--accent));}
+  main{margin-left:268px; padding:0;}
+  .section{max-width:920px; margin:0 auto; padding:64px 48px; scroll-margin-top:10px;
+    border-bottom:1px solid var(--border);}
+  .section:last-child{border-bottom:none;}
+  .section h2{font-size:30px; font-weight:800; letter-spacing:-.02em; margin:0 0 6px; color:var(--accent);}
+  .section h2 .n{color:var(--fg-dim); font-weight:600; font-size:.7em; margin-right:.5em;}
+  .section h3{font-size:20px; color:var(--cyan); margin:1.6em 0 .5em; font-weight:600;}
+  .section .lead{font-size:18px; color:var(--fg-dim); margin:0 0 1.4em;}
+  .section p{margin:.7em 0;} .section ul,.section ol{margin:.6em 0 1em 1.3em;} .section li{margin:.35em 0;}
+  .section strong{color:var(--fg); font-weight:700;} .section em{color:var(--cyan); font-style:normal;}
+
+  /* hero */
+  .hero{max-width:920px; margin:0 auto; padding:90px 48px 56px; border-bottom:1px solid var(--border);}
+  .hero h1{font-size:52px; font-weight:800; letter-spacing:-.03em; margin:0 0 .2em; line-height:1.08;
+    background:linear-gradient(90deg,var(--accent) 0%,var(--cyan) 40%,var(--magenta) 80%,var(--accent) 100%);
+    background-size:300% 100%; -webkit-background-clip:text; background-clip:text;
+    -webkit-text-fill-color:transparent; animation:flow 9s ease-in-out infinite;}
+  @keyframes flow{0%,100%{background-position:0% 50%;}50%{background-position:100% 50%;}}
+  .hero .tagline{font-size:21px; color:var(--fg); margin:.3em 0;}
+  .hero .meta{color:var(--fg-dim); font-size:15px; margin-top:1em;}
+
+  /* concept cards */
+  .card{background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:18px 20px;
+    margin:.6em 0; box-shadow:var(--shadow);}
+  .card .t{font-weight:700; color:var(--fg); margin:0 0 .3em; font-size:15px;}
+  .grid{display:grid; gap:14px; margin:1em 0;}
+  .grid.c2{grid-template-columns:1fr 1fr;} .grid.c3{grid-template-columns:1fr 1fr 1fr;}
+  @media(max-width:760px){.grid.c2,.grid.c3{grid-template-columns:1fr;}}
+
+  /* callout */
+  .callout{border-left:3px solid var(--accent); background:var(--bg2); padding:14px 18px; border-radius:0 10px 10px 0; margin:1.1em 0;}
+  .callout.warn{border-left-color:var(--result);} .callout.key{border-left-color:var(--magenta);}
+  .callout .lbl{font-size:12px; text-transform:uppercase; letter-spacing:1px; color:var(--accent); font-weight:700;}
+  .callout.warn .lbl{color:var(--result);} .callout.key .lbl{color:var(--magenta);}
+
+  /* HTML/CSS diagram (NO mermaid) */
+  .diagram{display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:14px;
+    margin:1.4em 0; padding:20px; background:var(--bg2); border:1px solid var(--border); border-radius:12px;}
+  .dbox{background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:12px 16px;
+    text-align:center; min-width:90px;}
+  .dbox.hl{border-color:var(--accent);} .dbox .s{display:block; color:var(--fg-dim); font-size:12px; margin-top:3px;}
+  .darrow{color:var(--accent); font-size:24px;} .dcol{display:flex; flex-direction:column; gap:12px;}
+
+  /* stats */
+  .stats{display:flex; gap:22px; flex-wrap:wrap; margin:1.2em 0;}
+  .stat{background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:16px 22px; text-align:center;}
+  .stat .v{font-size:34px; font-weight:800; color:var(--accent);} .stat .l{color:var(--fg-dim); font-size:13px;}
+
+  /* tables */
+  table{width:100%; border-collapse:collapse; margin:1em 0; font-size:14.5px;}
+  th{background:var(--bg2); color:var(--accent); text-align:left; padding:9px 12px; border-bottom:2px solid var(--border);}
+  td{padding:8px 12px; border-bottom:1px solid var(--border);}
+  .tag{display:inline-block; background:var(--bg3); border:1px solid var(--border); color:var(--cyan);
+    border-radius:20px; padding:2px 11px; font-size:12px; margin:2px;}
+  .dim{color:var(--fg-dim);}
+</style>
+</head>
+<body>
+<div class="sidebar">
+  <p class="brand"><span class="g">Claude Code Automations</span></p>
+  <p class="sub">coding-agent · cấu hình project-level</p>
+  <nav id="toc">
+    <a href="#intro"><span class="n">00</span>Tại sao có tài liệu này</a>
+    <a href="#concepts"><span class="n">01</span>Hooks · Skills · Subagents là gì</a>
+    <a href="#layout"><span class="n">02</span>Bốn file đặt ở đâu</a>
+    <a href="#start-vllm"><span class="n">03</span>Skill: start-vllm</a>
+    <a href="#demo"><span class="n">04</span>Skill: demo</a>
+    <a href="#guardian"><span class="n">05</span>Subagent: sandbox-guardian</a>
+    <a href="#hook"><span class="n">06</span>Hook: chạy test sau khi sửa</a>
+    <a href="#howto"><span class="n">07</span>Dùng như thế nào</a>
+    <a href="#safety"><span class="n">08</span>An toàn trước buổi present</a>
+  </nav>
+</div>
+<div class="progress"><div class="progress-bar" id="pbar"></div></div>
+<main>
+<div class="hero" id="top">
+  <h1>Tự động hóa Claude Code cho coding-agent</h1>
+  <p class="tagline">Bốn cấu hình <strong>project-level</strong> đặt trong <code>.claude/</code>: hai <em>skill</em> để chạy server &amp; demo, một <em>subagent</em> canh gác sandbox, và một <em>hook</em> tự chạy test sau mỗi lần sửa code. Tài liệu này giải thích từng cái <strong>là gì</strong>, <strong>làm gì</strong>, và <strong>nối với dự án ra sao</strong>.</p>
+  <div class="callout key"><span class="lbl">Nguyên tắc</span> Các automation này chỉ là <em>lớp tiện ích</em> bao quanh dự án — chúng <strong>không</strong> sửa một dòng nào trong <code>src/</code>. Chúng gọi đúng các lệnh thật đã có (<code>scripts/start_vllm.sh</code>, <code>cli/solve.py</code>, <code>pytest tests/</code>). Bạn vẫn hiểu và kiểm soát từng dòng — đúng tinh thần của dự án.</div>
+  <p class="meta">Math/Stat 361 — Knox College · Demo Fri 2026-05-29 · nguồn schema: docs Claude Code (code.claude.com/docs/en/hooks)</p>
+</div>
+
+<!-- ───────────────────────── 00 INTRO ───────────────────────── -->
+<section id="intro" class="section">
+  <h2><span class="n">00</span>Tại sao có tài liệu này</h2>
+  <p class="lead">"Automation" ở đây nghĩa là dạy <em>Claude Code</em> (con AI bạn đang dùng để code) biết các quy trình lặp đi lặp lại của riêng dự án này — để bạn gõ ngắn, nó làm đúng, và nó tự bảo vệ những bất biến quan trọng.</p>
+  <p>Repo <code>coding-agent</code> trước đây <strong>không</strong> có thư mục <code>.claude/</code> riêng. Giờ ta thêm 4 thứ, tất cả nằm gọn trong <code>.claude/</code> của project (không đụng tới global settings, không đụng tới máy):</p>
+  <div class="grid c2">
+    <div class="card"><p class="t"><span style="color:var(--accent)">2 Skills</span> — quy trình gõ tay</p><p><code>/start-vllm</code> bật model server; <code>/demo</code> chạy màn demo agent sửa test. Đây là "checklist sống" — bạn gọi tên, Claude làm theo từng bước.</p></div>
+    <div class="card"><p class="t"><span style="color:var(--magenta)">1 Subagent</span> — người soát code</p><p><code>sandbox-guardian</code> chỉ-đọc, review mỗi thay đổi ở <code>src/tools.py</code> để bảo đảm 3 bất biến an toàn không bị phá.</p></div>
+    <div class="card"><p class="t"><span style="color:var(--result)">1 Hook</span> — phản xạ tự động</p><p>Sau mỗi lần <code>Edit/Write</code> vào <code>src/</code> hoặc <code>tests/</code>, tự chạy <code>pytest tests/</code> và báo kết quả. Không chặn, không hỏi.</p></div>
+    <div class="card"><p class="t"><span style="color:var(--cyan)">1 trang HTML</span> — chính trang này</p><p>Giải thích bằng tiếng Việt để bạn re-explain được trong buổi present, đúng style của <code>SYSTEM_DEEP_DIVE.html</code>.</p></div>
+  </div>
+</section>
+
+<!-- ───────────────────────── 01 CONCEPTS ───────────────────────── -->
+<section id="concepts" class="section">
+  <h2><span class="n">01</span>Hooks · Skills · Subagents — ba khái niệm</h2>
+  <p class="lead">Ba cơ chế mở rộng của Claude Code, khác nhau ở <strong>ai kích hoạt</strong> và <strong>khi nào</strong>. Hiểu trục này là hiểu hết.</p>
+
+  <div class="grid c3">
+    <div class="card">
+      <p class="t" style="color:var(--accent)">Skill</p>
+      <p>Một file <code>SKILL.md</code> = một quy trình viết sẵn dưới dạng <em>văn bản hướng dẫn</em>. Khi được gọi, nội dung file được nạp vào ngữ cảnh và Claude làm theo các bước đó.</p>
+      <p class="dim"><strong>Ai kích hoạt:</strong> bạn (gõ <code>/tên-skill</code>). Hai skill ở đây đặt <code>disable-model-invocation: true</code> nên <em>chỉ</em> bạn gọi được, Claude không tự ý chạy.</p>
+    </div>
+    <div class="card">
+      <p class="t" style="color:var(--magenta)">Subagent</p>
+      <p>Một "nhân viên phụ" có <em>system prompt riêng</em> và <em>bộ tool giới hạn riêng</em>, chạy trong ngữ cảnh tách biệt. Định nghĩa bằng 1 file <code>.md</code> trong <code>.claude/agents/</code>.</p>
+      <p class="dim"><strong>Ai kích hoạt:</strong> Claude chính ủy thác sang, hoặc bạn yêu cầu. Của ta chỉ có tool <em>read-only</em> (Read/Grep/Glob) → không thể sửa gì, chỉ soi &amp; báo cáo.</p>
+    </div>
+    <div class="card">
+      <p class="t" style="color:var(--result)">Hook</p>
+      <p>Một <em>lệnh shell</em> mà <strong>harness Claude Code</strong> (không phải model) tự chạy tại một thời điểm trong vòng đời — ví dụ <code>PostToolUse</code> = ngay <em>sau</em> khi một tool chạy xong. Khai báo trong <code>settings.json</code>.</p>
+      <p class="dim"><strong>Ai kích hoạt:</strong> hệ thống, tự động, theo sự kiện. Không phụ thuộc việc model "nhớ" hay không — đó là sức mạnh của hook.</p>
+    </div>
+  </div>
+
+  <h3>Trục phân biệt: ai bấm nút?</h3>
+  <div class="diagram">
+    <div class="dbox hl">Bạn gõ <code>/demo</code><span class="s">SKILL → Claude đọc &amp; làm theo</span></div>
+    <div class="darrow">·</div>
+    <div class="dbox">Claude ủy thác<span class="s">SUBAGENT chạy ngữ cảnh riêng</span></div>
+    <div class="darrow">·</div>
+    <div class="dbox">Hệ thống tự bắn<span class="s">HOOK chạy sau sự kiện tool</span></div>
+  </div>
+  <div class="callout"><span class="lbl">Mấu chốt</span> Skill &amp; subagent là <em>chỉ dẫn cho model</em> (model vẫn quyết định hành động). Hook là <em>code chạy thật</em> do harness thực thi — nên nó là chỗ duy nhất bạn ép được "luôn luôn làm X", không lệ thuộc vào việc model có nhớ hay không.</div>
+</section>
+
+<!-- ───────────────────────── 02 LAYOUT ───────────────────────── -->
+<section id="layout" class="section">
+  <h2><span class="n">02</span>Bốn file đặt ở đâu</h2>
+  <p class="lead">Tất cả nằm trong <code>.claude/</code> ở gốc repo — <em>project-scoped</em>, không phải global. Ai clone repo này cũng có sẵn.</p>
+  <pre><code class="language-text">coding-agent/
+└── .claude/
+    ├── settings.json                  ← Hook (PostToolUse: chạy pytest)
+    ├── skills/
+    │   ├── start-vllm/SKILL.md         ← /start-vllm
+    │   └── demo/SKILL.md               ← /demo
+    └── agents/
+        └── sandbox-guardian.md         ← subagent review tools.py</code></pre>
+  <table>
+    <thead><tr><th>File</th><th>Loại</th><th>Kích hoạt bằng</th><th>Gọi tới (lệnh thật của repo)</th></tr></thead>
+    <tbody>
+      <tr><td><code>skills/start-vllm/SKILL.md</code></td><td>Skill</td><td><code>/start-vllm</code></td><td><code>bash scripts/start_vllm.sh</code> + <code>curl …/v1/models</code></td></tr>
+      <tr><td><code>skills/demo/SKILL.md</code></td><td>Skill</td><td><code>/demo</code></td><td><code>cli/solve.py "Fix all failing tests in demo_repo/"</code></td></tr>
+      <tr><td><code>agents/sandbox-guardian.md</code></td><td>Subagent</td><td>Claude ủy thác / bạn yêu cầu</td><td>đọc <code>src/tools.py</code> + <code>AGENTS.md</code></td></tr>
+      <tr><td><code>settings.json</code></td><td>Hook</td><td>tự động sau <code>Edit/Write</code></td><td><code>.venv/bin/python -m pytest tests/ -q -x</code></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ───────────────────────── 03 START-VLLM ───────────────────────── -->
+<section id="start-vllm" class="section">
+  <h2><span class="n">03</span>Skill <code>/start-vllm</code> — bật model server</h2>
+  <p class="lead">Agent không chạy được nếu không có model server. Skill này bật vLLM đúng y các flag trong <code>scripts/start_vllm.sh</code>, đợi nó sẵn sàng, rồi xác minh endpoint sống.</p>
+
+  <h3>Nó làm gì, theo thứ tự</h3>
+  <div class="diagram">
+    <div class="dbox"><code>curl</code> port 8765<span class="s">đã chạy chưa?</span></div>
+    <div class="darrow">→</div>
+    <div class="dbox hl"><code>bash scripts/start_vllm.sh</code><span class="s">Qwen3-14B trên GPU1</span></div>
+    <div class="darrow">→</div>
+    <div class="dbox">đợi log<span class="s">"Application startup complete"</span></div>
+    <div class="darrow">→</div>
+    <div class="dbox"><code>curl</code> lại<span class="s">verify model có mặt</span></div>
+  </div>
+  <p>Các flag <strong>không bịa</strong> — skill chạy thẳng script có sẵn, vốn đã set: <code>VLLM_USE_FLASHINFER_SAMPLER=0</code> (dùng sampler PyTorch-native vì server này không có <code>nvcc</code>), <code>CUDA_VISIBLE_DEVICES=1</code> (ghim GPU1, để GPU0 cho người khác), <code>--max-model-len 32768</code>, <code>--gpu-memory-utilization 0.75</code>, <code>--reasoning-parser qwen3</code>, <code>--tool-call-parser hermes</code>, <code>--port 8765</code>.</p>
+  <div class="callout warn"><span class="lbl">Vì sao đợi log thay vì đoán</span> Nạp Qwen3-14B (BF16, ~28 GB) mất 1–3 phút. Skill <em>poll</em> <code>/tmp/vllm.log</code> tới khi thấy dòng <code>Application startup complete</code> rồi mới verify — không "ngủ 60 giây rồi hy vọng".</div>
+  <div class="callout"><span class="lbl">Chống chạy 2 lần</span> Bước 1 kiểm tra trước: nếu port 8765 đã trả <code>Qwen/Qwen3-14B</code>, skill dừng ngay — GPU1 chỉ đủ chỗ một bản (ở mức 0.75 VRAM), khởi động lần hai sẽ <code>CUDA out of memory</code>.</div>
+</section>
+
+<!-- ───────────────────────── 04 DEMO ───────────────────────── -->
+<section id="demo" class="section">
+  <h2><span class="n">04</span>Skill <code>/demo</code> — chạy màn demo chuẩn</h2>
+  <p class="lead">Kịch bản tham chiếu của dự án: agent nhận một <code>demo_repo/</code> đang lỗi, rồi lặp <code>pytest → read_file → apply_patch → pytest</code> tới khi <strong>11/11 test pass</strong> — chỉ sửa source, không bao giờ sửa test.</p>
+
+  <h3>Bốn bước, có pre-check và reset</h3>
+  <div class="diagram">
+    <div class="dbox"><code>curl</code> 8765<span class="s">vLLM up? nếu không → /start-vllm</span></div>
+    <div class="darrow">→</div>
+    <div class="dbox"><code>git checkout -- demo_repo/</code><span class="s">trả về trạng thái buggy</span></div>
+    <div class="darrow">→</div>
+    <div class="dbox hl"><code>cli/solve.py "Fix all failing tests…"</code><span class="s">ReAct trace verbose</span></div>
+    <div class="darrow">→</div>
+    <div class="dbox"><code>pytest demo_repo/</code><span class="s">verify 11 passed</span></div>
+  </div>
+  <p>Lệnh chạy agent là entrypoint thật đã verify — <code>cli/solve.py</code> là wrapper argparse mỏng quanh <code>run_agent()</code>, workspace mặc định là <code>demo_repo/</code>, <code>--max-iters</code> mặc định 15:</p>
+  <pre><code class="language-bash">.venv/bin/python cli/solve.py "Fix all failing tests in demo_repo/"</code></pre>
+  <div class="callout key"><span class="lbl">Vì sao reset trước</span> Demo chỉ "diễn" được nếu <code>demo_repo/</code> bắt đầu ở trạng thái lỗi (2 bug trong <code>algorithms.py</code>: <code>is_prime</code> và <code>factorial</code> đều dùng <code>range(1, n)</code> → 5/11 test fail). Nếu lần chạy trước đã sửa rồi, agent không có gì để làm. <code>git checkout -- demo_repo/</code> trả lại bản buggy. <strong>Không</strong> dùng <code>git clean</code> (sẽ xóa stray <code>fibonacci.py</code> — vô hại nhưng không cần đụng).</div>
+  <div class="callout warn"><span class="lbl">Pre-check vLLM</span> Nếu <code>curl</code> port 8765 fail, skill dừng và nhắc bạn chạy <code>/start-vllm</code> trước — tránh chạy demo vào endpoint chết rồi nhận một đống lỗi khó đọc giữa buổi present.</div>
+</section>
+
+<!-- ───────────────────────── 05 GUARDIAN ───────────────────────── -->
+<section id="guardian" class="section">
+  <h2><span class="n">05</span>Subagent <code>sandbox-guardian</code> — canh gác <code>tools.py</code></h2>
+  <p class="lead">Một reviewer <strong>chỉ-đọc</strong> (tool: Read · Grep · Glob). Mỗi khi <code>src/tools.py</code> thay đổi, nó kiểm tra 3 bất biến an toàn mà <code>AGENTS.md</code> tuyên bố là "load-bearing, không thể nhân nhượng".</p>
+
+  <div class="grid c3">
+    <div class="card">
+      <p class="t">① Mọi tool đụng file đi qua <code>_safe_path</code></p>
+      <p>7 tool chạm filesystem (<code>read_file</code>, <code>write_file</code>, <code>apply_patch</code>, <code>multi_edit</code>, <code>grep_files</code>, <code>glob_files</code>, <code>list_dir</code>) phải resolve path qua <code>_safe_path(path, workspace)</code> trước khi mở file. Đây là phòng thủ <span class="tag">CWE-22</span> path-traversal.</p>
+      <p class="dim">Flag nếu ai đó nối path bằng tay rồi mở thẳng, hoặc làm yếu chính <code>_safe_path</code>.</p>
+    </div>
+    <div class="card">
+      <p class="t">② Tool <em>RETURN</em> <code>"ERROR: …"</code>, không raise</p>
+      <p>Mọi nhánh lỗi phải <code>return</code> chuỗi bắt đầu <code>"ERROR: "</code> để model đọc và tự sửa — vòng lặp ReAct không được chết vì một tool fail. <code>execute_tool()</code> là lưới an toàn cuối: <code>try/except</code> biến exception thành chuỗi error.</p>
+      <p class="dim">Flag nếu có <code>raise</code> không được bắt, hoặc ai đó thu hẹp <code>try/except</code> trong dispatcher.</p>
+    </div>
+    <div class="card">
+      <p class="t">③ <code>workspace</code> là keyword-only, không global</p>
+      <p>Mọi hàm tool có chữ ký <code>(…, *, workspace: Path)</code>; <code>execute_tool()</code> tự inject. <strong>Không</strong> có global <code>WORKSPACE</code>, không có <code>set_workspace()</code>. Nhờ vậy nhiều agent (vd subagent) chạy khác workspace trong cùng process vẫn an toàn.</p>
+      <p class="dim">Flag nếu global quay lại, hoặc <code>workspace</code> bị chuyển thành positional/default.</p>
+    </div>
+  </div>
+
+  <div class="callout key"><span class="lbl">Vì sao là subagent read-only, không phải hook</span> Ba bất biến này cần <em>đọc hiểu</em> code (ngữ nghĩa), không phải so khớp văn bản máy móc — đó là việc của model. Cho nó tool <em>read-only</em> nghĩa là dù phán đoán sai, nó cũng <strong>không thể tự sửa code</strong>; nó chỉ báo cáo PASS/FAIL kèm số dòng để bạn quyết định. An toàn tuyệt đối.</div>
+  <p class="dim">Cách dùng: sau khi sửa <code>src/tools.py</code>, nhờ Claude "review tools.py bằng sandbox-guardian", hoặc Claude tự ủy thác khi thấy file đó đổi.</p>
+</section>
+
+<!-- ───────────────────────── 06 HOOK ───────────────────────── -->
+<section id="hook" class="section">
+  <h2><span class="n">06</span>Hook — tự chạy test sau khi sửa code</h2>
+  <p class="lead">Cơ chế tự động <em>duy nhất</em> ở đây. Sau mỗi lần Claude dùng <code>Edit</code> hoặc <code>Write</code> đụng vào file trong <code>src/</code> hoặc <code>tests/</code>, harness tự chạy <code>pytest tests/</code> và in kết quả. <strong>Không chặn, không hỏi, luôn an toàn.</strong></p>
+
+  <h3>Đúng schema chính thức của Claude Code</h3>
+  <p>Cấu trúc: <code>hooks</code> → <code>PostToolUse</code> → mảng các nhóm <code>{matcher, hooks:[{type, command}]}</code>. <code>matcher</code> lọc theo <em>tên tool</em>, hỗ trợ danh sách ngăn bằng <code>|</code>. Đây là <code>settings.json</code> đầy đủ:</p>
+  <pre><code class="language-json">{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 120,
+            "statusMessage": "Running unit tests (tests/)…",
+            "command": "f=$(jq -r '.tool_input.file_path // empty'); case \"$f\" in */src/*|*/tests/*) cd \"$CLAUDE_PROJECT_DIR\" && out=$(timeout 120 .venv/bin/python -m pytest tests/ -q -x 2>&1); echo \"[sandbox-tests] after editing $f:\"; echo \"$out\" | tail -n 5 ;; *) : ;; esac; exit 0"
+          }
+        ]
+      }
+    ]
+  }
+}</code></pre>
+
+  <h3>Đọc lệnh shell từng mảnh</h3>
+  <div class="diagram">
+    <div class="dbox"><code>jq</code> đọc stdin<span class="s">lấy tool_input.file_path</span></div>
+    <div class="darrow">→</div>
+    <div class="dbox"><code>case</code> lọc<span class="s">có chứa /src/ hay /tests/?</span></div>
+    <div class="darrow">→</div>
+    <div class="dbox hl"><code>pytest tests/ -q -x</code><span class="s">trong $CLAUDE_PROJECT_DIR</span></div>
+    <div class="darrow">→</div>
+    <div class="dbox"><code>echo</code> 5 dòng cuối<span class="s">rồi exit 0</span></div>
+  </div>
+  <ul>
+    <li><strong>Vì sao lọc <code>/src/</code> &amp; <code>/tests/</code>:</strong> <code>Edit/Write</code> có thể đụng bất kỳ file nào (kể cả file HTML này). Ta <em>chỉ</em> chạy test khi sửa code logic — sửa README hay HTML thì hook im lặng (<code>: ;;</code> = no-op).</li>
+    <li><strong>Vì sao <code>-q -x</code>:</strong> <code>-q</code> gọn, <code>-x</code> dừng ở fail đầu tiên. Bộ 21 test chạy ~0.3–0.6s nên gần như tức thì.</li>
+    <li><strong>Vì sao <code>timeout 120</code> + field <code>"timeout": 120</code>:</strong> hai lớp bảo hiểm để hook <em>không bao giờ</em> treo phiên làm việc.</li>
+    <li><strong>Vì sao luôn <code>exit 0</code>:</strong> <code>PostToolUse</code> chạy <em>sau khi</em> tool đã xong nên về bản chất không thể "rollback" — và ta cố tình <code>exit 0</code> để nó tuyệt đối không nổi lên như lỗi làm gián đoạn. Test fail vẫn <em>hiện ra</em> (bạn thấy dòng <code>FAILED</code>), chỉ là không chặn.</li>
+    <li><strong><code>$CLAUDE_PROJECT_DIR</code>:</strong> biến môi trường Claude Code cấp = gốc repo, nên <code>.venv/bin/python</code> trỏ đúng venv (Python 3.12.3).</li>
+  </ul>
+
+  <div class="callout warn"><span class="lbl">Đã test thủ công 5 ca</span> Sửa <code>src/tools.py</code> → chạy pytest (21 passed). Sửa <code>tests/…</code> → chạy. Sửa <code>README.md</code> → im lặng. Thiếu <code>file_path</code> → im lặng, không crash. Test <em>fail</em> giả lập → hiện <code>FAILED</code> rõ ràng nhưng vẫn <code>exit 0</code>. Mọi ca đều trả về exit code 0.</div>
+  <div class="callout key"><span class="lbl">CỐ TÌNH không có PreToolUse chặn cứng</span> Một hook <code>PreToolUse</code> chặn-cứng (vd cấm sửa file nào đó) <em>quá rủi ro</em> ngay trước buổi present — lỡ cấu hình sai là kẹt cả workflow. Ở đây chỉ có một hook <code>PostToolUse</code> quan sát-và-báo. Việc <em>thực thi</em> bất biến sandbox để cho subagent read-only lo (mục 05), không để hook chặn.</div>
+</section>
+
+<!-- ───────────────────────── 07 HOWTO ───────────────────────── -->
+<section id="howto" class="section">
+  <h2><span class="n">07</span>Dùng như thế nào</h2>
+  <p class="lead">Tóm tắt thao tác thực tế trong một phiên Claude Code mở tại repo này.</p>
+  <table>
+    <thead><tr><th>Muốn gì</th><th>Làm gì</th><th>Kết quả mong đợi</th></tr></thead>
+    <tbody>
+      <tr><td>Bật model server</td><td>gõ <code>/start-vllm</code></td><td>vLLM lên, <code>curl …/v1/models</code> trả <code>Qwen/Qwen3-14B</code></td></tr>
+      <tr><td>Chạy màn demo</td><td>gõ <code>/demo</code></td><td>ReAct trace verbose → <strong>11 passed</strong></td></tr>
+      <tr><td>Soát lại <code>tools.py</code> sau khi sửa</td><td>nhờ Claude "review bằng sandbox-guardian"</td><td>verdict PASS, hoặc FAIL kèm dòng vi phạm</td></tr>
+      <tr><td>Sửa <code>src/</code> hoặc <code>tests/</code></td><td>không cần làm gì — hook tự chạy</td><td>thấy <code>[sandbox-tests] …</code> + kết quả pytest</td></tr>
+    </tbody>
+  </table>
+  <div class="callout"><span class="lbl">Reset giữa các lần demo</span> <code>git checkout -- demo_repo/</code> trả <code>demo_repo/</code> về buggy để diễn lại. Skill <code>/demo</code> đã tự làm bước này.</div>
+  <p class="dim">Skills &amp; subagent là file văn bản — mở ra đọc/sửa thoải mái: <code>.claude/skills/*/SKILL.md</code>, <code>.claude/agents/sandbox-guardian.md</code>. Đổi xong, lần gọi sau Claude dùng bản mới.</p>
+</section>
+
+<!-- ───────────────────────── 08 SAFETY ───────────────────────── -->
+<section id="safety" class="section">
+  <h2><span class="n">08</span>An toàn trước buổi present (Fri 2026-05-29)</h2>
+  <p class="lead">Mọi lựa chọn ở đây nghiêng về <strong>thấp rủi ro</strong>, vì sắp tới ngày present và không được phép làm hỏng workflow.</p>
+  <div class="grid c2">
+    <div class="card"><p class="t">Không đụng <code>src/</code></p><p>Bốn automation chỉ là lớp bao quanh; <strong>không sửa một dòng nào</strong> trong mã agent. Gỡ bỏ = xóa <code>.claude/</code> là xong, repo trở lại y nguyên.</p></div>
+    <div class="card"><p class="t">Hook không chặn, luôn <code>exit 0</code></p><p>Trường hợp xấu nhất hook gặp lỗi cũng chỉ in vài dòng thừa rồi thoát sạch — không bao giờ chặn <code>Edit/Write</code> hay treo phiên.</p></div>
+    <div class="card"><p class="t">Skills chỉ bạn gọi được</p><p>Cả hai đặt <code>disable-model-invocation: true</code> → Claude <em>không</em> tự ý bật server hay chạy demo giữa chừng. Bạn nắm nút bấm.</p></div>
+    <div class="card"><p class="t">Subagent read-only</p><p>Chỉ Read/Grep/Glob → dù phán đoán sai cũng không sửa được gì. Chỉ báo cáo.</p></div>
+    <div class="card"><p class="t">Không PreToolUse chặn cứng</p><p>Cố tình bỏ qua loại hook rủi ro nhất. Không có "rào chắn" nào có thể vô tình khóa thao tác của bạn.</p></div>
+    <div class="card"><p class="t">Schema verify từ nguồn chính thống</p><p>JSON của hook lấy đúng schema từ docs Claude Code, đã <code>jq</code> kiểm tra hợp lệ và chạy thử 5 kịch bản.</p></div>
+  </div>
+  <div class="callout key"><span class="lbl">Một dòng để nhớ</span> Skill = checklist bạn gọi · Subagent = người soát chỉ-đọc · Hook = phản xạ tự động không chặn. Cả ba bao quanh dự án, không xâm nhập nó.</div>
+  <p class="meta">Nguồn schema hook: <a href="https://code.claude.com/docs/en/hooks">code.claude.com/docs/en/hooks</a> · các lệnh thật: <code>scripts/start_vllm.sh</code>, <code>cli/solve.py</code>, <code>AGENTS.md</code>.</p>
+</section>
+</main>
+<script>
+  // scroll progress bar
+  const pbar=document.getElementById('pbar');
+  addEventListener('scroll',()=>{const h=document.documentElement;
+    const p=h.scrollTop/(h.scrollHeight-h.clientHeight)*100; pbar.style.width=p+'%';},{passive:true});
+  // active TOC highlight
+  const links=[...document.querySelectorAll('#toc a')];
+  const secs=links.map(a=>document.querySelector(a.getAttribute('href')));
+  addEventListener('scroll',()=>{let i=secs.findIndex((s,k)=>s&&s.getBoundingClientRect().top>120);
+    if(i===-1)i=secs.length; i=Math.max(0,i-1);
+    links.forEach((a,k)=>a.classList.toggle('active',k===i));},{passive:true});
+  if(window.Prism) Prism.highlightAll();
+  addEventListener('load',()=>{if(window.Prism)Prism.highlightAll();});
+</script>
+</body>
+</html>

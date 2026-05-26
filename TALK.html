@@ -250,7 +250,7 @@ done — stopped on its own
 <section>
   <h2>Results: does it actually work?</h2>
   <p style="text-align:center; font-size:1.5em; margin:0.3em 0;">
-    On the full <strong>627-task</strong> suite: <em>pass-rate</em> <strong>79.9%</strong>
+    On the full <strong>627-task</strong> suite: <em>pass-rate</em> <strong class="count" data-to="79.9">79.9%</strong>
   </p>
   <table style="width:52%; margin:0.4em auto;">
     <thead>
@@ -314,29 +314,8 @@ done — stopped on its own
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/highlight/highlight.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/notes/notes.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
 <script>
-  mermaid.initialize({
-    startOnLoad: false,
-    theme: 'dark',
-    themeVariables: {
-      background: '#0f1117', primaryColor: '#1f2330', primaryTextColor: '#e7ecef',
-      primaryBorderColor: '#7bdcb5', lineColor: '#7bdcb5',
-      secondaryColor: '#161922', secondaryTextColor: '#e7ecef', secondaryBorderColor: '#7bf0ff',
-      tertiaryColor: '#1f2330', tertiaryTextColor: '#e7ecef', tertiaryBorderColor: '#ff8aff',
-      mainBkg: '#1f2330', nodeBorder: '#7bdcb5', nodeTextColor: '#e7ecef',
-      clusterBkg: '#161922', clusterBorder: '#2a2f3d',
-      titleColor: '#7bdcb5', edgeLabelBackground: '#0f1117',
-      actorBkg: '#1f2330', actorBorder: '#7bdcb5', actorTextColor: '#e7ecef',
-      signalColor: '#e7ecef', signalTextColor: '#e7ecef',
-      labelBoxBkgColor: '#161922', labelBoxBorderColor: '#7bdcb5', labelTextColor: '#7bdcb5',
-      noteBkgColor: '#161922', noteTextColor: '#ffd966', noteBorderColor: '#ffd966',
-      fontFamily: 'Inter, -apple-system, "Segoe UI", sans-serif', fontSize: '15px',
-    },
-    flowchart: { curve: 'basis', htmlLabels: true, padding: 14, nodeSpacing: 55, rankSpacing: 70 },
-    sequence: { actorMargin: 50, useMaxWidth: true },
-  });
-
   Reveal.initialize({
     hash: true, controls: true, progress: true, slideNumber: 'c/t',
     history: false, keyboard: true, overview: true, center: true, touch: true,
@@ -345,20 +324,25 @@ done — stopped on its own
     width: 1280, height: 800, margin: 0.04, minScale: 0.2, maxScale: 2.0,
   });
 
-  // Render mermaid ONLY after web fonts are ready — otherwise mermaid measures node
-  // widths with a fallback font and the real (wider) font overflows → labels get clipped.
-  function renderMermaid(root) {
-    if (!root) return;
-    const nodes = root.querySelectorAll('.mermaid:not([data-processed="true"])');
-    if (!nodes.length) return;
-    const go = () => { try { mermaid.run({ nodes: Array.from(nodes) }); } catch (e) { console.warn('Mermaid:', e); } };
-    (document.fonts && document.fonts.ready) ? document.fonts.ready.then(go) : go();
+  // Count-up on the headline result. Bulletproof by design: if gsap fails to load the
+  // static "79.9%" in the HTML stays; reduced-motion is respected; onComplete pins the
+  // exact final value (no float drift); runs once per element (data-done).
+  function countUp(slide) {
+    if (!slide || !window.gsap) return;
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    slide.querySelectorAll('.count').forEach(el => {
+      if (el.dataset.done) return;
+      const to = parseFloat(el.dataset.to);
+      const dec = el.dataset.to.includes('.') ? 1 : 0;
+      if (reduce) { el.textContent = to.toFixed(dec) + '%'; el.dataset.done = '1'; return; }
+      const o = { v: 0 };
+      gsap.to(o, { v: to, duration: 1.1, ease: 'power2.out',
+        onUpdate() { el.textContent = o.v.toFixed(dec) + '%'; },
+        onComplete() { el.textContent = to.toFixed(dec) + '%'; el.dataset.done = '1'; } });
+    });
   }
-  // Render only the VISIBLE slide's diagram. mermaid (htmlLabels) must measure label
-  // text in a displayed element — rendering a hidden slide's diagram sizes boxes wrong
-  // (text gets clipped). Each diagram renders when its slide first becomes visible.
-  Reveal.on('ready', () => renderMermaid(Reveal.getCurrentSlide()));
-  Reveal.on('slidechanged', e => renderMermaid(e.currentSlide));
+  Reveal.on('ready', () => { Reveal.layout(); countUp(Reveal.getCurrentSlide()); });
+  Reveal.on('slidechanged', e => countUp(e.currentSlide));
 </script>
 </body>
 </html>

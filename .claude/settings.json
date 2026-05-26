@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 120,
+            "statusMessage": "Running unit tests (tests/)…",
+            "command": "f=$(jq -r '.tool_input.file_path // empty'); case \"$f\" in */src/*|*/tests/*) cd \"$CLAUDE_PROJECT_DIR\" && out=$(timeout 120 .venv/bin/python -m pytest tests/ -q -x 2>&1); echo \"[sandbox-tests] after editing $f:\"; echo \"$out\" | tail -n 5 ;; *) : ;; esac; exit 0"
+          }
+        ]
+      }
+    ]
+  }
+}

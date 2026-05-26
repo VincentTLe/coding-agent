@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="vi"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Coding Agent — Hướng phát triển tiếp theo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0f1117;--bg2:#161922;--bg3:#1f2330;--fg:#e7ecef;--fg-dim:#9aa5b1;--accent:#7bdcb5;--cyan:#7bf0ff;--magenta:#ff8aff;--result:#ffd966;--red:#ff7b7b;--border:#2a3040;--shadow:0 4px 24px rgba(0,0,0,.4);}
+  *{box-sizing:border-box;} html{scroll-behavior:smooth;}
+  body{margin:0;background:var(--bg);color:var(--fg);font-family:'Inter',-apple-system,'Segoe UI',Roboto,sans-serif;line-height:1.7;font-size:16px;}
+  a{color:var(--accent);text-decoration:none;} a:hover{color:var(--cyan);}
+  code{font-family:'JetBrains Mono',ui-monospace,monospace;background:var(--bg3);color:var(--cyan);padding:.08em .35em;border-radius:4px;font-size:.86em;}
+  pre{margin:1em 0;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:1em 1.2em;font-size:.84em;line-height:1.55;overflow:auto;}
+  pre code{background:none;padding:0;}
+  .sidebar{position:fixed;top:0;left:0;width:262px;height:100vh;background:var(--bg2);border-right:1px solid var(--border);padding:24px 16px;overflow-y:auto;z-index:100;}
+  .sidebar .brand{font-weight:800;font-size:16px;margin:0 0 3px;}
+  .sidebar .brand .g{background:linear-gradient(90deg,var(--accent),var(--cyan),var(--magenta));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+  .sidebar .sub{color:var(--fg-dim);font-size:12px;margin:0 0 18px;}
+  .sidebar nav a{display:block;color:var(--fg-dim);font-size:13.5px;padding:7px 10px;border-radius:7px;border-left:2px solid transparent;margin:2px 0;}
+  .sidebar nav a:hover{background:var(--bg3);color:var(--fg);}
+  .sidebar nav a.active{color:var(--accent);border-left-color:var(--accent);background:var(--bg3);}
+  .sidebar nav a .n{color:var(--accent);font-weight:700;margin-right:7px;}
+  .progress{position:fixed;top:0;left:262px;right:0;height:3px;background:var(--bg3);z-index:99;}
+  .progress-bar{height:100%;width:0;background:linear-gradient(90deg,var(--cyan),var(--accent));}
+  main{margin-left:262px;}
+  .section{max-width:900px;margin:0 auto;padding:56px 46px;border-bottom:1px solid var(--border);}
+  .section h2{font-size:28px;font-weight:800;letter-spacing:-.02em;margin:0 0 6px;color:var(--accent);}
+  .section h2 .n{color:var(--fg-dim);font-weight:600;font-size:.66em;margin-right:.5em;}
+  .section h3{font-size:18px;color:var(--cyan);margin:1.5em 0 .4em;font-weight:600;}
+  .lead{font-size:18px;color:var(--fg-dim);margin:0 0 1.3em;}
+  p{margin:.7em 0;} ul,ol{margin:.6em 0 1em 1.3em;} li{margin:.4em 0;}
+  strong{color:var(--fg);font-weight:700;} em{color:var(--cyan);font-style:normal;}
+  .hero{max-width:900px;margin:0 auto;padding:80px 46px 44px;border-bottom:1px solid var(--border);}
+  .hero h1{font-size:46px;font-weight:800;letter-spacing:-.03em;margin:0 0 .2em;line-height:1.1;background:linear-gradient(90deg,var(--accent) 0%,var(--cyan) 45%,var(--magenta) 85%,var(--accent) 100%);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:flow 9s ease-in-out infinite;}
+  @keyframes flow{0%,100%{background-position:0% 50%;}50%{background-position:100% 50%;}}
+  .hero .tagline{font-size:19px;color:var(--fg);margin:.3em 0;}
+  .hero .meta{color:var(--fg-dim);font-size:14px;margin-top:1em;}
+  .card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin:.6em 0;box-shadow:var(--shadow);}
+  .card .t{font-weight:700;color:var(--fg);margin:0 0 .3em;font-size:15px;}
+  .grid{display:grid;gap:13px;margin:1em 0;} .grid.c2{grid-template-columns:1fr 1fr;} .grid.c3{grid-template-columns:1fr 1fr 1fr;}
+  @media(max-width:780px){.grid.c2,.grid.c3{grid-template-columns:1fr;} .sidebar{display:none;} main{margin-left:0;} .progress{left:0;}}
+  .callout{border-left:3px solid var(--accent);background:var(--bg2);padding:13px 17px;border-radius:0 10px 10px 0;margin:1.1em 0;}
+  .callout.warn{border-left-color:var(--result);} .callout.key{border-left-color:var(--magenta);}
+  .callout .lbl{display:block;font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--accent);font-weight:700;margin-bottom:3px;}
+  .callout.warn .lbl{color:var(--result);} .callout.key .lbl{color:var(--magenta);}
+  .diagram{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:11px;margin:1.3em 0;padding:18px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;}
+  .dbox{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 14px;text-align:center;min-width:84px;}
+  .dbox.hl{border-color:var(--accent);} .dbox.bad{border-color:var(--red);} .dbox.good{border-color:var(--accent);}
+  .dbox .s{display:block;color:var(--fg-dim);font-size:11.5px;margin-top:3px;}
+  .darrow{color:var(--accent);font-size:21px;} .dcol{display:flex;flex-direction:column;gap:9px;}
+  .stats{display:flex;gap:16px;flex-wrap:wrap;margin:1.1em 0;}
+  .stat{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:13px 19px;text-align:center;}
+  .stat .v{font-size:27px;font-weight:800;color:var(--accent);} .stat .l{color:var(--fg-dim);font-size:12.5px;}
+  table{width:100%;border-collapse:collapse;margin:1em 0;font-size:14px;}
+  th{background:var(--bg2);color:var(--accent);text-align:left;padding:9px 11px;border-bottom:2px solid var(--border);}
+  td{padding:8px 11px;border-bottom:1px solid var(--border);vertical-align:top;}
+  .tag{display:inline-block;background:var(--bg3);border:1px solid var(--border);color:var(--cyan);border-radius:20px;padding:2px 10px;font-size:12px;margin:2px;}
+  .dim{color:var(--fg-dim);} .ok{color:var(--accent);font-weight:700;} .no{color:var(--red);font-weight:700;}
+  .rank{display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;border-radius:50%;background:var(--accent);color:#0f1117;font-weight:800;font-size:13px;margin-right:8px;}
+  .src{font-size:13px;color:var(--fg-dim);} .src a{word-break:break-all;}
+</style></head>
+<body>
+<div class="sidebar">
+  <p class="brand"><span class="g">Coding Agent</span></p>
+  <p class="sub">Hướng phát triển — tổng hợp 13 agent nghiên cứu</p>
+  <nav id="toc">
+    <a href="#pi"><span class="n">01</span>Pi coding agent</a>
+    <a href="#noaction"><span class="n">02</span>no_action = mỏ vàng</a>
+    <a href="#directions"><span class="n">03</span>Hướng ưu tiên</a>
+    <a href="#research"><span class="n">04</span>Đào sâu (tùy chọn)</a>
+    <a href="#models"><span class="n">05</span>Có nên đổi model?</a>
+    <a href="#training"><span class="n">06</span>Fine-tune & tự cải thiện</a>
+    <a href="#verdict"><span class="n">07</span>Đi tới đâu + nguồn</a>
+  </nav>
+</div>
+<div class="progress"><div class="progress-bar" id="pbar"></div></div>
+<main>
+<div class="hero">
+  <h1>Đi tiếp tới đâu?</h1>
+  <p class="tagline">Tổng hợp từ <strong>13 agent nghiên cứu</strong>: Pi coding agent, phát hiện <em>no_action</em> của bạn, và lộ trình phát triển <strong>thực tế</strong> cho một agent local Qwen3-14B do một mình bạn làm.</p>
+  <div class="callout"><span class="lbl">Góc nhìn</span> Đây là <strong>dự án cá nhân</strong> của bạn — bạn tự xây và phát triển nó; giá trị nằm ở chỗ bạn <em>hiểu sâu từng phần</em> và đẩy nó đi xa tùy ý, <strong>không cần dán mác "làm để nghiên cứu"</strong>. Agent sẽ không vượt frontier (Claude/Codex) về năng lực thô — nhưng nó có thể thành một agent local <em>vững và minh bạch</em> đúng cái niche mà <strong>Pi vừa chứng minh là có thật</strong>. Và nếu bạn thích, thử các lý thuyết/mô hình từ research paper (vd quanh <code>no_action</code>) là một sân chơi thú vị — bonus, không bắt buộc.</div>
+  <p class="meta">Math/Stat 361 · Knox College · Qwen3-14B / vLLM · 2× RTX A6000</p>
+</div>
+
+<section id="pi" class="section">
+  <h2><span class="n">01</span>Pi coding agent — nó là gì?</h2>
+  <p class="lead">Có thật. Và nó xác nhận đúng cái triết lý bạn đang theo.</p>
+  <div class="grid c2">
+    <div class="card">
+      <p class="t">Pi là gì</p>
+      <p>Coding agent open-source (MIT) của <strong>Mario Zechner</strong> (repo <code>badlogic/pi-mono</code>, chính là cha đẻ libGDX). Một CLI TypeScript, <strong>bring-your-own-key</strong>, cố ý tối giản: <strong>4 tool lõi</strong> (read/write/edit/bash), <strong>system prompt ~1K token</strong> (Claude Code ~10K), không MCP/sandbox/sub-agent mặc định. Mọi thứ khác là <em>extension opt-in</em>.</p>
+    </div>
+    <div class="card">
+      <p class="t">Chạy local — hợp với bạn</p>
+      <p>Pi gọi model qua <strong>bất kỳ endpoint OpenAI-compatible nào</strong> — Ollama, LM Studio, và <strong>vLLM</strong>. Model cấu hình trong <code>~/.pi/agent/models.json</code>. Repo còn ship sẵn cả pod deploy vLLM.</p>
+    </div>
+  </div>
+
+  <h3>"Linux vs Windows" — đúng, nhưng hơi rộng tay</h3>
+  <p>Trục so sánh của bạn chuẩn: Pi = mở / hackable / local / minh bạch; Claude Code = bóng bẩy / có chính kiến / nhiều rào chắn / proprietary. Điểm <em>chưa hoàn hảo</em> của ví von: Pi vẫn phải dựa vào chính các model frontier (proprietary) để giỏi — nên nó giống "một distro Linux chạy trên cùng con CPU", không phải một stack mở hoàn toàn.</p>
+
+  <table>
+    <thead><tr><th>Trục</th><th>Pi</th><th>Claude Code</th><th>Của bạn (coding-agent)</th></tr></thead>
+    <tbody>
+      <tr><td>Số tool lõi</td><td>4</td><td>nhiều + MCP</td><td>10</td></tr>
+      <tr><td>System prompt</td><td>~1K token</td><td>~10K token</td><td>nhỏ, gọn</td></tr>
+      <tr><td>Model</td><td>BYO (gồm local)</td><td>frontier proprietary</td><td><strong>local Qwen3-14B</strong></td></tr>
+      <tr><td>Sandbox</td><td><span class="no">không (YOLO)</span></td><td>có, phân quyền</td><td><span class="ok">có (_safe_path)</span></td></tr>
+      <tr><td>Minh bạch</td><td>cao</td><td>thấp (hộp đen)</td><td><span class="ok">cao (giải thích từng dòng)</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout key"><span class="lbl">Ý chính</span> Pi <strong>độc lập xác nhận thesis của bạn</strong>: ít tool + prompt nhỏ + tin model + minh bạch là một hướng đi đúng và có người theo. Nên <strong>mượn</strong>: (1) cách <code>models.json</code> tách model khỏi vòng lặp (đổi model = đổi 1 dòng), (2) ý tưởng <em>extension/skill nạp theo nhu cầu</em> (chỉ tốn token khi dùng). <strong>Đừng</strong> copy "no sandbox" — sandbox của bạn là điểm hơn, giữ lại.</div>
+</section>
+
+<section id="noaction" class="section">
+  <h2><span class="n">02</span>Phát hiện <code>no_action</code> = mỏ vàng của bạn</h2>
+  <p class="lead">Đây là điểm hội tụ mạnh nhất của cả 13 agent: vừa là chỗ sửa độ-tin-cậy số 1, vừa là một đóng góp nghiên cứu có thể công bố.</p>
+
+  <div class="stats">
+    <div class="stat"><div class="v">79.9%</div><div class="l">pass@1 hiện tại</div></div>
+    <div class="stat"><div class="v">~92%</div><div class="l">đúng KHI nó chịu gọi tool</div></div>
+    <div class="stat"><div class="v">no_action</div><div class="l">lỗi chủ đạo: nói thay vì làm</div></div>
+  </div>
+
+  <div class="callout warn"><span class="lbl">⚠️ Kiểm tra ĐẦU TIÊN — có thể đổi cả con số headline</span>
+  Trên vLLM + parser <strong>hermes</strong>, Qwen3 có bug đã biết: tool call rơi vào field <code>content</code> (<code>tool_calls: null</code>) hoặc kẹt trong thẻ <code>&lt;think&gt;</code> và <strong>không được parse</strong> (vLLM issue #29814, #19056). Nghĩa là <strong>một phần các ca "no_action" của bạn có thể là LỖI PARSE, không phải model từ chối hành động.</strong> Phải soi raw generation để tách ra trước khi xây thêm gì lên trên — và bản thân việc tách này đã là một phát hiện.</div>
+
+  <div class="diagram">
+    <div class="dbox bad">no_action<br><span class="s">84 ca trong eval</span></div>
+    <div class="darrow">→</div>
+    <div class="dbox hl">soi raw output</div>
+    <div class="darrow">→</div>
+    <div class="dcol">
+      <div class="dbox bad">prose thật<span class="s">model thực sự không gọi tool</span></div>
+      <div class="dbox">parse-miss<span class="s">tool call có, nhưng bị parser bỏ</span></div>
+    </div>
+  </div>
+
+  <h3>Mấy cách vá rẻ mà đánh trúng đích</h3>
+  <div class="grid c2">
+    <div class="card"><p class="t">Tool <code>finish</code> / <code>no_op</code></p>Cho model một hành động hợp lệ để "kết thúc" → hết cám dỗ trả prose thay vì gọi tool. (rẻ, hiệu quả cao)</div>
+    <div class="card"><p class="t"><code>tool_choice="required"</code></p>vLLM hỗ trợ, ép luôn ≥1 tool call. Nhưng phải <em>test với Qwen3</em> — grammar JSON có thể cãi nhau với template hermes/XML (issue #19051, #22132).</div>
+    <div class="card"><p class="t">Loop-halt / nudge</p>Phát hiện lượt không-hành-động rồi nhắc lại. Một paper báo <strong>+530%</strong> độ chính xác trên model nhỏ chỉ nhờ logic chặn vòng lặp chết.</div>
+    <div class="card"><p class="t">Bước "plan" trước</p>Bắt model viết kế hoạch ngắn TRƯỚC khi gọi tool. Một Qwen3-8B có scaffold này <em>vượt</em> GPT-4 ReAct trên một benchmark tool-use.</div>
+  </div>
+</section>
+
+<section id="directions" class="section">
+  <h2><span class="n">03</span>Hướng ưu tiên — rẻ trước, tham vọng sau</h2>
+  <p class="lead">Thứ tự theo tỉ lệ "lợi ích / công sức". Làm từ trên xuống.</p>
+
+  <div class="diagram">
+    <div class="dbox good">① Scaffolding rẻ<span class="s">vài ngày</span></div>
+    <div class="darrow">→</div>
+    <div class="dbox">② Eval mới<span class="s">đo thật hơn</span></div>
+    <div class="darrow">→</div>
+    <div class="dbox">③ Đổi/A-B model<span class="s">giảm no_action</span></div>
+    <div class="darrow">→</div>
+    <div class="dbox">④ Paper<span class="s">no_action study</span></div>
+    <div class="darrow">→</div>
+    <div class="dbox">⑤⑥ Fine-tune / self-improve<span class="s">Phase 3-4</span></div>
+  </div>
+
+  <h3><span class="rank">1</span>Thắng nhanh bằng scaffolding (không cần đổi model)</h3>
+  <ul>
+    <li><strong>Tool <code>finish</code> + chặn no_action + nudge</strong> — đánh trúng lỗi chủ đạo.</li>
+    <li><strong>Best-of-N với pytest làm trọng tài</strong> — sinh 3 lời giải (temp 0.7), chạy test, chọn cái pass nhiều nhất. Model nhỏ dao động cao → lợi lớn.</li>
+    <li><strong>Cho agent viết test trước</strong> rồi mới viết code; sửa theo traceback (tối đa 3 vòng).</li>
+    <li><strong>Repo-map kiểu Aider</strong> — tóm tắt cây thư mục (tree-sitter) nhét đầu context → model nhỏ tìm đúng file mà không ngộp.</li>
+    <li><strong>Sandbox mạnh hơn</strong>: bọc <code>run_bash</code> bằng <code>firejail --net=none</code> (1 dòng) — chặn mạng + cô lập FS, hơn hẳn chỉ check path.</li>
+    <li><strong>Compaction thông minh hơn</strong>: nén <em>tool output</em> ở ngưỡng thấp, giữ <em>reasoning</em> của model lâu hơn; thêm header <code>GOAL / PROGRESS / BLOCKERS</code> vào bản tóm tắt.</li>
+  </ul>
+
+  <h3><span class="rank">2</span>Nâng cấp eval (xem mục 04 dưới về paper)</h3>
+  <p>HumanEval/MBPP <strong>đã bão hòa</strong>. Thêm: <strong>SWE-bench Verified Mini</strong> (50 task, chạy vài giờ, có leaderboard HAL công khai) + <strong>LiveCodeBench</strong> (chống nhiễm dữ liệu). Giữ bộ <em>curated-hard</em> làm tín hiệu nội bộ trung thực. <span class="dim">Chưa nên chạy full SWE-bench Lite (300 task) — 20-40h trên máy của bạn.</span></p>
+
+  <div class="callout"><span class="lbl">Bỏ qua lúc này</span> Multi-agent nặng và LATS/tree-search — bằng chứng cho thấy ở quy mô 14B chúng chủ yếu <em>khuếch đại điểm yếu nhất</em> của model (tự đánh giá) và tốn 3-10× token mà lợi không đáng. Scaffolding tốt > multi-agent.</div>
+</section>
+
+<section id="research" class="section">
+  <h2><span class="n">04</span>Đào sâu <code>no_action</code> — sân chơi tùy chọn</h2>
+  <p class="lead">Hướng này <strong>không bắt buộc</strong>. Nếu bạn thích đào sâu, <code>no_action</code> là chỗ tuyệt để thử ý tưởng/mô hình từ các paper; và nếu sau này muốn viết lại thành report hay đem nộp đâu đó cũng được. Nhưng ưu tiên số một luôn là: làm dự án của bạn tốt hơn và bạn hiểu rõ nó.</p>
+
+  <div class="card">
+    <p class="t">Câu hỏi nghiên cứu (RQ)</p>
+    <p>"Với một model <em>local nhỏ</em> trong vòng ReAct, bao nhiêu phần của khoảng cách năng lực là do <strong>tool-engagement</strong> (<code>no_action</code>) so với <strong>code sai</strong>?" — trình bày như một phép <em>phân rã</em> lỗi.</p>
+  </div>
+
+  <h3>Thí nghiệm khiến reviewer tin</h3>
+  <ul>
+    <li>Báo cáo <code>no_action</code> rate + độ chính xác có-điều-kiện theo từng tầng độ khó.</li>
+    <li>Ablation: ≥2 cỡ model (vd 8B vs 14B) + ≥1 biến thể guardrail, kèm <strong>delta</strong> nó mang lại.</li>
+    <li>So với <em>control</em> không guardrail; nhiều <strong>seed + variance</strong>, không phải 1 lần chạy.</li>
+    <li>Tách "prose thật vs parse-miss" (mục 02) — bản thân nó là một kết quả.</li>
+  </ul>
+
+  <div class="callout key"><span class="lbl">Nếu lúc nào đó muốn công bố</span> Hoàn toàn tùy chọn — nhưng nếu thích: hàng xóm gần nhất là <em>When2Tool</em> (arXiv 2605.09252), nghiên cứu chuyện model "ngại gọi tool" trên benchmark tổng hợp. Khác biệt của bạn: đo <strong>in-the-wild trên một coding-agent thật, model local 14B</strong> — chiều sâu. Chỗ hợp để nộp: <strong>ICBINB @ ICLR 2026</strong> (workshop negative-results/limitations) hoặc chỉ cần để <strong>arXiv</strong> kèm repo. Nhắc lại: bonus, không phải mục tiêu.</div>
+</section>
+
+<section id="models" class="section">
+  <h2><span class="n">05</span>Có nên đổi model? (giảm no_action)</h2>
+  <p class="lead">Qwen3-14B ổn nhưng <em>không tối ưu</em> cho tool-engagement. Đây là một đòn bẩy mạnh — và bản thân việc A/B test có thể thành một trục của paper.</p>
+  <table>
+    <thead><tr><th>Model</th><th>Cỡ / VRAM</th><th>Điểm mạnh</th><th>Ghi chú</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Devstral-Small-2</strong></td><td>24B · vừa 1× A6000 (FP8)</td><td><strong>68% SWE-bench Verified</strong>, train chuyên cho tool-use trong scaffold agent</td><td><span class="ok">Ứng viên A/B số 1 để giảm no_action</span></td></tr>
+      <tr><td><strong>GLM-4.7-Flash</strong></td><td>30B MoE (~3.6B active) · ~24GB</td><td>điểm <em>τ²-bench</em> (multi-turn tool) cao nhất tìm được; 59% SWE-bench</td><td>kiểm tra hỗ trợ tool-call trong vLLM trước</td></tr>
+      <tr><td><strong>Qwen3-32B</strong></td><td>32B · 2× A6000 (TP=2)</td><td>BFCL v3 ~75.7% — tool-calling mạnh hơn hẳn 14B</td><td>cùng họ Qwen → đổi ít ma sát nhất</td></tr>
+      <tr><td>Qwen3-14B <span class="dim">(hiện tại)</span></td><td>14B · ~28GB, 1 card</td><td>generalist ổn, minh bạch</td><td>baseline; tool-engagement là điểm yếu</td></tr>
+    </tbody>
+  </table>
+  <div class="callout"><span class="lbl">Gợi ý</span> A/B test <strong>Devstral-Small-2</strong> trước (vừa 1 card, không đổi phần cứng, train sẵn để "hành động"). Nếu muốn ở lại họ Qwen thì nhảy thẳng <strong>32B</strong> (TP=2), đừng quanh quẩn 14B. Giữ Qwen3-14B làm baseline để so — đây chính là một trục thí nghiệm đẹp cho paper.</div>
+</section>
+
+<section id="training" class="section">
+  <h2><span class="n">06</span>Fine-tune (Phase 3) & tự cải thiện (Phase 4)</h2>
+  <p class="lead">2× A6000 (96GB) <strong>thừa sức</strong>. Vấn đề không phải VRAM mà là <em>chất lượng dữ liệu</em>.</p>
+
+  <h3>Phase 3 — fine-tune trên chính trace của agent</h3>
+  <ul>
+    <li><strong>Rejection-sampling → SFT (QLoRA)</strong>: lấy các trace <em>thành công VÀ có gọi tool</em>, lọc sạch, SFT bằng Unsloth (Qwen3-14B vừa <em>1</em> A6000). Cần ~500-2000 trace chất lượng; dưới 500 dễ overfit.</li>
+    <li><strong>Giữ format tool-call</strong>: trộn ~10% dữ liệu "replay" function-calling (vd <code>glaiveai/glaive-function-calling-v2</code>) để adapter không làm trôi schema tool — lỗi regression phổ biến nhất sau SFT.</li>
+    <li><strong>Sau khi SFT ổn → GRPO</strong>: dùng chính eval harness làm reward (pass/fail), thêm phạt -1 cho <code>no_action</code>. Bỏ qua DPO/PPO lúc đầu cho đỡ phức tạp.</li>
+    <li>Tách <em>held-out</em> trước khi gom data; tuyệt đối không eval trên trace đã train.</li>
+  </ul>
+
+  <h3>Phase 4 — tự cải thiện từ trace</h3>
+  <ul>
+    <li><strong>DPO trên cặp (engaged-success vs no_action-fail)</strong> đào từ chính trace của bạn — tín hiệu preference rẻ, đúng đích.</li>
+    <li><strong>EEF-style</strong>: khai thác hành động tốt đầu tiên từ các trace <em>thất bại</em> (không chỉ trace thành công) — đã được chứng minh hơn RFT thuần.</li>
+    <li>Trước khi train gì: chạy <strong>Reflexion + DSPy</strong> (không cần train) để đo xem prompt/memory vá được bao nhiêu — framing "đo thật" rất hợp gu bạn.</li>
+  </ul>
+</section>
+
+<section id="verdict" class="section">
+  <h2><span class="n">07</span>Đi tới đâu — và nguồn</h2>
+  <p class="lead">Trả lời thẳng câu "phát triển tới điểm nào được nữa".</p>
+  <div class="callout key"><span class="lbl">Kết luận</span> Không vượt frontier về năng lực — và đó không phải mục tiêu. Trước hết, đây là <strong>dự án của bạn</strong>: đẩy tới đâu là tùy bạn thấy vui và học được gì. Nó có thể thành (1) một agent local <em>vững, có sandbox, scaffolding tốt, đo trung thực</em> đúng cái niche minh bạch/local mà <strong>Pi chứng minh là có thật</strong>; và (2) nếu thích, một sân để thử các ý tưởng nghiên cứu quanh <code>no_action</code> — bonus thú vị, không phải cái mác bắt buộc.</div>
+  <p><strong>Bước đầu tiên mình đề xuất:</strong> audit lại các trace <code>no_action</code> để tách "prose thật vs parse-miss" (mục 02). Nhanh, rẻ, và có thể làm sắc lại (hoặc đổi hẳn) phát hiện headline trước khi xây thêm bất cứ gì.</p>
+
+  <h3>Nguồn chính</h3>
+  <p class="src">
+    Pi: <a href="https://github.com/badlogic/pi-mono">github.com/badlogic/pi-mono</a> ·
+    <a href="https://mariozechner.at/posts/2025-11-30-pi-coding-agent/">bài giới thiệu Pi</a><br>
+    no_action / tool-calling: <a href="https://arxiv.org/pdf/2605.09252">When2Tool 2605.09252</a> ·
+    <a href="https://docs.vllm.ai/en/latest/features/tool_calling/">vLLM tool_choice docs</a> ·
+    <a href="https://github.com/vllm-project/vllm/issues/29814">vLLM #29814 (parse bug)</a> ·
+    <a href="https://arxiv.org/abs/2402.01030">CodeAct 2402.01030</a> ·
+    <a href="https://arxiv.org/abs/2303.11366">Reflexion 2303.11366</a><br>
+    Eval: <a href="https://hal.cs.princeton.edu/swebench_verified_mini">SWE-bench Verified Mini (HAL)</a> ·
+    <a href="https://www.codesota.com/benchmark/livecodebench">LiveCodeBench</a> ·
+    <a href="https://epoch.ai/blog/swebench-docker">chạy SWE-bench nhanh (Epoch)</a><br>
+    Model: <a href="https://huggingface.co/mistralai/Devstral-Small-2-24B-Instruct-2512">Devstral-Small-2</a> ·
+    <a href="https://gorilla.cs.berkeley.edu/leaderboard.html">BFCL (Berkeley)</a><br>
+    Train: <a href="https://unsloth.ai/docs/models/tutorials/qwen3-how-to-run-and-fine-tune">Unsloth Qwen3</a> ·
+    <a href="https://arxiv.org/abs/2210.11610">LLMs Can Self-Improve 2210.11610</a> ·
+    <a href="https://arxiv.org/abs/2504.13145">EEF 2504.13145</a><br>
+    Paper venue: <a href="https://sites.google.com/view/icbinb-2026/home">ICBINB @ ICLR 2026</a> ·
+    scaffolding: <a href="https://arxiv.org/html/2511.10037v1">Planner-centric 2511.10037</a> ·
+    <a href="https://github.com/swe-agent/swe-agent">SWE-agent</a> ·
+    <a href="https://github.com/Aider-AI/aider">Aider (repo-map)</a>
+  </p>
+</section>
+</main>
+<script>
+  const pbar=document.getElementById('pbar');
+  addEventListener('scroll',()=>{const h=document.documentElement;pbar.style.width=(h.scrollTop/(h.scrollHeight-h.clientHeight)*100)+'%';},{passive:true});
+  const links=[...document.querySelectorAll('#toc a')];
+  const secs=links.map(a=>document.querySelector(a.getAttribute('href')));
+  addEventListener('scroll',()=>{let i=secs.findIndex(s=>s&&s.getBoundingClientRect().top>120);if(i===-1)i=secs.length;i=Math.max(0,i-1);links.forEach((a,k)=>a.classList.toggle('active',k===i));},{passive:true});
+</script>
+</body></html>

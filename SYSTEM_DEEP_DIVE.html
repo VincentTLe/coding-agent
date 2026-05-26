@@ -108,19 +108,24 @@
     <a href="#foundations"><span class="n">01</span>Nền tảng: LLM làm gì</a>
     <a href="#agent-concepts"><span class="n">02</span>Chatbot → agent (ReAct)</a>
     <a href="#serving"><span class="n">03</span>Chạy model (vLLM)</a>
-    <a href="#system"><span class="n">04</span>Hệ thống của mình</a>
-    <a href="#eval"><span class="n">05</span>Đo lường (eval)</a>
-    <a href="#differentiation"><span class="n">06</span>Cái gì là của riêng mình</a>
+    <a href="#map"><span class="n">04</span>Bản đồ + system prompt</a>
+    <a href="#tools-code"><span class="n">05</span>Code: tools.py</a>
+    <a href="#agent-code"><span class="n">06</span>Code: agent.py</a>
+    <a href="#repl-code"><span class="n">07</span>REPL: chat.py</a>
+    <a href="#trace"><span class="n">08</span>Ghép lại: trace</a>
+    <a href="#eval"><span class="n">09</span>Đo lường (eval)</a>
+    <a href="#differentiation"><span class="n">10</span>Của riêng mình</a>
+    <a href="#glossary"><span class="n">11</span>Glossary + nguồn</a>
   </nav>
 </div>
 <div class="progress"><div class="progress-bar" id="pbar"></div></div>
 <main>
 <div class="hero" id="top">
   <h1>Coding Agent, từ đầu tới cuối</h1>
-  <p class="tagline">Một AI coding agent viết từ số 0 — không framework — điều khiển một model <strong>Qwen3-14B chạy local</strong> để đọc, sửa, chạy và <em>tự kiểm chứng</em> code.</p>
-  <p>Trang này giải thích toàn bộ hệ thống <strong>từ nguyên lý gốc</strong>: một LLM thực sự làm gì, làm sao biến nó từ "chatbot biết nói" thành "agent biết làm", mình ghép các mảnh ra sao, và làm sao <em>đo</em> được nó thật sự chạy được — chứ không phải "có vẻ chạy". Đọc theo thứ tự 01 → 06, mỗi mục xây trên mục trước.</p>
-  <div class="callout"><span class="lbl">Luận điểm trung thực</span> Dự án này <strong>không</strong> mạnh hơn Claude Code hay Codex về năng lực thô. Giá trị nằm ở chỗ khác: <em>minh bạch</em> (tự viết từng dòng), <em>local + riêng tư</em> (không gửi code đi đâu), <em>đo lường trung thực</em> (627 task, test bị giấu) — và một <em>phát hiện thực nghiệm của riêng mình</em> về việc agent "nói thay vì làm".</div>
-  <p class="meta">Math/Stat 361 — Knox College · advisor Prof. Andrew Leahy · Qwen3-14B (BF16) qua vLLM · 32K context</p>
+  <p class="tagline">Một AI coding agent viết từ số 0 — không framework — điều khiển <strong>Qwen3-14B chạy local</strong> để đọc, sửa, chạy và <em>tự kiểm chứng</em> code. Tài liệu này đi từ <em>nguyên lý</em> tới <em>từng dòng code thật</em>.</p>
+  <p>Mục tiêu: một người chưa biết gì đọc xong cũng hiểu hệ thống <strong>từ đầu tới cuối</strong> — LLM thực sự làm gì (§01–03), rồi <strong>đọc thẳng code</strong> từng file và cách chúng móc nối (§04–08), cuối cùng là cách <em>đo</em> nó và cái gì là của riêng mình (§09–11). Đọc theo thứ tự 01 → 11.</p>
+  <div class="callout"><span class="lbl">Luận điểm trung thực</span> Dự án này <strong>không</strong> mạnh hơn Claude Code hay Codex về năng lực thô. Giá trị nằm ở chỗ khác: <em>minh bạch</em> (tự viết + hiểu từng dòng), <em>local + riêng tư</em>, <em>đo lường trung thực</em> (627 task, test bị giấu) — và một <em>phát hiện thực nghiệm của riêng mình</em> về việc agent "nói thay vì làm".</div>
+  <p class="meta">Math/Stat 361 — Knox College · Qwen3-14B (BF16) qua vLLM · ~2,194 dòng code (src + cli)</p>
 </div>
 
 <section id="foundations" class="section">
@@ -296,122 +301,747 @@ resp = client.chat.completions.create(
   <div class="callout key"><span class="lbl">VRAM &amp; quantization</span> Kích thước weights ≈ <strong>số params × số byte mỗi param</strong>. <em>BF16</em> dùng 2 byte/param → 14B × 2 ≈ 28GB. <em>Quantization</em> (vd FP8 = 1 byte, 4-bit = 0.5 byte) thu nhỏ model để tốn ít VRAM hơn, nhưng đánh đổi bằng một chút độ chính xác. Ở đây 28GB đã vừa 1 A6000 nên mình giữ BF16 — ưu tiên chất lượng reasoning thay vì tiết kiệm VRAM.</div>
 </section>
 
-<section id="system" class="section">
-  <h2><span class="n">04</span>Hệ thống của mình, từ đầu tới cuối</h2>
-  <p class="lead">Toàn bộ agent gói gọn trong ba file Python — không framework, không lớp trừu tượng giấu mặt. Mọi dòng đều đọc được và đều có lý do tồn tại.</p>
+<section id="map" class="section">
+  <h2><span class="n">04</span>Bản đồ hệ thống + luật cho model</h2>
+  <p class="lead">Trước khi đọc từng dòng code, hãy nhìn toàn cảnh: 5 file nào gánh việc chính, và đâu là "luật chơi" mà model phải tuân theo.</p>
 
-  <h3>Kiến trúc 3 mảnh</h3>
-  <p>Tách trách nhiệm rạch ròi: một file <em>nghĩ</em> (vòng lặp), một file <em>làm</em> (tool + sandbox), một file <em>chỉ đường</em> (system prompt). Mỗi mảnh đổi độc lập với mảnh kia.</p>
+  <h3>Bản đồ file — repo thật ra trông thế nào</h3>
+  <p>Toàn bộ tác nhân (agent) sống trong hai thư mục <em>src/</em> (lõi) và <em>cli/</em> (giao diện), cộng lại khoảng <strong>2,194 dòng code</strong>. Đừng tin con số "3 file" cũ — thực tế có 5 file gánh việc, mỗi file một vai rõ ràng:</p>
 
-  <div class="diagram">
-    <div class="dbox hl">src/agent.py<span class="s">vòng lặp ReAct · run_agent()</span></div>
-    <div class="darrow">⇄</div>
-    <div class="dcol">
-      <div class="dbox">src/tools.py<span class="s">10 tool + execute_tool() + _safe_path() sandbox</span></div>
-      <div class="dbox">src/prompts.py<span class="s">SYSTEM_PROMPT — luật chơi cho model</span></div>
-    </div>
-  </div>
-
-  <p><strong>agent.py</strong> gửi <code>messages + TOOL_SCHEMAS</code> cho model; model trả về content (xong) hoặc <code>tool_calls</code>. Mỗi tool_call được đẩy qua <code>execute_tool(name, args, workspace)</code> trong <strong>tools.py</strong>, kết quả append lại dưới <code>role:"tool"</code> rồi lặp tiếp. <strong>prompts.py</strong> chỉ chứa <code>SYSTEM_PROMPT</code> — tách riêng để dễ versioning khi gom trace cho training về sau.</p>
-
-  <h3>10 tool theo 4 nhóm</h3>
-  <p>Model không tự chạm vào đĩa — nó <em>xin</em> một tool, dispatcher mới thực thi. Mười tool chia làm bốn nhóm theo việc chúng làm:</p>
-
-  <table>
-    <thead>
-      <tr><th>Nhóm</th><th>Tool</th><th>Vai trò</th></tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><strong>File I/O</strong></td>
-        <td><span class="tag">read_file</span> <span class="tag">write_file</span> <span class="tag">apply_patch</span> <span class="tag">multi_edit</span></td>
-        <td>Đọc / ghi đè / sửa phẫu thuật / sửa nhiều chỗ atomic</td>
-      </tr>
-      <tr>
-        <td><strong>Discovery</strong></td>
-        <td><span class="tag">list_dir</span> <span class="tag">glob_files</span> <span class="tag">grep_files</span></td>
-        <td>Xem layout / tìm file theo tên / tìm dòng theo regex</td>
-      </tr>
-      <tr>
-        <td><strong>Execution</strong></td>
-        <td><span class="tag">run_bash</span> <span class="tag">run_python</span></td>
-        <td>Chạy shell (pytest, git) / chạy snippet Python</td>
-      </tr>
-      <tr>
-        <td><strong>Delegation</strong></td>
-        <td><span class="tag">spawn_subagent</span></td>
-        <td>Giao subtask cho một agent con cô lập</td>
-      </tr>
-    </tbody>
-  </table>
-
-  <div class="callout">
-    <span class="lbl">Ý chính</span>
-    Registry kiểu <em>"chỉ-thêm"</em>: thêm tool = append function vào dict <code>TOOLS</code> và schema vào <code>TOOL_SCHEMAS</code> — <strong>vòng lặp trong agent.py không đụng tới một dòng</strong>. Một <code>assert</code> lúc import bắt ngay nếu hai bên lệch tên.
-  </div>
-
-  <h3>workspace là tham số tường minh</h3>
-  <p>Mọi tool function nhận <code>workspace: Path</code> dưới dạng keyword-only; <code>execute_tool()</code> tự inject nó vào từng lời gọi (model không bao giờ gửi). Trước khi chạm đĩa, <code>_safe_path(path, workspace)</code> resolve đường dẫn rồi <em>từ chối</em> nếu nó thoát khỏi sandbox — đây là phòng thủ path-traversal (CWE-22), chặn model mò sang <code>/etc</code> hay <code>~/.ssh</code>.</p>
-
-  <pre><code class="language-python">def _safe_path(path: str, workspace: Path) -> Path:
-    p = (workspace / path).resolve()
-    # workspace phải là tổ tiên của p — nếu không, p đã ra ngoài sandbox
-    if workspace not in p.parents and p != workspace:
-        raise ValueError(f"path {p} escapes workspace {workspace}")
-    return p</code></pre>
-
-  <div class="callout warn">
-    <span class="lbl">Refactor</span>
-    Trước đây <code>workspace</code> là <strong>biến global</strong> set qua <code>set_workspace()</code> → <code>import</code> có side-effect và hai agent chạy chung process sẽ giẫm chân nhau. Đổi thành tham số tường minh khiến code sạch hơn, <em>test được</em>, và an toàn khi subagent chạy với workspace khác.
-  </div>
-
-  <h3>Hợp đồng lỗi (error contract)</h3>
-  <p>Đây là quyết định thiết kế quan trọng nhất cho độ bền. Khi một tool gặp sự cố — file không tồn tại, regex hỏng, lệnh timeout — nó <strong>trả về một string bắt đầu bằng <code>"ERROR: ..."</code></strong> thay vì raise exception.</p>
-
-  <div class="grid c2">
+  <div class="grid c3">
     <div class="card">
-      <p class="t">Nếu raise</p>
-      <p>Exception bubble lên vòng lặp → <code>run_agent</code> crash → cả task tính là hỏng. Một lỗi nhỏ giết toàn bộ.</p>
+      <p class="t">src/prompts.py <span class="dim">(68)</span></p>
+      <p><strong>Luật.</strong> Chứa <em>SYSTEM_PROMPT</em> — thông điệp hệ thống duy nhất khai báo 10 tool, quy trình làm việc và các quy tắc model phải theo.</p>
     </div>
     <div class="card">
-      <p class="t">Vì trả string</p>
-      <p>Vòng lặp sống sót, model <em>đọc</em> dòng ERROR ở turn sau, hiểu mình sai ở đâu, rồi thử lại. Lỗi trở thành phản hồi.</p>
+      <p class="t">src/tools.py <span class="dim">(925)</span></p>
+      <p><strong>Làm.</strong> 10 tool + sandbox <em>_safe_path</em> + dispatcher <em>execute_tool</em>. Đây là đôi tay thật sự chạm vào đĩa.</p>
+    </div>
+    <div class="card">
+      <p class="t">src/agent.py <span class="dim">(428)</span></p>
+      <p><strong>Nghĩ.</strong> Vòng lặp <em>run_agent</em> — chu trình ReAct: gọi model → chạy tool → nạp kết quả → lặp lại.</p>
+    </div>
+    <div class="card">
+      <p class="t">cli/chat.py <span class="dim">(676)</span></p>
+      <p><strong>Trò chuyện.</strong> REPL streaming (<em>stream=True</em>) + nén ngữ cảnh (<em>compact_messages</em>) khi hội thoại quá dài.</p>
+    </div>
+    <div class="card">
+      <p class="t">eval/ <span class="dim">(run.py 515)</span></p>
+      <p><strong>Đo.</strong> Chấm điểm trung thực trên 627 task bằng hidden-test, có cổng validate. Đây là cái thước.</p>
+    </div>
+    <div class="card">
+      <p class="t"><span class="dim">+ phụ trợ</span></p>
+      <p><span class="dim">cli/solve.py (97), eval/validate_tasks.py (118) — cổng vào một-lần và bộ kiểm tra task.</span></p>
     </div>
   </div>
 
-  <div class="callout key">
-    <span class="lbl">Key idea</span>
-    <code>execute_tool()</code> bọc try/except để biến <em>mọi</em> exception lọt lưới thành <code>"ERROR: ..."</code>. Một tool hỏng <strong>không bao giờ giết vòng lặp</strong> — agent tự phục hồi.
-  </div>
-
-  <h3>Context compaction — sống sót trong 32K</h3>
-  <p>API là stateless: <code>messages</code> list là bộ nhớ duy nhất, và nó phình lên sau mỗi turn. Khi ước lượng vượt <strong>~24k token</strong> (<code>COMPACT_THRESHOLD_TOKENS = 24000</code>, ~75% của cửa sổ 32K), REPL tóm tắt phần lịch sử cũ thành một message duy nhất và <strong>giữ nguyên 10 message gần nhất</strong> (<code>KEEP_RECENT_MESSAGES = 10</code>) — đủ headroom để không bao giờ chạm trần 32K giữa chừng.</p>
+  <p>Đọc theo luồng dữ liệu thì dễ nhớ: <em>prompts.py</em> đặt luật → <em>agent.py</em> điều phối vòng "nghĩ" → mỗi vòng gọi vào <em>tools.py</em> để "làm" → <em>chat.py</em> là cửa người dùng → <em>eval/</em> đo kết quả.</p>
 
   <div class="diagram">
-    <div class="dbox">history dài<span class="s">&gt; 24k token</span></div>
+    <div class="dbox">prompts.py<span class="s">luật chơi</span></div>
     <div class="darrow">→</div>
-    <div class="dbox">summary 1 msg<span class="s">phần cũ, nén lại</span></div>
-    <div class="darrow">+</div>
-    <div class="dbox hl">10 msg cuối<span class="s">verbatim</span></div>
+    <div class="dbox hl">agent.py<span class="s">nghĩ (run_agent)</span></div>
+    <div class="darrow">⇄</div>
+    <div class="dbox">tools.py<span class="s">làm (10 tool)</span></div>
+    <div class="darrow">→</div>
+    <div class="dbox">eval/<span class="s">đo</span></div>
   </div>
 
-  <h3>spawn_subagent — chia để trị</h3>
-  <p>Cho một subtask độc lập (đếm file, kiểm tra hàm có tồn tại không), agent cha gọi <code>spawn_subagent</code> để chạy một agent con trong <strong>subprocess riêng</strong>. Hai lợi ích cốt lõi:</p>
+  <h3><code>SYSTEM_PROMPT</code> là gì</h3>
+  <p>Mỗi lần agent khởi động, nó nhét đúng một <em>system message</em> lên đầu danh sách <em>messages</em>. Đó chính là <em>SYSTEM_PROMPT</em> trong <em>prompts.py</em>: bản hợp đồng nói cho model biết nó có <strong>tool gì</strong>, làm theo <strong>quy trình nào</strong>, và phải tuân <strong>luật gì</strong>. Dưới đây là chính bản prompt thật (đã rút gọn phần liệt kê tool):</p>
+
+  <pre><code class="language-python">SYSTEM_PROMPT = """You are a focused coding assistant working inside a small Python repository.
+
+You have 10 tools. Pick the RIGHT one for each task — don't reach for run_bash when a structured tool exists.
+# ... (liệt kê 10 tool: read_file / write_file / apply_patch / multi_edit /
+#      list_dir / glob_files / grep_files / run_bash / run_python / spawn_subagent)
+
+Workflow for a typical bug-fix task:
+  1. list_dir('.') to see the repo layout.
+  2. run_bash('pytest -x') to see what fails.
+  3. read_file(failing_test) and read_file(target_file) ...
+  4. apply_patch to fix the bug surgically (NOT write_file unless rewriting whole file).
+  5. run_bash('pytest') to confirm. If still failing, iterate.
+  6. When done, reply with a short final message and DO NOT call more tools.
+
+Rules:
+  - To create or change a file you MUST call a tool (write_file / apply_patch /
+    multi_edit). Writing code or a plan as prose in your reply changes NOTHING on
+    disk. Never answer with code-in-prose instead of a tool call.
+  - Always verify your fix with the test command before declaring done.
+  - Never edit files outside the workspace.
+  - If you don't understand a task, ask one clarifying question instead of guessing."""</code></pre>
+
+  <p>Ba phần đáng chú ý:</p>
   <ul>
-    <li><strong>Cô lập context</strong> — agent con có <code>messages</code> riêng, reasoning của nó không làm phình lịch sử của cha.</li>
-    <li><strong>Chống đệ quy</strong> — subprocess phẳng thay vì gọi đệ quy in-process, không có nguy cơ stack-overflow; crash của con cũng không kéo cha chết theo, và timeout 300s ép bằng một SIGKILL.</li>
+    <li><strong>Danh mục tool</strong> — model được nhắc tên và công dụng từng tool, kèm gợi ý chọn đúng tool (ví dụ sửa 1–10 dòng thì dùng <em>apply_patch</em>, đừng dùng <em>write_file</em>).</li>
+    <li><strong>Quy trình mẫu</strong> — một kịch bản sửa bug 6 bước: nhìn repo → chạy test → đọc file → vá → chạy lại test → trả lời ngắn và dừng. Đây là "đường ray" để model không lạc.</li>
+    <li><strong>Luật cốt tử</strong> — dòng quan trọng nhất: <em>"To create or change a file you MUST call a tool ... Writing code or a plan as prose ... changes NOTHING on disk."</em></li>
   </ul>
 
-  <h3>Vì sao đây là "thứ tin cậy được", không chỉ là demo</h3>
-  <p>Bốn cơ chế cộng lại tạo nên sự khác biệt:</p>
+  <div class="callout warn">
+    <span class="lbl">Luật cốt tử</span>
+    Model <strong>BẮT BUỘC gọi tool</strong> để chạm vào đĩa. Viết code dưới dạng văn bản trong câu trả lời thì <strong>không thay đổi gì cả</strong> — file vẫn y nguyên. Chính luật này là lý do sinh ra phát hiện <em>no_action</em> mà ta sẽ gặp ở §06/§09: khi model "kể" thay vì "làm", agent coi như nó chưa hành động.
+  </div>
+
   <div class="callout key">
-    <span class="lbl">Reliability = tổng của bốn lớp</span>
-    <strong>sandbox</strong> (agent không phá ra ngoài) + <strong>verify-loop</strong> (model tự chạy <code>pytest</code> để kiểm chứng việc mình làm) + <strong>compaction</strong> (không chết vì tràn context) + <strong>error-contract</strong> (một lỗi không giết cả run). Đó chính là <em>khác biệt giữa một demo và một thứ tin cậy được</em>.
+    <span class="lbl">Ý chính</span>
+    <em>prompts.py</em> là <strong>"luật chơi"</strong> — một file 68 dòng đặt ra mọi kỳ vọng. Các phần tiếp theo (§05–§08) sẽ đi vào code <em>thực thi</em> và <em>sử dụng</em> bộ luật đó: tools.py làm, agent.py nghĩ, chat.py trò chuyện, eval/ đo.
   </div>
 </section>
 
+<section id="tools-code" class="section">
+<h2><span class="n">05</span>Đọc code: <code>tools.py</code> — 10 tool + sandbox + dispatcher</h2>
+<p class="lead">Tầng "tay chân" của agent: 10 hàm Python thật sự đụng vào file và shell, một cái khoá an toàn (<code>_safe_path</code>), và một người gác cổng (<code>execute_tool</code>) biến mọi lỗi thành chuỗi text thay vì làm sập agent.</p>
+
+<div class="callout"><span class="lbl">Ý chính</span> Model (Qwen3-14B) không "tự" làm gì cả — nó chỉ nói "hãy gọi tool tên X với arguments này". <code>tools.py</code> là nơi những lời nói đó biến thành hành động thật, và là nơi ta dựng hàng rào an toàn quanh hành động đó.</div>
+
+<h3>5.1 — <code>_safe_path</code>: cái khoá chống path-traversal (CWE-22)</h3>
+<p>Đây là hàm <em>quan trọng nhất về mặt an toàn</em> trong cả file. Mọi tool đụng tới file đều đi qua nó trước. Mục tiêu: model chỉ được đọc/ghi <strong>bên trong workspace</strong> (thư mục sandbox), không thể thò tay ra <code>/etc/passwd</code> hay <code>~/.ssh</code>.</p>
+<pre><code class="language-python">def _safe_path(path: str, workspace: Path) -> Path:
+    """Resolve path relative to `workspace` and refuse to escape it."""
+    # Ghép workspace + path → resolve → đường dẫn tuyệt đối.
+    p = (workspace / path).resolve()
+
+    # Nếu workspace KHÔNG nằm trong danh sách thư mục cha của p
+    # → p đang ở ngoài sandbox → reject.
+    # `p != workspace` để cho phép case `path = "."` (chính workspace).
+    if workspace not in p.parents and p != workspace:
+        raise ValueError(f"path {p} escapes workspace {workspace}")
+    return p</code></pre>
+<p>Đọc từng dòng:</p>
+<ul>
+<li><strong><code>p = (workspace / path).resolve()</code></strong> — ghép workspace với path model gửi, rồi <code>resolve()</code> "duỗi thẳng" nó: bỏ hết <code>..</code>, <code>.</code>, và đi theo symlink để ra <em>đường dẫn tuyệt đối, chuẩn hoá</em>. Đây là chìa khoá: nếu model gửi <code>path="../../etc/passwd"</code>, sau <code>resolve()</code> nó thành <code>/etc/passwd</code> thật sự — không còn che giấu được bằng <code>..</code> nữa.</li>
+<li><strong><code>workspace not in p.parents</code></strong> — <code>p.parents</code> là danh sách mọi thư mục cha của <code>p</code> (ví dụ <code>/a/b/c.txt</code> → <code>[/a/b, /a, /]</code>). Nếu <code>workspace</code> <em>không</em> nằm trong danh sách cha đó, nghĩa là <code>p</code> đã thoát ra ngoài sandbox → ném <code>ValueError</code>.</li>
+<li><strong><code>and p != workspace</code></strong> — trường hợp đặc biệt: khi <code>path="."</code>, kết quả <code>p</code> chính là <code>workspace</code>. Lúc đó <code>workspace</code> không nằm trong <code>parents</code> của chính nó, nên cần điều kiện phụ này để vẫn cho phép trỏ vào chính thư mục gốc.</li>
+</ul>
+<div class="callout warn"><span class="lbl">Tại sao phải <code>resolve()</code> TRƯỚC khi kiểm tra</span> Nếu chỉ so chuỗi text thô (<code>workspace/path</code>) mà không duỗi <code>..</code>, thì <code>"ws/../../secret"</code> trông vẫn "bắt đầu bằng ws" và lọt lưới. <code>resolve()</code> phá tan trò đó. Đây đúng là lỗ hổng <em>path traversal (CWE-22)</em> kinh điển, và 2 dòng này là cách vá nó.</div>
+
+<h3>5.2 — Toàn cảnh 10 tool, chia 4 nhóm</h3>
+<p>Mỗi tool là một hàm Python bình thường. Điểm chung: tham số <code>workspace: Path</code> luôn là <em>keyword-only</em> (đứng sau dấu <code>*</code> trong signature) — model không bao giờ gửi nó, mà <code>execute_tool</code> tự tiêm vào.</p>
+<table>
+<thead><tr><th>Nhóm</th><th>Tool</th><th>Làm gì (một dòng)</th></tr></thead>
+<tbody>
+<tr><td rowspan="4">File I/O</td><td><code>read_file</code></td><td>Đọc toàn bộ nội dung 1 file text.</td></tr>
+<tr><td><code>write_file</code></td><td>Ghi đè / tạo file — phải gửi <strong>full nội dung mới</strong>, không phải diff.</td></tr>
+<tr><td><code>apply_patch</code></td><td>Tìm-thay-thế phẫu thuật; <code>old_text</code> phải khớp <strong>đúng 1 lần</strong>.</td></tr>
+<tr><td><code>multi_edit</code></td><td>Nhiều edit lên 1 file, <strong>all-or-nothing</strong> (atomic).</td></tr>
+<tr><td rowspan="3">Discovery</td><td><code>list_dir</code></td><td>Liệt kê 1 thư mục (file + subdir + size), bỏ qua file ẩn.</td></tr>
+<tr><td><code>glob_files</code></td><td>Tìm file theo <em>tên/path</em> (glob, vd <code>**/*.py</code>).</td></tr>
+<tr><td><code>grep_files</code></td><td>Tìm dòng theo <em>nội dung</em> (regex, qua GNU grep).</td></tr>
+<tr><td rowspan="2">Execution</td><td><code>run_bash</code></td><td>Chạy lệnh shell (param là <code>command</code>), timeout 600s.</td></tr>
+<tr><td><code>run_python</code></td><td>Chạy snippet Python qua <code>python -c</code>, timeout 60s.</td></tr>
+<tr><td>Delegation</td><td><code>spawn_subagent</code></td><td>Đẻ ra 1 agent con (process riêng) lo subtask độc lập, timeout 300s.</td></tr>
+</tbody>
+</table>
+<div class="callout"><span class="lbl">Quy luật chọn tool</span> <span class="tag">glob</span> tìm file theo TÊN (rẻ, không đọc body) · <span class="tag">grep</span> tìm dòng theo NỘI DUNG (đắt hơn, scan body) · <span class="tag">list_dir</span> để "ngó tổng quan repo có gì". Có <code>apply_patch</code>/<code>multi_edit</code> rồi thì gần như không bao giờ cần ghi đè cả file lớn bằng <code>write_file</code>.</div>
+
+<h3>5.3 — <code>apply_patch</code>: luật "khớp đúng một lần"</h3>
+<p>Tool sửa code chủ lực. Thay vì ghi đè cả file (tốn token, dễ làm hỏng file lớn), nó tìm một đoạn text và thay bằng đoạn khác — giống Edit tool của Claude Code. Cái hay nằm ở luật <em>uniqueness</em>:</p>
+<pre><code class="language-python">def apply_patch(path: str, old_text: str, new_text: str, *, workspace: Path) -> str:
+    p = _safe_path(path, workspace)
+    if not p.exists():
+        return f"ERROR: file not found: {path}"
+    content = p.read_text(encoding="utf-8", errors="replace")
+
+    count = content.count(old_text)            # đếm số lần xuất hiện
+    if count == 0:
+        return f"ERROR: old_text not found in {path}. Read the file to get exact bytes."
+    if count > 1:
+        return (f"ERROR: old_text matches {count} places in {path}. "
+                "Add more context (surrounding lines) to make it unique.")
+    # ... count == 1: happy path
+    new_content = content.replace(old_text, new_text, 1)
+    p.write_text(new_content, encoding="utf-8")
+    return f"patched {path}: replaced {len(old_text)} chars with {len(new_text)} chars"</code></pre>
+<ul>
+<li><strong><code>count = content.count(old_text)</code></strong> — đếm xem đoạn cần thay xuất hiện bao nhiêu lần. Ba kết quả, ba số phận:</li>
+<li><strong>0 lần</strong> → không có gì để thay. Thường vì model nhớ sai bytes (thiếu indent, sai khoảng trắng) hoặc file đã bị đổi ở bước trước. Error nhắc thẳng <em>"Read the file to get exact bytes"</em> để model đọc lại.</li>
+<li><strong>&gt;1 lần</strong> → mơ hồ. Nếu <code>old_text="return 0"</code> mà file có 3 hàm cùng <code>return 0</code>, ta không biết thay cái nào → bắt model thêm context (vài dòng xung quanh) cho duy nhất. Đây là <em>safety property</em>: cấm "blind replace all" để khỏi sửa nhầm chỗ.</li>
+<li><strong>1 lần</strong> → happy path. <code>replace(..., 1)</code> (đối số thứ 3 = chỉ thay 1 lần) cho chắc, rồi <code>write_text</code> ghi đè một phát. File <em>không bị động</em> nếu bất kỳ check nào fail vì kiểm tra count đứng <em>trước</em> lệnh ghi.</li>
+</ul>
+
+<h3>5.4 — <code>multi_edit</code>: nhiều edit, một lần ghi = atomic</h3>
+<p>Khi cần sửa vài chỗ trong cùng một file, gọi <code>apply_patch</code> nhiều lần có rủi ro: nếu edit thứ 3 hỏng thì edit 1 và 2 <em>đã lỡ ghi xuống đĩa</em> — file kẹt ở trạng thái nửa vời. <code>multi_edit</code> giải quyết bằng cơ chế: <strong>đọc 1 lần → apply tuần tự trong RAM → ghi 1 lần</strong>.</p>
+<pre><code class="language-python">def multi_edit(path: str, edits: list, *, workspace: Path) -> str:
+    p = _safe_path(path, workspace)
+    if not p.exists():
+        return f"ERROR: file not found: {path}"
+    if not isinstance(edits, list) or not edits:
+        return "ERROR: edits must be a non-empty list of {old_text, new_text}"
+
+    content = p.read_text(encoding="utf-8", errors="replace")   # đọc 1 lần
+    original_len = len(content)
+    for i, edit in enumerate(edits, 1):
+        old = edit.get("old_text", "")
+        new = edit.get("new_text", "")
+        # ... validate old không rỗng ...
+        count = content.count(old)          # đếm TRÊN content đã sửa bởi edit trước
+        if count == 0:
+            return f"ERROR: edit #{i}: old_text not found (file not modified)"
+        if count > 1:
+            return f"ERROR: edit #{i}: old_text matches {count} places (file not modified)"
+        content = content.replace(old, new, 1)   # mutate in-memory, CHƯA ghi đĩa
+    p.write_text(content, encoding="utf-8")       # tất cả pass → ghi 1 lần
+    return f"applied {len(edits)} edits to {path} ({original_len} → {len(content)} chars)"</code></pre>
+<ul>
+<li><strong>Đọc một lần vào biến <code>content</code></strong>, rồi vòng <code>for</code> sửa lần lượt <em>trên biến đó</em> chứ không đụng đĩa.</li>
+<li><strong>"file not modified" trong mọi error</strong> — vì lệnh <code>p.write_text(...)</code> nằm <em>sau</em> vòng lặp. Edit nào fail uniqueness, ta <code>return</code> ngay; file gốc trên đĩa nguyên vẹn. Đó chính là tính <em>atomic / all-or-nothing</em>.</li>
+<li><strong>Tuần tự, không song song</strong> — <code>content.count(old)</code> đếm trên <code>content</code> <em>đã bị các edit trước thay đổi</em>. Nên edit #2 có thể tìm đoạn text chỉ tồn tại <em>sau khi</em> edit #1 chạy. Mặt trái: nếu edit #1 đổi <code>foo→bar</code> và edit #2 đổi <code>bar→baz</code>, kết quả cuối là <code>baz</code>. Thứ tự quan trọng.</li>
+<li><strong>Một <code>read</code> + một <code>write</code></strong> thay vì N lần — vừa nhanh hơn (disk I/O đắt), vừa an toàn hơn.</li>
+</ul>
+
+<h3>5.5 — <code>run_bash</code>: chạy shell, bắt trọn exit/stdout/stderr</h3>
+<p>Cửa ngõ ra thế giới shell: dùng cho <code>pytest</code>, <code>git</code>, <code>pip</code> — những việc các tool kia không lo. Lưu ý: tham số tên là <strong><code>command</code></strong> (không phải <code>cmd</code>).</p>
+<pre><code class="language-python">def run_bash(command: str, timeout: int = 600, *, workspace: Path) -> str:
+    log.info(f"[tools] bash> {command}")
+    try:
+        result = subprocess.run(
+            command,
+            shell=True,             # command là 1 chuỗi (cho pipe, redirect…)
+            cwd=workspace,          # CWD = sandbox, nên `ls` ra file trong workspace
+            capture_output=True,    # giữ stdout/stderr lại, không in ra terminal
+            text=True,              # stdout/stderr là str, không phải bytes
+            timeout=timeout,        # mặc định 600s; model có thể override
+        )
+    except subprocess.TimeoutExpired:
+        return f"ERROR: command timed out after {timeout}s"   # trả string, KHÔNG raise
+
+    parts = [f"exit_code: {result.returncode}"]
+    if result.stdout:
+        parts.append(f"stdout:\n{result.stdout}")
+    if result.stderr:
+        parts.append(f"stderr:\n{result.stderr}")
+    return "\n".join(parts)</code></pre>
+<ul>
+<li><strong><code>timeout=600</code></strong> (10 phút) — đủ thoáng cho <code>pytest</code> / <code>pip install</code> nhưng vẫn chống treo vĩnh viễn. Quá giờ thì <code>TimeoutExpired</code> được bắt và biến thành <em>error string</em>, không ném ra ngoài.</li>
+<li><strong><code>cwd=workspace</code></strong> — subprocess chạy ngay trong sandbox, nên đường dẫn tương đối ("ls", "cat foo.py") hoạt động đúng kỳ vọng.</li>
+<li><strong>Gói gọn kết quả thành 1 chuỗi đẹp</strong> — luôn có <code>exit_code</code>, thêm <code>stdout</code>/<code>stderr</code> nếu khác rỗng. Model đọc nguyên khối này để biết lệnh thành công hay hỏng và hỏng vì sao. <code>run_python</code> dùng đúng format này để model chỉ phải học 1 kiểu output cho cả hai.</li>
+</ul>
+
+<h3>5.6 — <code>spawn_subagent</code>: chia để trị, trong một process riêng</h3>
+<p>Tool "ủy quyền": agent cha đẻ ra một agent con để lo subtask độc lập (vd "đếm xem repo có bao nhiêu file Python"). Con chạy trong <strong>subprocess riêng</strong>, có <code>messages</code> list riêng — không làm phình context của cha, và nếu con sập thì cha vẫn sống.</p>
+<pre><code class="language-python">def spawn_subagent(goal: str, max_iters: int = 8, *, workspace: Path) -> str:
+    import sys
+    # STEP 1: tìm project root — đi ngược lên tới khi thấy src/agent.py
+    project_root = None
+    cur = workspace
+    for _ in range(10):                       # tối đa 10 cấp, chống loop vô hạn
+        if (cur / "src" / "agent.py").exists():
+            project_root = cur
+            break
+        if cur == cur.parent:                 # chạm root filesystem, hết đường lên
+            break
+        cur = cur.parent
+    if project_root is None:
+        return "ERROR: cannot find src/agent.py (project root not located)"
+
+    # STEP 2: chạy subprocess `python -m src.agent <goal> --workspace <ws>`
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "src.agent", goal, "--workspace", str(workspace)],
+            cwd=project_root, capture_output=True, text=True,
+            timeout=300,                      # 5 phút hard limit, không cho model chỉnh
+        )
+    except subprocess.TimeoutExpired:
+        return "ERROR: subagent timed out after 300s"
+
+    # STEP 3: cắt bớt output — giữ 2000 ký tự CUỐI (tail)
+    output = (result.stdout or "") + (result.stderr or "")
+    if len(output) > 2000:
+        output = "... [truncated, showing last 2000 chars]\n" + output[-2000:]
+    return f"subagent exit_code: {result.returncode}\n{output}"</code></pre>
+<ul>
+<li><strong>STEP 1 — đi tìm project root:</strong> <code>workspace</code> thường là <code>demo_repo/</code> (con cháu của project root), nhưng để chạy <code>python -m src.agent</code> thì cwd phải là nơi có thư mục <code>src/</code>. Vòng lặp đi ngược lên cha cho tới khi thấy marker <code>src/agent.py</code>, có chặn <strong>10 cấp</strong> để không loop vô hạn nếu symlink lỗi.</li>
+<li><strong>STEP 2 — subprocess riêng:</strong> truyền <code>--workspace str(workspace)</code> để agent con sandbox <em>đúng chỗ cha đang làm</em> (trước đây con bị hardcode về <code>demo_repo</code> — một bug cũ). <code>timeout=300</code> cố tình <em>không</em> cho model chỉnh để tránh bị set 1 tiếng.</li>
+<li><strong>STEP 3 — cắt đuôi (tail), không cắt đầu:</strong> lấy <em>2000 ký tự cuối</em> vì câu trả lời cuối của agent con và dòng "Agent finished." nằm ở cuối log. Gộp cả <code>stdout</code> lẫn <code>stderr</code> vì <code>logging</code> có thể đẩy ra một trong hai tuỳ cấu hình.</li>
+</ul>
+
+<h3>5.7 — Registry: <code>TOOLS</code> + <code>TOOL_SCHEMAS</code> + một <code>assert</code> lúc import</h3>
+<p>Hai cấu trúc song song giữ "append-only registry": <code>TOOLS</code> ánh xạ <em>tên → hàm Python thật</em> (cái chạy), còn <code>TOOL_SCHEMAS</code> là danh sách JSON Schema chuẩn OpenAI <em>model nhìn thấy</em> (cái mô tả). Thêm tool mới = nối vào cả hai, <strong>không phải sửa <code>agent.py</code></strong>.</p>
+<pre><code class="language-python">TOOLS = {
+    "read_file": read_file,
+    "write_file": write_file,
+    "run_bash": run_bash,
+    # Phase 2 additions:
+    "apply_patch": apply_patch,
+    "multi_edit": multi_edit,
+    "grep_files": grep_files,
+    "glob_files": glob_files,
+    "list_dir": list_dir,
+    "run_python": run_python,
+    "spawn_subagent": spawn_subagent,
+}
+
+TOOL_SCHEMAS = [ ... ]   # 1 JSON schema cho mỗi tool: {name, description, parameters}
+
+# Import-time invariant: tên trong TOOLS phải khớp CHÍNH XÁC tên trong TOOL_SCHEMAS.
+assert set(TOOLS) == {s["function"]["name"] for s in TOOL_SCHEMAS}, "TOOLS vs TOOL_SCHEMAS drift"</code></pre>
+<ul>
+<li><strong>Cái <code>assert</code> chạy lúc <em>import</em></strong> — nếu bạn thêm hàm vào <code>TOOLS</code> mà quên viết schema (hoặc lỡ đổi tên một bên), Python <em>sập ngay khi nạp module</em> với thông báo "TOOLS vs TOOL_SCHEMAS drift", thay vì để lỗi mơ hồ bùng ra lúc runtime giữa chừng một task. Đây là "fail fast" đúng nghĩa.</li>
+<li><strong><code>workspace</code> cố tình VẮNG MẶT trong mọi schema</strong> — model không được biết, không bao giờ gửi tham số này. Nó là <em>state của caller</em>, do <code>execute_tool</code> tiêm vào. Nhờ vậy model không thể tự ý đổi sandbox của mình.</li>
+<li><strong>Schema dùng chuẩn OpenAI</strong> (<code>type: "function"</code>, có <code>description</code> + <code>parameters</code>) nên cùng một file chạy được với GPT, Claude, vLLM, Ollama mà không sửa gì.</li>
+</ul>
+
+<h3>5.8 — <code>execute_tool</code>: dispatcher và hợp đồng "lỗi-là-chuỗi"</h3>
+<p>Người gác cổng duy nhất. Model trả về tên tool và một <em>chuỗi JSON</em> arguments (luôn là string, không phải dict). Hàm này: parse JSON → tra cứu hàm → gọi với <code>workspace</code> tiêm thêm → và <strong>bọc try/except để biến mọi thất bại thành chuỗi <code>"ERROR: ..."</code></strong>.</p>
+<pre><code class="language-python">def execute_tool(name: str, arguments: str, workspace: Path) -> str:
+    # 1. Tool không tồn tại → error string (không raise)
+    if name not in TOOLS:
+        return f"ERROR: unknown tool {name}. Available: {list(TOOLS)}"
+
+    # 2. Parse arguments JSON; rỗng → {}; hỏng → error string
+    try:
+        args = json.loads(arguments) if arguments else {}
+    except json.JSONDecodeError as e:
+        return f"ERROR: bad JSON arguments: {e}"
+
+    # 3. Gọi hàm: **args (model gửi) + workspace=... (ta tiêm). Bắt MỌI exception.
+    try:
+        result = TOOLS[name](**args, workspace=workspace)
+    except TypeError as e:
+        return f"ERROR: bad args for {name}: {e}"       # thiếu/sai kiểu tham số
+    except Exception as e:
+        return f"ERROR: {name} crashed: {e}"            # catch-all
+
+    # 4. Mọi tool đều khai báo -> str, nên trả thẳng kết quả.
+    return result</code></pre>
+<ul>
+<li><strong>Bước 1–2:</strong> tên tool sai, JSON arguments hỏng — tất cả thành chuỗi <code>ERROR:</code>, không ai bị ném exception.</li>
+<li><strong>Bước 3 là trái tim:</strong> <code>TOOLS[name](**args, workspace=workspace)</code> — <code>**args</code> bung dict thành keyword args (đúng những gì model gửi), và <code>workspace=workspace</code> là phần ta <em>tự tiêm</em>. <code>TypeError</code> (thiếu required arg, sai kiểu) và mọi <code>Exception</code> khác (vd <code>ValueError</code> từ <code>_safe_path</code> khi path thoát sandbox) đều bị bắt và gói lại thành text.</li>
+</ul>
+<div class="callout key"><span class="lbl">Error-as-string contract</span> Không tool nào được phép <em>raise</em> ra ngoài. Một tool hỏng phải trở thành <strong>feedback</strong>, không phải <strong>crash</strong>. Nhờ thế vòng lặp ReAct trong <code>agent.py</code> nhận lại một chuỗi <code>"ERROR: ..."</code> như mọi tool result bình thường, đưa nó vào <code>messages</code>, và model <em>tự đọc lỗi rồi thử lại</em> (đọc lại file để lấy đúng bytes, nới context cho unique, sửa JSON…). Toàn bộ hệ thống "tự phục hồi" đứng trên đúng một quyết định thiết kế nhỏ này.</div>
+
+<div class="diagram">
+<div class="dbox">model: name + args<span class="s">JSON string</span></div>
+<div class="darrow">→</div>
+<div class="dbox hl">execute_tool<span class="s">parse · lookup · inject ws</span></div>
+<div class="darrow">→</div>
+<div class="dbox">TOOLS[name](**args)<span class="s">try/except</span></div>
+<div class="darrow">→</div>
+<div class="dbox">str kết quả<span class="s">hoặc "ERROR: …"</span></div>
+</div>
+</section>
+
+<section id="agent-code" class="section">
+  <h2><span class="n">06</span>Đọc code: <code>agent.py</code> — vòng lặp <code>run_agent</code></h2>
+  <p class="lead">Đi từng dòng qua trái tim của hệ thống: cách <code>run_agent</code> nuôi một danh sách <code>messages</code> qua nhiều turn, gọi model, chạy tool, và biết khi nào dừng — kèm guardrail "nói mà không làm".</p>
+
+  <h3>Import không có tác dụng phụ: <code>get_client()</code> / <code>get_model()</code> lười</h3>
+  <pre><code class="language-python">_client: OpenAI | None = None
+
+def get_client() -> OpenAI:
+    """Trả về OpenAI client (singleton), dựng lười ở lần gọi đầu tiên."""
+    global _client
+    if _client is None:
+        load_dotenv()
+        base_url = os.environ["VLLM_BASE_URL"]
+        api_key = os.environ.get("VLLM_API_KEY", "not-needed")
+        _client = OpenAI(base_url=base_url, api_key=api_key)
+    return _client
+
+def get_model() -> str:
+    load_dotenv()
+    return os.environ["VLLM_MODEL_NAME"]</code></pre>
+  <p>Trước đây file này đọc <code>.env</code> và dựng client <strong>ngay lúc import</strong> — nghĩa là chỉ cần <code>import src.agent</code> là đã bắt buộc phải có <code>.env</code> + tạo kết nối. Eval harness, examples, hay test chỉ muốn <em>import</em> module sẽ crash nếu thiếu env. Cách sửa: đẩy mọi thứ vào hàm lười.</p>
+  <ul>
+    <li><strong><code>_client = None</code> ở module level, <code>global</code> trong hàm</strong>: đây là pattern <em>singleton</em> — lần gọi đầu tiên mới dựng client thật, các lần sau trả lại đúng object cũ (không tạo kết nối mới mỗi turn).</li>
+    <li><strong>Vì sao dựng ở lần gọi đầu, không phải lúc import?</strong> Để <code>import src.agent</code> hoàn toàn không có tác dụng phụ: không đọc <code>.env</code>, không cần biến môi trường, không mở socket. Chỉ khi <code>run_agent</code> thực sự cần gọi model thì client mới ra đời.</li>
+    <li><strong><code>get_model()</code> tách riêng</strong>: <code>load_dotenv()</code> là idempotent (gọi nhiều lần vô hại), nên đọc tên model ở đây an toàn kể cả khi client chưa dựng. Thiếu <code>VLLM_BASE_URL</code> hoặc <code>VLLM_MODEL_NAME</code> → crash ngay (fail fast), tốt hơn lỗi mơ hồ về sau.</li>
+  </ul>
+
+  <h3>Gieo mầm <code>messages</code>: ký ức bắt đầu từ đây</h3>
+  <pre><code class="language-python">messages: list[ChatCompletionMessageParam] = [
+    {"role": "system", "content": SYSTEM_PROMPT},
+    {"role": "user", "content": goal},
+]</code></pre>
+  <p>Toàn bộ "ký ức" của agent chỉ là <strong>một list <code>messages</code></strong> — không có database, không có state ẩn nào khác. Nó khởi đầu với đúng 2 phần tử:</p>
+  <ul>
+    <li><strong><code>system</code></strong>: <code>SYSTEM_PROMPT</code> (từ <code>src/prompts.py</code>) — chỉ dẫn nền cho model về cách hành xử.</li>
+    <li><strong><code>user</code></strong>: <code>goal</code> — nhiệm vụ ngôn ngữ tự nhiên người dùng giao.</li>
+  </ul>
+  <p>Mọi turn sau đó chỉ <em>append thêm</em> vào list này (assistant message, rồi tool results). Model không "nhớ" gì giữa các lần gọi API — mỗi turn ta gửi lại <strong>toàn bộ</strong> list, và đó là lý do thứ tự + tính toàn vẹn của list quyết định tính đúng đắn của cả vòng lặp.</p>
+
+  <h3>Vòng lặp: ngân sách thời gian + lời gọi model</h3>
+  <pre><code class="language-python">for i in range(1, max_iters + 1):
+    if time_budget_s is not None and time.monotonic() - start > time_budget_s:
+        cprint(Color.WARN, f"\nAgent hit time budget {time_budget_s:.0f}s on turn {i}.")
+        return {"finish_reason": "timeout", "iters_used": i}
+    # ...
+    create_kwargs = dict(
+        model=model, messages=messages, tools=TOOL_SCHEMAS,
+        tool_choice="auto", max_tokens=2048,
+    )
+    if temperature is not None:
+        create_kwargs["temperature"] = temperature
+    try:
+        resp = client.chat.completions.create(**create_kwargs)  # type: ignore[arg-type]
+    except OpenAIError as e:
+        cprint(Color.WARN, f"\nAPI error on turn {i}: {e}. Stopping.")
+        return {"finish_reason": "api_error", "iters_used": i}</code></pre>
+  <ul>
+    <li><strong><code>for i in range(1, max_iters+1)</code></strong>: <code>i</code> đếm 1-based số turn. Đây là <em>safety net</em> — agent không bao giờ loop vô tận; mặc định <code>max_iters=15</code>.</li>
+    <li><strong>Check thời gian GIỮA các turn</strong>: <code>time.monotonic()</code> (đồng hồ chỉ tăng, không bị NTP chỉnh lùi). Không ngắt được tool đang chạy dở, nhưng mỗi tool có timeout riêng nên tổng thời gian vẫn bị chặn trên. Vượt budget → trả <code>finish_reason="timeout"</code>.</li>
+    <li><strong>Lời gọi model</strong>: <code>tools=TOOL_SCHEMAS</code> cho model biết nó được gọi gì; <code>max_tokens=2048</code> giới hạn độ dài 1 lượt trả lời.</li>
+    <li><strong><code>tool_choice="auto"</code> (không phải <code>"required"</code>)</strong>: cho model <em>tự quyết</em> có gọi tool hay không. Nếu ép <code>"required"</code>, model sẽ buộc phải gọi tool MỖI turn — và sẽ không bao giờ "kết thúc" được, vì cách báo xong là trả về content trần không kèm tool_call. <strong>Đây là cơ chế giúp agent biết dừng.</strong></li>
+    <li><strong><code>try/except OpenAIError</code> chỉ bọc lời gọi API</strong>: <code>OpenAIError</code> là base class của MỌI lỗi SDK (timeout, 5xx, rớt mạng, 400 do context tràn). Bắt nó tại đây để 1 lỗi transient không kill cả <code>run_agent</code> → trả gọn <code>api_error</code>. Quan trọng: ta return <em>trước</em> khi append assistant message mới, nên <code>messages</code> vẫn ở trạng thái hợp lệ.</li>
+  </ul>
+
+  <h3>Append assistant message: vì sao đúng cái form này</h3>
+  <pre><code class="language-python">msg = resp.choices[0].message
+messages.append(msg.model_dump(exclude_none=True))  # type: ignore[arg-type]</code></pre>
+  <div class="callout"><span class="lbl">Ý chính</span> Đây KHÔNG phải <code>{"role":"assistant","content":...}</code> tự dựng tay — vì làm vậy sẽ làm <strong>mất mảng <code>tool_calls</code></strong>.</div>
+  <ul>
+    <li><strong><code>msg</code> là Pydantic object</strong> có <code>.content</code>, <code>.role</code>, <code>.tool_calls</code> (mỗi tool_call có <code>.id</code> + <code>.function</code>).</li>
+    <li><strong>Bất biến ghép cặp (pairing invariant)</strong>: mỗi assistant message mang <code>tool_calls</code> BẮT BUỘC phải được theo sau bởi đúng 1 tool message cho MỖI <code>tool_call_id</code>. Nếu ta append thủ công chỉ <code>content</code>, mảng <code>tool_calls</code> biến mất → các tool-result ở bước sau sẽ tham chiếu <code>tool_call_id</code> không tồn tại trong assistant trước → <strong>API trả 400</strong> và cả run hỏng (orphaned tool results).</li>
+    <li><strong><code>model_dump(exclude_none=True)</code></strong>: convert Pydantic object → dict, bỏ các field <code>null</code> (vd <code>content: None</code> khi model chỉ gọi tool, hay <code>audio: None</code>). Đã verify: nó <em>giữ nguyên</em> mảng <code>tool_calls</code> + <code>id</code> + <code>function</code> — chỉ rụng field thừa làm API khó chịu. Vừa giữ bất biến, vừa làm payload sạch.</li>
+  </ul>
+
+  <h3>Guardrail "nói mà không làm" — phát hiện chữ ký của dự án</h3>
+  <pre><code class="language-python">made_tool_call = False
+nudges_used = 0
+MAX_NUDGES = 2
+NUDGE = ("You replied with text but called no tool, so nothing has actually changed "
+         "on disk and the task is NOT done. If the task needs a file created or edited, "
+         "call write_file / apply_patch / multi_edit now — do not just describe the code. "
+         "Only stop without a tool call once the work is truly complete.")</code></pre>
+  <pre><code class="language-python">if not msg.tool_calls:
+    if made_tool_call:
+        cprint(Color.FINISH, "\nAgent finished.")
+        return {"finish_reason": "finished", "iters_used": i}
+    if nudges_used < MAX_NUDGES and i < max_iters:
+        nudges_used += 1
+        cprint(Color.WARN,
+               f"\nModel answered without calling a tool; nudging ({nudges_used}/{MAX_NUDGES}).")
+        messages.append({"role": "user", "content": NUDGE})
+        continue
+    cprint(Color.WARN, "\nAgent stopped without ever calling a tool (no_action).")
+    return {"finish_reason": "no_action", "iters_used": i}</code></pre>
+  <div class="callout key"><span class="lbl">Phát hiện chữ ký</span> Khi đào trace các ca trượt, lỗi chủ đạo KHÔNG phải code sai mà là model trả về <em>prose</em> (mô tả hoặc viết code dạng text) <strong>mà không gọi tool nào</strong>. Vòng lặp ReAct ngây thơ sẽ tưởng "xong" → task fail oan. Guardrail này phân biệt "xong thật" với "chỉ nói suông".</div>
+  <ul>
+    <li><strong><code>made_tool_call</code></strong>: chốt phân biệt. Nếu agent đã hành động ít nhất 1 lần rồi mới dừng → tin nó xong thật → <code>finished</code> (bảo toàn quyền kết thúc hợp lệ của ReAct).</li>
+    <li><strong>Chưa đụng tool lần nào mà đã "xong"</strong> → gần như chắc là trả prose suông. Nếu còn quota nhắc, append <code>NUDGE</code> (một user message nhắc model "đĩa chưa đổi gì, hãy gọi <code>write_file</code>/<code>apply_patch</code>/<code>multi_edit</code>") rồi <code>continue</code> để model thử lại.</li>
+    <li><strong><code>MAX_NUDGES = 2</code></strong>: chặn trên số lần nhắc để không loop vô tận với một model cứng đầu.</li>
+    <li><strong>Ca biên tinh tế — <code>and i &lt; max_iters</code></strong>: chỉ nhắc khi VẪN CÒN turn phía sau để model đáp lại nudge. Nếu đây là turn cuối (<code>i == max_iters</code>), nhắc cũng vô nghĩa — vòng lặp dừng ngay, model không kịp đọc → rơi thẳng xuống <code>no_action</code>. Thiếu điều kiện này, ở case <code>max_iters &lt;= MAX_NUDGES</code> hàm sẽ append nudge ở turn cuối rồi rơi nhầm xuống nhánh <code>max_iters</code> thay vì <code>no_action</code> → eval phân loại sai.</li>
+    <li><strong>Hết quota (hoặc turn cuối) mà vẫn không act</strong> → return <code>no_action</code> ngay tại đây, để harness phân biệt rõ với <code>finished</code> thật (đây là fail kiểu "nói mà không làm").</li>
+  </ul>
+
+  <h3>Thực thi tool calls: bất biến ghép cặp trong hành động</h3>
+  <pre><code class="language-python">if i == max_iters:
+    break
+
+made_tool_call = True
+for tc in msg.tool_calls:
+    cprint(Color.TOOL, f"[tool] {tc.function.name}({tc.function.arguments})")
+    result = execute_tool(tc.function.name, tc.function.arguments, workspace)
+    preview = result if len(result) < 500 else result[:500] + "...[truncated]"
+    cprint(Color.RESULT, f"[tool result]\n{preview}")
+    messages.append({
+        "role": "tool",
+        "tool_call_id": tc.id,
+        "content": result,
+    })</code></pre>
+  <ul>
+    <li><strong>Last-turn guard <code>if i == max_iters: break</code></strong>: nếu đây là turn cuối mà model vẫn muốn gọi tool, ta KHÔNG chạy. Lý do: kết quả tool ở turn cuối sẽ không bao giờ được gửi lại cho model (loop dừng ngay sau) → chạy chỉ phí công, tệ hơn là <code>write_file</code>/<code>apply_patch</code> đổi đĩa mà model không kịp verify. Đừng chạy tool mà bạn không gửi lại được kết quả.</li>
+    <li><strong><code>made_tool_call = True</code></strong>: tới đây chắc chắn sẽ chạy tool → tắt guardrail "nói mà không làm" cho các turn sau (agent đã thực sự hành động).</li>
+    <li><strong>Vòng <code>for tc in msg.tool_calls</code></strong>: 1 turn có thể có nhiều tool_call (parallel calls), nên ta lặp qua từng cái. <code>execute_tool(name, arguments, workspace)</code> tự parse JSON args + dispatch, và luôn trả về <em>string</em> (kể cả lỗi cũng là chuỗi mở đầu <code>"ERROR:"</code>) để loop có thể phục hồi.</li>
+    <li><strong>Append <code>{"role":"tool", "tool_call_id": tc.id, "content": result}</code></strong>: đây là bất biến ghép cặp <em>trong hành động</em> — mỗi tool result mang đúng <code>tool_call_id</code> của call sinh ra nó, để API biết kết quả này thuộc về call nào. Model sẽ "thấy" chuỗi <code>content</code> này ở turn kế tiếp.</li>
+  </ul>
+
+  <h3>5 lý do kết thúc (<code>finish_reason</code>)</h3>
+  <p>Mọi nhánh return đều báo cùng dạng <code>{"finish_reason": str, "iters_used": int}</code>, với <code>iters_used = i</code> (1-based, số turn đã bước vào) nhất quán ở mọi lối thoát — để eval harness ghi lại kết cục chính xác.</p>
+  <table>
+    <thead><tr><th>finish_reason</th><th>Khi nào</th><th>Ý nghĩa</th></tr></thead>
+    <tbody>
+      <tr><td><span class="tag">finished</span></td><td>Model trả content trần, không tool_call, VÀ <code>made_tool_call</code> đã true</td><td>Xong thật — agent đã làm việc rồi mới dừng.</td></tr>
+      <tr><td><span class="tag">max_iters</span></td><td>Dùng hết <code>max_iters</code> turn mà model vẫn muốn gọi tool</td><td>Safety net chống loop vô tận; dấu hiệu task khó hoặc model bị kẹt.</td></tr>
+      <tr><td><span class="tag">api_error</span></td><td><code>OpenAIError</code> bị bắt quanh lời gọi <code>create()</code></td><td>vLLM rớt mạng / 5xx / context tràn (400) — dừng gọn, không crash cả run.</td></tr>
+      <tr><td><span class="tag">timeout</span></td><td>Vượt <code>time_budget_s</code> khi check giữa các turn</td><td>Hết ngân sách wall-clock (eval truyền vào).</td></tr>
+      <tr><td><span class="tag">no_action</span></td><td>Model dừng mà CHƯA bao giờ gọi tool, đã hết nudge (hoặc turn cuối)</td><td>Fail kiểu "nói mà không làm" — chữ ký của dự án (84/627 task ở eval).</td></tr>
+    </tbody>
+  </table>
+
+  <div class="diagram">
+    <div class="dbox">model trả lời<span class="s">resp.choices[0].message</span></div>
+    <div class="darrow">→</div>
+    <div class="dbox">có tool_calls?<span class="s">if not msg.tool_calls</span></div>
+    <div class="darrow">→</div>
+    <div class="dbox hl">chạy tool → append role:tool<span class="s">loop lại</span></div>
+    <div class="darrow">↺</div>
+    <div class="dbox">không → finished / nudge / no_action</div>
+  </div>
+</section>
+
+<section id="repl-code" class="section">
+  <h2><span class="n">07</span>REPL: <code>cli/chat.py</code> — streaming + nén context</h2>
+  <p class="lead">Một front-end tương tác, stream từng token, tái dùng tools + prompt nhưng tự viết lại vòng lặp với <code>stream=True</code> và tự nén history khi gần đầy context.</p>
+
+  <h3>Vì sao có một REPL riêng?</h3>
+  <p><code>src/agent.py</code> là một hàm <em>one-shot</em>: gọi <code>run_agent(goal, ...)</code>, nó chạy ReAct loop đến khi xong rồi trả về một <code>dict</code>. Tốt cho script và eval, nhưng không phải trải nghiệm "chat". <code>cli/chat.py</code> là tầng <strong>tương tác</strong>: bạn gõ → agent stream chữ + thinking + tool call real-time → xong một lượt → bạn gõ tiếp, history tích lũy trong cùng session (giống Claude Code). Nó <strong>tái dùng</strong> <code>TOOL_SCHEMAS</code>, <code>execute_tool</code> và <code>SYSTEM_PROMPT</code> y nguyên, nhưng <strong>không gọi <code>run_agent</code></strong> — nó viết lại vòng lặp với <code>stream=True</code> để có streaming + live thinking + nén context.</p>
+
+  <pre><code class="language-python"># cli/chat.py — tái dùng nguyên si, không duplicate
+from src.tools import TOOL_SCHEMAS, execute_tool
+from src.prompts import SYSTEM_PROMPT
+# ...
+messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]</code></pre>
+  <p>Ba dòng import này là điểm mấu chốt: REPL <em>không</em> định nghĩa lại tool hay prompt. Nó chỉ thay đổi cách <strong>gọi model</strong> và cách <strong>quản lý history</strong>.</p>
+
+  <table>
+    <thead><tr><th></th><th><code>src/agent.py</code> (<code>run_agent</code>)</th><th><code>cli/chat.py</code> (REPL)</th></tr></thead>
+    <tbody>
+      <tr><td>Kiểu gọi</td><td>one-shot, trả <span class="tag">dict</span></td><td>nhiều lượt, in trực tiếp ra terminal</td></tr>
+      <tr><td>API</td><td><code>stream=False</code> (cả response một lần)</td><td><code>stream=True</code> (iterator của chunks)</td></tr>
+      <tr><td>Thinking</td><td>không hiển thị</td><td>in <em>live</em> ngay khi token chảy về</td></tr>
+      <tr><td>Context</td><td>không nén (chạy ngắn)</td><td>tự <em>compact</em> khi vượt threshold</td></tr>
+      <tr><td>History</td><td>cục bộ trong một lần chạy</td><td>tích lũy qua nhiều turn trong session</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Streaming: response thành iterator của chunk</h3>
+  <p>Khi đặt <code>stream=True</code>, kiểu trả về đổi từ một <code>ChatCompletion</code> thành một <strong>iterator các <code>ChatCompletionChunk</code></strong>. Mỗi chunk mang một <code>delta</code> = MỘT MẢNH của response. Ta gom <strong>ba thứ</strong> từ mỗi <code>delta</code>: <code>content</code> nhìn thấy, <code>reasoning_content</code> (luồng <code>&lt;think&gt;</code>, in ra nhưng KHÔNG lưu vào history), và <code>tool_calls</code> (đến rải rác qua nhiều delta, phải ghép lại).</p>
+
+  <pre><code class="language-python">stream = client.chat.completions.create(
+    model=model, messages=messages,
+    tools=TOOL_SCHEMAS, tool_choice="auto",
+    max_tokens=2048, stream=True,
+    extra_body={"chat_template_kwargs": {"enable_thinking": thinking_enabled}},
+)
+content_buf = ""               # gom visible content (cần lưu history)
+tool_calls: dict[int, dict] = {}   # gom tool_calls theo .index</code></pre>
+  <p><code>content_buf</code> tích lũy phần text nhìn thấy để cuối cùng lưu vào history. Thinking thì <em>không</em> buffer — chỉ in ra cho user xem rồi bỏ. <code>tool_calls</code> là <code>dict</code> khóa theo <code>index</code> vì model có thể gọi nhiều tool song song.</p>
+
+  <pre><code class="language-python">for chunk in stream:
+    if not chunk.choices:          # vLLM thi thoảng emit chunk rỗng
+        continue
+    delta = chunk.choices[0].delta
+
+    # 1. REASONING — field riêng do `--reasoning-parser qwen3` tách ra
+    r = getattr(delta, "reasoning_content", None) or getattr(delta, "reasoning", None)
+    if r:
+        if not in_thinking:
+            print(f"\n{CYAN}[thinking]{RESET}", flush=True); in_thinking = True
+        print(f"{WHITE}{r}{RESET}", end="", flush=True)   # in live, KHÔNG lưu
+
+    # 2. VISIBLE CONTENT
+    if delta.content:
+        print(f"{MAGENTA}{delta.content}{RESET}", end="", flush=True)
+        content_buf += delta.content</code></pre>
+  <p>vLLM được khởi động với <code>--reasoning-parser qwen3</code> nên block <code>&lt;think&gt;...&lt;/think&gt;</code> của Qwen3 được tách thành một field riêng. Tên field là <code>reasoning_content</code> (vài version gọi là <code>reasoning</code>) — <code>getattr</code> với fallback để tương thích cả hai. <code>end=""</code> + <code>flush=True</code> ghi từng mẩu lên cùng dòng, không chờ buffer.</p>
+
+  <div class="callout warn"><span class="lbl">Bẫy reassembly</span> <code>tool_calls</code> trong stream KHÔNG đến nguyên vẹn: <code>.id</code> và <code>.function.name</code> thường ở chunk đầu, còn <code>.function.arguments</code> (JSON có thể dài vài KB) bị xé thành nhiều chunk. Phải ghép thủ công theo <code>.index</code>.</div>
+
+  <pre><code class="language-python"># 3. TOOL CALLS — đến rải rác, ghép theo index
+if delta.tool_calls:
+    for tcd in delta.tool_calls:
+        idx = tcd.index
+        if idx not in tool_calls:
+            tool_calls[idx] = {"id": "", "name": "", "arguments": ""}
+        if tcd.id:
+            tool_calls[idx]["id"] += tcd.id
+        if tcd.function:
+            if tcd.function.name:
+                tool_calls[idx]["name"] += tcd.function.name
+            if tcd.function.arguments:
+                tool_calls[idx]["arguments"] += tcd.function.arguments
+# ...
+return content_buf, [tool_calls[i] for i in sorted(tool_calls)]</code></pre>
+  <p>Mỗi <code>tcd</code> (tool-call delta) mang một mảnh; ta <strong>nối chuỗi</strong> (<code>+=</code>) <code>id</code>, <code>name</code>, <code>arguments</code> vào đúng slot <code>idx</code>. Cuối stream, <code>sorted(tool_calls)</code> trả về list theo đúng thứ tự <code>index</code> để khớp với <code>tool_choice="auto"</code>.</p>
+
+  <h3>Thinking toggle: <code>/think</code> ↔ <code>/nothink</code></h3>
+  <p>Một biến closure <code>thinking_enabled</code> (sticky, mặc định OFF) bật/tắt chế độ suy nghĩ sâu. Nó được forward thẳng vào <code>extra_body</code> — đây là native switch của Qwen3, vLLM chuyển thẳng sang chat template.</p>
+
+  <pre><code class="language-python">if low in ("/think", "/deep"):
+    thinking_enabled = True
+    print(f"{CYAN}Thinking mode: ON (deep){RESET}"); continue
+if low in ("/nothink", "/fast"):
+    thinking_enabled = False
+    print(f"{CYAN}Thinking mode: OFF (fast){RESET}"); continue
+# → forward vào stream call:
+#   extra_body={"chat_template_kwargs": {"enable_thinking": thinking_enabled}}</code></pre>
+  <p>Vì sao mặc định OFF? Fast mode hợp cho câu ngắn (chào hỏi, hỏi nhanh). Gõ <code>/think</code> trước khi giao task phức tạp để model "nghĩ" trước mỗi turn.</p>
+
+  <h3>Nén context (the big one)</h3>
+  <p>Qwen3-14B có <code>max_model_len=32768</code>. Mỗi turn append thêm assistant + tool messages — qua 20-30 turn, history dễ vượt 32K → vLLM trả <strong>400 "context length exceeded"</strong> và REPL crash. Cách giải: khi history quá dài, gom các turn cũ thành một summary, giữ recent turn nguyên xi — đúng pattern auto-summarize của Claude Code.</p>
+
+  <div class="grid c3">
+    <div class="card"><p class="t"><code>estimate_tokens</code></p><p>Heuristic ~chars/4. Không cần exact — chỉ cần biết "đã gần limit chưa?".</p></div>
+    <div class="card"><p class="t"><code>COMPACT_THRESHOLD<br>_TOKENS = 24000</code></p><p>~75% của 32K — chừa headroom cho response + tool results.</p></div>
+    <div class="card"><p class="t"><code>KEEP_RECENT<br>_MESSAGES = 10</code></p><p>Giữ 10 message gần nhất verbatim (≈5-6 turn).</p></div>
+  </div>
+
+  <pre><code class="language-python">def estimate_tokens(messages: list) -> int:
+    total = 0
+    for m in messages:
+        total += len(m.get("content") or "")        # content (None → "")
+        if m.get("tool_call_id"):
+            total += len(m["tool_call_id"])          # role=tool
+        for tc in m.get("tool_calls") or []:         # role=assistant actions
+            fn = tc.get("function", {})
+            total += len(fn.get("name", "")) + len(fn.get("arguments", ""))
+    return total // 4                                # ~4 chars/token</code></pre>
+  <p>Đếm thô: tổng độ dài <code>content</code> + <code>tool_call_id</code> + (<code>name</code>+<code>arguments</code> của mỗi tool call), rồi chia 4. Tại sao không dùng tokenizer thật? tiktoken là của OpenAI (không khớp Qwen3), còn HF tokenizer phải load weights — sai số ±20-30% không ảnh hưởng quyết định vì threshold đã có buffer.</p>
+
+  <div class="callout key"><span class="lbl">Hazard split-point</span> Boundary của summary BẮT BUỘC rơi vào một message <code>role:"user"</code>. OpenAI API yêu cầu mọi <code>role:"tool"</code> phải có <code>assistant.tool_calls</code> đứng trước với <code>tool_call_id</code> khớp. Nếu cắt giữa cặp (assistant.tool_calls → tool_result), tool message thành <strong>orphan</strong> → API 400.</div>
+
+  <pre><code class="language-python"># Walk FORWARD từ -keep_recent đến khi gặp user message (clean boundary)
+split = len(messages) - keep_recent
+while split < len(messages) and messages[split].get("role") != "user":
+    split += 1
+if split >= len(messages):           # không thấy user → bail, thà không nén
+    return messages, "compaction skipped (no clean user boundary ...)"
+
+system_msg   = messages[0]           # giữ — định nghĩa persona
+to_summarize = messages[1:split]     # phần bị nén thành 1 summary
+recent       = messages[split:]      # giữ nguyên — immediate context</code></pre>
+  <p>Vì <code>recent</code> bắt đầu đúng tại một <code>user</code> message — luôn là turn boundary sạch, không phụ thuộc tool — nên tool message đầu tiên trong <code>recent</code> (nếu có) chắc chắn đã có <code>assistant.tool_calls</code> đứng trước nó <em>bên trong</em> <code>recent</code> → không bao giờ orphan. Walk <strong>forward</strong> (chứ không backward) chỉ làm <code>recent</code> ngắn hơn → an toàn với context budget; worst case không thấy <code>user</code> thì bail.</p>
+
+  <div class="diagram">
+    <div class="dbox">system<span class="s">giữ</span></div>
+    <div class="darrow">+</div>
+    <div class="dbox">m1 … m(split-1)<span class="s">→ 1 summary</span></div>
+    <div class="darrow">+</div>
+    <div class="dbox hl">recent (từ user)<span class="s">10 msg verbatim</span></div>
+  </div>
+
+  <p>Summary được sinh bằng một LLM call <strong>riêng</strong> (thinking OFF cho nhanh, <code>max_tokens=600</code>), với prompt yêu cầu giữ lại tool call, file path, decision, error. Kết quả ghép thành history mới: <code>[system, "[Earlier conversation summary]…", *recent]</code>.</p>
+
+  <p>Hai slash command đi kèm: <code>/tokens</code> in ước lượng hiện tại (đỏ/vàng/xanh theo mức gần threshold) mà không làm gì; <code>/compact</code> trigger nén ngay cả khi chưa chạm threshold. Ngoài ra một <strong>auto-compact check</strong> chạy trước mỗi inner loop:</p>
+
+  <pre><code class="language-python">tok_estimate = estimate_tokens(messages)
+if tok_estimate > COMPACT_THRESHOLD_TOKENS:
+    print(f"{YELLOW}[auto-compact] ~{tok_estimate} tokens > threshold ...{RESET}")
+    try:
+        new_msgs, status = compact_messages(messages, client, model)
+        messages[:] = new_msgs        # slice-assign: giữ nguyên ref local
+    except Exception as e:
+        print(f"{RED}[auto-compact] failed: {e} — proceeding ...{RESET}")</code></pre>
+  <p>Dùng <code>messages[:] = new_msgs</code> (slice assignment) thay vì gán lại biến, để các tham chiếu khác đến cùng list không bị lệch. Compaction là <em>best-effort</em>: nếu LLM call fail thì cảnh báo rồi vẫn thử gửi request — không bao giờ để crash REPL.</p>
+</section>
+
+<section id="trace" class="section">
+<h2><span class="n">08</span>Ghép lại: một request đi xuyên hệ thống</h2>
+<p class="lead">Lấy đúng task demo "Sửa test đang fail trong <em>demo_repo/</em>" và lần theo nó từ lúc gõ lệnh tới lúc agent báo <em>finished</em> — mỗi mũi tên là một hàm THẬT trong code.</p>
+
+<h3>Bản đồ các cú nhảy hàm (call hops)</h3>
+<p>Một <strong>turn</strong> của ReAct loop đi qua đúng chuỗi hàm sau. Để ý: model không bao giờ chạm vào đĩa — nó chỉ <em>đề nghị</em> một <code>tool_call</code>; chính <code>run_agent</code> mới gọi tool và <strong>nhét <code>workspace</code> vào</strong> (model không thấy tham số này).</p>
+
+<div class="diagram">
+  <div class="dbox">User goal<span class="s">"Sửa test fail trong demo_repo/"</span></div>
+  <div class="darrow">→</div>
+  <div class="dbox hl"><code>run_agent</code><span class="s">seed: system + user vào <code>messages</code></span></div>
+  <div class="darrow">→</div>
+  <div class="dbox">model<span class="s"><code>create(messages, tools, tool_choice="auto")</code></span></div>
+</div>
+<div class="diagram">
+  <div class="dbox">trả về <code>msg.tool_calls</code><span class="s">append <code>model_dump(...)</code></span></div>
+  <div class="darrow">→</div>
+  <div class="dbox hl"><code>execute_tool(name, args, workspace)</code><span class="s">parse JSON args</span></div>
+  <div class="darrow">→</div>
+  <div class="dbox"><code>TOOLS[name](**args, workspace=workspace)</code></div>
+</div>
+<div class="diagram">
+  <div class="dbox"><code>_safe_path(path, workspace)</code><span class="s">chặn thoát sandbox</span></div>
+  <div class="darrow">→</div>
+  <div class="dbox">result <em>string</em><span class="s">"ERROR: ..." nếu lỗi, không raise</span></div>
+  <div class="darrow">→</div>
+  <div class="dbox hl">append <code>role:"tool"</code><span class="s">kèm <code>tool_call_id</code></span></div>
+  <div class="darrow">↺</div>
+  <div class="dbox">loop → model<span class="s">đến khi KHÔNG còn tool_call → <em>finished</em></span></div>
+</div>
+
+<div class="callout"><span class="lbl">Ý chính</span> Toàn bộ "trí nhớ" của một lượt chạy chỉ là cái list <code>messages</code>. Mỗi vòng lặp <strong>đẩy thêm 2 loại message</strong> vào nó: một <code>assistant</code> (chứa <code>tool_calls</code>) và một (hoặc nhiều) <code>tool</code> (chứa kết quả). Model "nhìn thấy" hành động của chính nó ở turn sau <em>chỉ vì</em> chúng nằm trong list này.</div>
+
+<h3>Lần theo từng turn của một run thật</h3>
+<p>Giả sử <em>demo_repo/</em> có <code>calculator.py</code> với hàm <code>add</code> bị viết nhầm thành phép trừ, và <code>test_calculator.py</code> đang fail. Dưới đây là 5 turn, mỗi bước ghi rõ <strong>hàm thật chạy</strong> và <strong>thứ được append vào <code>messages</code></strong>.</p>
+
+<pre><code class="language-python"># ── Turn 0 (seed, trước vòng lặp) ───────────────────────────────────
+# run_agent("Sửa test đang fail trong demo_repo/", workspace=…/demo_repo)
+messages = [
+  {"role":"system",  "content": SYSTEM_PROMPT},
+  {"role":"user",    "content": "Sửa test đang fail trong demo_repo/"},
+]
+</code></pre>
+<p><strong>Khởi tạo.</strong> <code>run_agent</code> dựng <code>messages</code> với system prompt + goal. Chưa gọi model. <code>made_tool_call=False</code>, <code>nudges_used=0</code>.</p>
+
+<pre><code class="language-python"># ── Turn 1 — REASON+ACT: chạy test để xem nó fail ra sao ───────────
+# create(messages, tools=TOOL_SCHEMAS, tool_choice="auto")
+# msg.tool_calls = [ run_bash(command="python -m pytest -q") ]
+execute_tool("run_bash", '{"command":"python -m pytest -q"}', workspace)
+#   → TOOLS["run_bash"](command="python -m pytest -q", workspace=…/demo_repo)
+#   → subprocess.run(..., cwd=workspace, timeout=600)
+# result = "exit_code: 1\nstdout:\n... FAILED test_calculator.py::test_add ..."
+messages += [
+  {"role":"assistant", "tool_calls":[{ "id":"call_a", "function":{...}}]},  # model_dump
+  {"role":"tool", "tool_call_id":"call_a", "content":"exit_code: 1 ... FAILED ..."},
+]
+made_tool_call = True   # guardrail "nói mà không làm" tắt từ đây
+</code></pre>
+<p><strong>Quan sát thất bại.</strong> Model gọi <code>run_bash</code> (tham số là <code>command</code>, KHÔNG phải <code>cmd</code>). <code>execute_tool</code> parse JSON args rồi dispatch qua <code>TOOLS["run_bash"]</code>; tool chạy pytest trong <code>cwd=workspace</code> và trả về <em>string</em> exit code + output. Cặp <code>assistant</code>+<code>tool</code> được append — đây là bất biến ghép cặp: mỗi <code>tool_call_id</code> phải có đúng một message <code>role:"tool"</code> đáp lại.</p>
+
+<pre><code class="language-python"># ── Turn 2 — READ: mở file nghi ngờ để lấy bytes chính xác ──────────
+# msg.tool_calls = [ read_file(path="calculator.py") ]
+execute_tool("read_file", '{"path":"calculator.py"}', workspace)
+#   → read_file(path="calculator.py", workspace=…)
+#   → _safe_path("calculator.py", workspace)   # OK, nằm trong sandbox
+# result = "def add(a, b):\n    return a - b\n..."   # thấy bug: a - b
+messages += [
+  {"role":"assistant", "tool_calls":[{ "id":"call_b", "...":"..."}]},
+  {"role":"tool", "tool_call_id":"call_b", "content":"def add(a, b):\n    return a - b ..."},
+]
+</code></pre>
+<p><strong>Đọc để tìm bug.</strong> <code>read_file</code> đi qua <code>_safe_path</code> — nếu path cố thoát ra ngoài <code>workspace</code> (vd <code>../../etc/passwd</code>) thì <code>_safe_path</code> raise <code>ValueError</code>, <code>execute_tool</code> bắt lại và biến thành <code>"ERROR: ..."</code> để model đọc. Ở đây path hợp lệ; model thấy <code>return a - b</code> — đúng thủ phạm.</p>
+
+<pre><code class="language-python"># ── Turn 3 — ACT: sửa surgical bằng apply_patch ────────────────────
+# msg.tool_calls = [ apply_patch(path="calculator.py",
+#                                old_text="return a - b", new_text="return a + b") ]
+execute_tool("apply_patch", '{"path":"calculator.py","old_text":"return a - b",'
+                            '"new_text":"return a + b"}', workspace)
+#   → apply_patch(...): count==1 (unique) → p.write_text(...)  # ghi ra đĩa
+# result = "patched calculator.py: replaced 12 chars with 12 chars"
+messages += [
+  {"role":"assistant", "tool_calls":[{ "id":"call_c", "...":"..."}]},
+  {"role":"tool", "tool_call_id":"call_c", "content":"patched calculator.py: ..."},
+]
+</code></pre>
+<p><strong>Vá lỗi.</strong> <code>apply_patch</code> kiểm tra <code>old_text</code> xuất hiện <em>đúng một lần</em> (count==1) rồi mới ghi — nếu 0 lần hoặc &gt;1 lần thì trả "ERROR:" và file KHÔNG bị động. Đây là chỗ duy nhất trong trace này thực sự thay đổi đĩa.</p>
+
+<pre><code class="language-python"># ── Turn 4 — VERIFY: chạy lại pytest, lần này xanh ─────────────────
+# msg.tool_calls = [ run_bash(command="python -m pytest -q") ]
+execute_tool("run_bash", '{"command":"python -m pytest -q"}', workspace)
+# result = "exit_code: 0\nstdout:\n... 3 passed in 0.04s"
+messages += [
+  {"role":"assistant", "tool_calls":[{ "id":"call_d", "...":"..."}]},
+  {"role":"tool", "tool_call_id":"call_d", "content":"exit_code: 0 ... 3 passed"},
+]
+</code></pre>
+<p><strong>Xác minh.</strong> Model lặp lại <code>run_bash("python -m pytest")</code>. Lần này <code>exit_code: 0</code> — bằng chứng cụ thể rằng việc sửa có tác dụng. Model "thấy" kết quả này vì nó vừa được append vào <code>messages</code> và sẽ đi cùng request ở turn 5.</p>
+
+<pre><code class="language-python"># ── Turn 5 — FINISH: model trả content trần, KHÔNG tool_call ───────
+# msg.tool_calls = None ;  msg.content = "Đã sửa add() và 3 test đều pass."
+messages += [ {"role":"assistant", "content":"Đã sửa add() và 3 test đều pass."} ]
+# trong run_agent:
+if not msg.tool_calls:
+    if made_tool_call:          # True → đã làm việc thật → tin là xong
+        return {"finish_reason": "finished", "iters_used": 5}
+</code></pre>
+<p><strong>Kết thúc.</strong> Model dừng gọi tool. Vì <code>made_tool_call</code> đã <code>True</code>, <code>run_agent</code> tin rằng task xong thật và trả <code>finish_reason="finished"</code>. (Nếu model dừng mà <em>chưa từng</em> gọi tool nào, guardrail no_action sẽ nudge tối đa <code>MAX_NUDGES=2</code> lần, rồi mới trả <code>"no_action"</code> — phân biệt "xong thật" với "nói suông".)</p>
+
+<table>
+<thead><tr><th>Turn</th><th>Hàm tool thật</th><th>Append vào <code>messages</code></th><th>Kết quả</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>run_bash("python -m pytest")</code></td><td>assistant + tool</td><td><span class="tag">exit 1</span> fail</td></tr>
+<tr><td>2</td><td><code>read_file("calculator.py")</code></td><td>assistant + tool</td><td>thấy <code>a - b</code></td></tr>
+<tr><td>3</td><td><code>apply_patch(...)</code></td><td>assistant + tool</td><td>ghi đĩa</td></tr>
+<tr><td>4</td><td><code>run_bash("python -m pytest")</code></td><td>assistant + tool</td><td><span class="tag">exit 0</span> pass</td></tr>
+<tr><td>5</td><td><span class="dim">— (không gọi tool)</span></td><td>assistant (content)</td><td><strong>finished</strong></td></tr>
+</tbody>
+</table>
+
+<div class="callout key"><span class="lbl">Aha — tất cả khớp vào nhau thế nào</span> Cái bạn vừa thấy chính là <strong>vòng lặp ReAct (§02)</strong> đang chạy <strong>code thật (§05–07)</strong>: reason (model nghĩ) → act (<code>execute_tool</code>) → observe (append <code>role:"tool"</code>) → lặp. <strong>List <code>messages</code> (§01)</strong> là sợi chỉ duy nhất giữ toàn bộ ngữ cảnh — không có DB, không có global state. Và hai thứ giữ cho nó không vỡ là: <strong>bất biến ghép cặp</strong> (mỗi <code>assistant.tool_calls</code> phải có đủ message <code>tool</code> theo <code>tool_call_id</code> — vì vậy mới dùng <code>model_dump(exclude_none=True)</code> thay vì tự ghép tay) và <strong>error-contract</strong> (tool trả <code>"ERROR: ..."</code> thay vì raise — nên một lỗi đọc file hay timeout pytest chỉ là một observation để model tự sửa, chứ không giết cả run).</div>
+</section>
+
 <section id="eval" class="section">
-  <h2><span class="n">05</span>Đo lường: chứng minh nó thật sự chạy được</h2>
+  <h2><span class="n">09</span>Đo lường: chứng minh nó thật sự chạy được</h2>
   <p class="lead">Một agent "có vẻ chạy" thì vô nghĩa — phần này là cách mình ép nó phải <em>tự chứng minh</em> bằng số, một cách trung thực.</p>
 
   <h3>Vì sao 3 task đồ chơi không chứng minh được gì</h3>
@@ -488,7 +1118,7 @@ resp = client.chat.completions.create(
 </section>
 
 <section id="differentiation" class="section">
-<h2><span class="n">06</span>Cái gì là của riêng mình? (vs Claude / Codex)</h2>
+<h2><span class="n">10</span>Cái gì là của riêng mình? (vs Claude / Codex)</h2>
 <p class="lead">Thành thật trước đã: về năng lực thô thì mình <strong>không hơn</strong> Claude Code hay Codex — khác biệt của mình nằm ở một trục hoàn toàn khác.</p>
 
 <div class="callout warn">
@@ -532,23 +1162,62 @@ Phần <strong>thực sự mới</strong> không phải là vòng ReAct hay bộ
   <li><strong>Nối với ý tưởng lớn hơn</strong>: một agent <em>tự cải thiện từ chính traces của nó</em> — tự phát hiện mẫu lỗi của mình rồi tự điều chỉnh, thay vì để con người vá tay từng lần.</li>
 </ul>
 
-<h3>Glossary ngắn</h3>
-<table>
-  <thead><tr><th>Thuật ngữ</th><th>Một câu</th></tr></thead>
-  <tbody>
-    <tr><td><span class="tag">ReAct</span></td><td>Vòng lặp suy nghĩ → hành động (gọi tool) → quan sát kết quả, lặp lại cho tới khi xong.</td></tr>
-    <tr><td><span class="tag">tool calling</span></td><td>Quy ước để model xuất JSON mô tả một lời gọi hàm thay vì chỉ nói chữ; client chạy hàm rồi trả kết quả về.</td></tr>
-    <tr><td><span class="tag">tool_call_id</span></td><td>Mã định danh từng lời gọi tool, để ghép đúng một kết quả <code>role:"tool"</code> với đúng lời gọi đó (bất biến pairing).</td></tr>
-    <tr><td><span class="tag">context window</span></td><td>Số token tối đa model nhìn được trong một lần — ở đây là 32K; vượt qua là phải cắt bớt.</td></tr>
-    <tr><td><span class="tag">compaction</span></td><td>Khi lịch sử quá dài, tóm tắt phần cũ và giữ nguyên ~10 message gần nhất để vẫn lọt context window.</td></tr>
-    <tr><td><span class="tag">sandbox / _safe_path</span></td><td>Hàm chặn đường dẫn thoát ra ngoài workspace (chống path-traversal CWE-22) trước khi đụng file.</td></tr>
-    <tr><td><span class="tag">vLLM</span></td><td>Bộ phục vụ LLM tốc độ cao, cho endpoint tương thích OpenAI — chỗ Qwen3-14B thật sự chạy.</td></tr>
-    <tr><td><span class="tag">pass@1</span></td><td>Tỉ lệ giải đúng ngay lần chạy đầu tiên, không cho thử lại nhiều lần.</td></tr>
-    <tr><td><span class="tag">no_action</span></td><td>Nhãn cho ca model trả lời bằng prose mà chưa từng gọi tool nào — lỗi "nói mà không làm".</td></tr>
-  </tbody>
-</table>
+
 
 <p class="dim">Tóm lại: dự án này không thắng Claude/Codex ở sức mạnh — nó thắng ở chỗ <strong>mình hiểu được từng dòng, giữ dữ liệu tại chỗ, đo trung thực, và tình cờ chạm tới một câu hỏi nghiên cứu của riêng mình</strong>.</p>
+</section>
+
+<section id="glossary" class="section">
+<h2><span class="n">11</span>Glossary + nguồn</h2>
+<p class="lead">Từ điển nhanh ~27 thuật ngữ xuất hiện trong tài liệu này — mỗi mục giải thích một dòng, gắn thẳng vào hệ thống agent ReAct chạy Qwen3-14B local — kèm danh sách nguồn chính thống để tra cứu sâu hơn.</p>
+
+<table>
+<thead>
+<tr><th>Thuật ngữ</th><th>Giải thích (trong dự án này)</th></tr>
+</thead>
+<tbody>
+<tr><td><span class="tag">token</span></td><td>Đơn vị nhỏ nhất mà model đọc/sinh ra — gần như "mảnh chữ", không phải ký tự cũng không hẳn là từ; mọi giới hạn dung lượng của Qwen3-14B đều tính theo token.</td></tr>
+<tr><td><span class="tag">tokenization</span></td><td>Bước cắt chuỗi text thành danh sách token trước khi đưa vào model; trong <span class="dim">cli/chat.py</span> ta chỉ <em>ước lượng</em> bằng <span class="tag">estimate_tokens</span> (~số ký tự ÷ 4) chứ không tokenize thật.</td></tr>
+<tr><td><span class="tag">context window</span></td><td>Tổng số token tối đa model "nhìn" được một lượt — ở đây là <strong>32K</strong>; vượt ngưỡng thì phải nén bớt lịch sử (compaction) chứ không thể nhồi thêm.</td></tr>
+<tr><td><span class="tag">autoregressive</span></td><td>Cách Qwen3 sinh chữ: từng token một, mỗi token mới phụ thuộc toàn bộ token đã có trước đó — lý do streaming hiển thị được chữ chảy dần.</td></tr>
+<tr><td><span class="tag">temperature</span></td><td>Núm chỉnh độ "ngẫu nhiên" khi sinh token; eval đặt <code>temperature=0.0</code> cho tái lập, thấp = bám sát/ổn định cho coding.</td></tr>
+<tr><td><span class="tag">ReAct</span></td><td>Mẫu "Reason + Act": model luân phiên suy nghĩ rồi gọi tool, đọc kết quả, suy nghĩ tiếp — đúng vòng lặp trong <span class="dim">src/agent.py</span>.</td></tr>
+<tr><td><span class="tag">tool calling</span></td><td>Cơ chế model trả về ý định gọi hàm (tên + arguments) thay vì chỉ trả text; 10 tool trong <span class="dim">src/tools.py</span> được mô tả cho model qua schema.</td></tr>
+<tr><td><span class="tag">JSON schema</span></td><td>Ngôn ngữ mô tả "hình dạng" mỗi tool (tên tham số, kiểu, bắt buộc hay không) trong <span class="tag">TOOL_SCHEMAS</span> để model biết cách điền arguments.</td></tr>
+<tr><td><span class="tag">tool_choice</span></td><td>Tham số quyết định model có buộc phải gọi tool không; ta dùng <code>"auto"</code> để model <em>tự</em> chọn gọi tool hay trả lời thẳng — <code>"required"</code> sẽ khiến không bao giờ kết thúc được.</td></tr>
+<tr><td><span class="tag">tool_call_id</span></td><td>ID nối mỗi kết quả tool về đúng lời gọi đã yêu cầu nó; bất biến bắt buộc — message <code>role:"tool"</code> phải mang đúng <code>tc.id</code>, sai/thiếu là API từ chối cả hội thoại.</td></tr>
+<tr><td><span class="tag">messages</span></td><td>Danh sách hội thoại gửi lại mỗi vòng — <strong>bộ nhớ duy nhất</strong> của agent; API stateless nên không nhớ gì ngoài list này.</td></tr>
+<tr><td><span class="tag">model_dump(exclude_none=True)</span></td><td>Cách <span class="dim">agent.py</span> chuyển message Pydantic của model thành dict để append vào <code>messages</code>, <strong>giữ nguyên</strong> field <code>tool_calls</code> (bỏ bằng dict thủ công sẽ làm gãy invariant <code>tool_call_id</code>).</td></tr>
+<tr><td><span class="tag">vLLM</span></td><td>Server inference chạy Qwen3-14B local (BF16, ~28GB, 1× A6000), phơi ra API tương thích OpenAI để agent gọi như gọi cloud.</td></tr>
+<tr><td><span class="tag">KV cache / PagedAttention</span></td><td>Bộ nhớ đệm "đã đọc tới đâu" của model; PagedAttention chia nó thành block kiểu phân trang OS, giúp vLLM phục vụ nhiều request 32K mà không phí VRAM.</td></tr>
+<tr><td><span class="tag">OpenAI-compatible API</span></td><td>vLLM nói cùng "giọng" với <code>/v1/chat/completions</code> của OpenAI, nên code agent dùng SDK chuẩn mà không cần sửa khi đổi backend.</td></tr>
+<tr><td><span class="tag">Hermes tool-call parser</span></td><td>Bộ parse phía vLLM (<code>--tool-call-parser hermes</code>) đọc các khối tool-call kiểu Hermes mà Qwen3 sinh ra rồi nhét vào field <code>tool_calls</code> đúng schema OpenAI.</td></tr>
+<tr><td><span class="tag">reasoning parser / thinking</span></td><td>Qwen3 có chế độ "suy nghĩ" (<code>&lt;think&gt;…&lt;/think&gt;</code>); bật/tắt qua <code>extra_body={"chat_template_kwargs":{"enable_thinking":…}}</code>, parser phía server tách phần nghĩ khỏi câu trả lời.</td></tr>
+<tr><td><span class="tag">streaming / SSE</span></td><td>REPL <span class="dim">cli/chat.py</span> đặt <code>stream=True</code> để nhận từng delta token qua Server-Sent Events, in chữ chảy dần thay vì chờ trọn câu trả lời.</td></tr>
+<tr><td><span class="tag">context compaction</span></td><td>Khi ước lượng vượt <span class="tag">COMPACT_THRESHOLD_TOKENS=24000</span>, <span class="tag">compact_messages</span> tóm tắt lịch sử cũ và giữ <span class="tag">KEEP_RECENT_MESSAGES=10</span> message gần nhất nguyên văn.</td></tr>
+<tr><td><span class="tag">sandbox / _safe_path</span></td><td>Mọi tool đọc/ghi đều qua <span class="tag">_safe_path(path, workspace)</span>: ghép rồi <code>resolve()</code> và từ chối nếu đường dẫn thoát khỏi <code>workspace</code> — chốt chặn an toàn.</td></tr>
+<tr><td><span class="tag">CWE-22</span></td><td>Lỗ hổng "path traversal" (vd <code>../../etc/passwd</code>) mà <span class="tag">_safe_path</span> phòng chống, ngăn model với ra ngoài thư mục làm việc.</td></tr>
+<tr><td><span class="tag">error-as-string contract</span></td><td>Quy ước: tool không bao giờ raise mà trả chuỗi bắt đầu <code>"ERROR: …"</code> — để model đọc lỗi ở lượt sau và tự sửa, vòng lặp không chết.</td></tr>
+<tr><td><span class="tag">spawn_subagent</span></td><td>Tool cho agent đẻ ra một agent con chạy mục tiêu phụ trong workspace riêng — vì <code>workspace</code> là tham số tường minh (không global) nên nhiều agent chạy song song an toàn.</td></tr>
+<tr><td><span class="tag">no_action</span></td><td>Một giá trị <code>finish_reason</code>: model trả lời mà chưa từng gọi tool nào; harness phân loại riêng để phân biệt với "finished" thật — phát hiện chính của dự án (84 task).</td></tr>
+<tr><td><span class="tag">guardrail / nudge</span></td><td>Khi model "nói suông" không gọi tool, vòng lặp nhắc lại tối đa <span class="tag">MAX_NUDGES=2</span> (chỉ khi <code>i &lt; max_iters</code>); hết quota thì kết thúc bằng <code>no_action</code>.</td></tr>
+<tr><td><span class="tag">pass@1</span></td><td>Tỉ lệ giải đúng ngay lần thử <strong>đầu tiên</strong>; kết quả tổng của dự án: 501/627 = <strong>79.9%</strong> (92% khi có tool được kích hoạt).</td></tr>
+<tr><td><span class="tag">hidden-test scoring</span></td><td>Chấm điểm bằng test <em>giấu</em>: task ghi <code>## Tests: hidden</code> nên agent không đọc được test, buộc phải implement đúng từ spec — đo năng lực thật.</td></tr>
+<tr><td><span class="tag">validation gate</span></td><td><span class="dim">eval/validate_tasks.py</span> đảm bảo mọi task là "thật": lời giải tham chiếu phải pass và bản stub phải fail, trước khi task được đưa vào bộ 627.</td></tr>
+</tbody>
+</table>
+
+<h3>Nguồn chính thống</h3>
+<div class="callout"><span class="lbl">Tra cứu</span> Các link dưới là tài liệu gốc cho từng mảng kiến thức trong doc — đọc thẳng từ nguồn thay vì tin lời tóm tắt.</div>
+<ul>
+<li><strong>OpenAI Chat Completions API</strong> — hợp đồng <code>messages</code> / <code>tool_calls</code> / <code>tool_call_id</code> / <code>tool_choice</code>: <a href="https://platform.openai.com/docs/api-reference/chat">platform.openai.com/docs/api-reference/chat</a> · function calling: <a href="https://platform.openai.com/docs/guides/function-calling">platform.openai.com/docs/guides/function-calling</a></li>
+<li><strong>vLLM</strong> — server tương thích OpenAI: <a href="https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html">docs.vllm.ai/.../openai_compatible_server.html</a> · tool calling (parser Hermes): <a href="https://docs.vllm.ai/en/latest/features/tool_calling.html">docs.vllm.ai/.../tool_calling.html</a></li>
+<li><strong>PagedAttention</strong> — bài báo gốc về KV cache phân trang (Kwon et al., 2023): <a href="https://arxiv.org/abs/2309.06180">arxiv.org/abs/2309.06180</a></li>
+<li><strong>Qwen3</strong> — model card &amp; blog (thinking mode, BF16): <a href="https://huggingface.co/Qwen/Qwen3-14B">huggingface.co/Qwen/Qwen3-14B</a> · <a href="https://qwenlm.github.io/blog/qwen3/">qwenlm.github.io/blog/qwen3</a></li>
+<li><strong>ReAct (Yao et al., 2022)</strong> — "Synergizing Reasoning and Acting in Language Models": <a href="https://arxiv.org/abs/2210.03629">arxiv.org/abs/2210.03629</a></li>
+<li><strong>EvalPlus / HumanEval+</strong> — chấm pass@1 với test nghiêm ngặt hơn: <a href="https://github.com/evalplus/evalplus">github.com/evalplus/evalplus</a></li>
+<li><strong>MBPP</strong> — Mostly Basic Python Problems benchmark: <a href="https://github.com/google-research/google-research/tree/master/mbpp">github.com/google-research/.../mbpp</a></li>
+</ul>
 </section>
 </main>
 <script>
