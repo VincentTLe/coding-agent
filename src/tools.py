@@ -936,6 +936,20 @@ def spawn_subagent(goal: str, max_iters: int = 8, *, workspace: Path) -> str:
 # `execute_tool()` sẽ lookup ở đây: TOOLS["read_file"] → hàm read_file.
 # Phase 2+ có thể thêm new tools vào dict này MÀ KHÔNG cần sửa agent.py.
 # Đó là pattern "extensible registry" — design choice quan trọng cho self-evolution.
+def finish(summary: str = "", *, workspace: Path) -> str:
+    """Signal that the task is fully complete so the agent loop can stop.
+
+    Unlike every other tool, finish() does not touch the workspace — it is a
+    pure "I'm done" signal (it accepts `workspace` only because execute_tool
+    injects it into every tool, but ignores it). Giving the model an explicit
+    completion ACTION means it no longer has to end a task by replying in prose,
+    which the loop cannot tell apart from "gave up without acting" (the no_action
+    failure). run_agent detects a finish call and returns finish_reason="finished".
+    """
+    summary = (summary or "").strip()
+    return f"Task marked complete. {summary}" if summary else "Task marked complete."
+
+
 TOOLS = {
     "read_file": read_file,
     "write_file": write_file,
@@ -948,6 +962,8 @@ TOOLS = {
     "list_dir": list_dir,
     "run_python": run_python,
     "spawn_subagent": spawn_subagent,
+    # Pi-redesign: explicit completion signal (productizes the no_action finding).
+    "finish": finish,
 }
 
 # `TOOL_SCHEMAS` — một list (danh sách) các dict mô tả schema của từng tool.
@@ -969,6 +985,20 @@ TOOLS = {
 #   }
 # Model đọc TOOL_SCHEMAS để biết: tool này tên gì, làm gì, nhận tham số nào.
 TOOL_SCHEMAS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "finish",
+            "description": "Call this when the task is fully complete to END the session, passing a one-line summary of what you did. IMPORTANT: replying in prose WITHOUT any tool call does NOT end the task — to finish you must call this tool.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "summary": {"type": "string", "description": "One-line summary of what was accomplished."},
+                },
+                "required": ["summary"],
+            },
+        },
+    },
     {
         "type": "function",
         "function": {

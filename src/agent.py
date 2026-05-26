@@ -717,6 +717,11 @@ def run_agent(goal: str, workspace: Path, max_iters: int = 15,
         # `= True` gán giá trị True cho biến made_tool_call.
         made_tool_call = True
 
+        # finish_called: model có gọi tool "finish" trong turn này không. finish là
+        # tín hiệu "task xong" → sau khi chạy hết tool_calls của turn, nếu cờ này
+        # bật ta kết thúc loop với finish_reason="finished".
+        finish_called = False
+
         # `for tc in msg.tool_calls:` — vòng lặp for lồng nhau (nested loop).
         # Lặp qua từng tool call trong list msg.tool_calls.
         # Biến `tc` (tool call) lần lượt nhận mỗi phần tử trong list.
@@ -769,9 +774,23 @@ def run_agent(goal: str, workspace: Path, max_iters: int = 15,
                 "tool_call_id": tc.id,
                 "content": result,
             })
+
+            # Nếu tool vừa chạy là "finish", model tuyên bố đã xong. Đánh dấu cờ để
+            # kết thúc loop SAU khi append đủ kết quả cho mọi tool_call của turn (giữ
+            # bất biến: mỗi tool_call có đúng 1 message role:"tool" tương ứng).
+            if tc.function.name == "finish":  # type: ignore[union-attr]
+                finish_called = True
         # Hết for — loop sang turn tiếp theo, model sẽ "thấy" tool results vừa append.
         # Vòng lặp for bên trong (for tc in msg.tool_calls) kết thúc.
         # Vòng lặp for bên ngoài (for i in range(...)) tiếp tục turn i+1.
+
+        # Model đã gọi finish() → kết thúc sạch. Đã append đủ tool result ở trên nên
+        # messages hợp lệ. Phân loại "finished" (KHÔNG phải no_action — model ĐÃ hành
+        # động bằng cách gọi finish). Đây là mấu chốt của finish: cho model một hành
+        # động kết thúc hợp lệ thay vì trả prose suông (vốn bị tính là no_action).
+        if finish_called:
+            cprint(Color.FINISH, "\nAgent called finish() — task complete.")
+            return {"finish_reason": "finished", "iters_used": i}
 
     # Rơi xuống đây = đã dùng hết max_iters turn mà model vẫn còn muốn gọi tool
     # (chưa chịu trả content trần để báo "xong"). Đây là safety net chống loop

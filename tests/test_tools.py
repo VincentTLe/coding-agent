@@ -187,11 +187,21 @@ def test_execute_tool_path_escape_returns_error(tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_registry_schema_in_sync():
-    """Tên trong TOOLS phải khớp CHÍNH XÁC tên trong TOOL_SCHEMAS, và có đúng 10 tool."""
+    """Tên trong TOOLS phải khớp CHÍNH XÁC tên trong TOOL_SCHEMAS, và có đúng 11 tool."""
     schema_names = {s["function"]["name"] for s in TOOL_SCHEMAS}
     assert set(TOOLS) == schema_names
-    assert len(TOOLS) == 10
-    assert len(TOOL_SCHEMAS) == 10
+    assert len(TOOLS) == 11
+    assert len(TOOL_SCHEMAS) == 11
+
+
+def test_finish_tool_registered_and_echoes_summary(tmp_path):
+    """finish is registered and echoes its summary; it never touches disk."""
+    assert "finish" in TOOLS
+    out = execute_tool("finish", json.dumps({"summary": "fixed the bug"}), tmp_path)
+    assert not out.startswith("ERROR")
+    assert "fixed the bug" in out
+    # summary has a default, so an empty-args call still works.
+    assert "complete" in execute_tool("finish", "{}", tmp_path).lower()
 
 
 def test_write_then_read_roundtrip(tmp_path):
