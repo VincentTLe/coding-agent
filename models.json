@@ -1,0 +1,22 @@
+{
+  "_comment": "Pi-style model/provider config. Swap the active model by changing 'default' (or set $AGENT_MODEL). Secrets stay in .env, referenced via 'api_key_env' — no key value lives here. If this file is deleted, the agent falls back to the VLLM_* env vars.",
+  "default": "qwen3-14b",
+  "models": {
+    "qwen3-14b": {
+      "base_url": "http://localhost:8765/v1",
+      "model": "Qwen/Qwen3-14B",
+      "api_key_env": "VLLM_API_KEY",
+      "max_tokens": 2048,
+      "temperature": 0.0,
+      "context_window": 32768
+    },
+    "qwen3-8b": {
+      "base_url": "http://localhost:8765/v1",
+      "model": "Qwen/Qwen3-8B",
+      "api_key_env": "VLLM_API_KEY",
+      "max_tokens": 2048,
+      "temperature": 0.0,
+      "context_window": 32768
+    }
+  }
+}

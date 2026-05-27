@@ -59,6 +59,9 @@ import time
 # thay vì viết chuỗi như "/home/user/demo_repo", ta dùng Path("/home/user/demo_repo")
 # và có các phương thức tiện lợi như .resolve(), .exists(), .name, v.v.
 from pathlib import Path
+import json
+from dataclasses import dataclass
+from functools import lru_cache
 
 # `from dotenv import load_dotenv` — nhập hàm load_dotenv từ thư viện python-dotenv.
 # Hàm này đọc file .env (chứa cấu hình bí mật như API key, URL) và nạp
@@ -192,6 +195,56 @@ _client: OpenAI | None = None
 _logging_ready = False
 
 
+# ---------------------------------------------------------------------------
+# MODEL CONFIG — Pi-style models.json (swap model = edit a data file, not code)
+# ---------------------------------------------------------------------------
+# Borrowed from Pi's models.json: model/provider knobs live in a data file
+# (models.json at the repo root), read by id, so swapping Qwen3-14B for another
+# model is a config edit — not a code change. Secrets stay in .env (referenced
+# via api_key_env). If models.json is absent we fall back to the legacy VLLM_*
+# env vars, so nothing breaks for anyone without the file.
+@dataclass(frozen=True)
+class ModelConfig:
+    base_url: str
+    model: str
+    api_key: str = "not-needed"
+    max_tokens: int = 2048
+    temperature: float = 0.0
+    context_window: int = 32768
+
+
+@lru_cache(maxsize=1)
+def load_model_config() -> ModelConfig:
+    """Active model config from models.json (by id), falling back to .env.
+
+    models.json: {"default": "<id>", "models": {"<id>": {base_url, model,
+    api_key_env?, max_tokens?, temperature?, context_window?}}}. Active id =
+    $AGENT_MODEL or the file's "default". The API key is read from the env var
+    named by api_key_env (default VLLM_API_KEY) so no secret lives in the JSON.
+    """
+    load_dotenv()
+    cfg_path = Path(__file__).resolve().parent.parent / "models.json"
+    if cfg_path.exists():
+        data = json.loads(cfg_path.read_text(encoding="utf-8"))
+        model_id = os.environ.get("AGENT_MODEL") or data["default"]
+        entry = data["models"][model_id]
+        api_key = os.environ.get(entry.get("api_key_env", "VLLM_API_KEY"), "not-needed")
+        return ModelConfig(
+            base_url=entry["base_url"],
+            model=entry["model"],
+            api_key=api_key,
+            max_tokens=entry.get("max_tokens", 2048),
+            temperature=entry.get("temperature", 0.0),
+            context_window=entry.get("context_window", 32768),
+        )
+    # Fallback: legacy .env behaviour (identical to before models.json existed).
+    return ModelConfig(
+        base_url=os.environ["VLLM_BASE_URL"],
+        model=os.environ["VLLM_MODEL_NAME"],
+        api_key=os.environ.get("VLLM_API_KEY", "not-needed"),
+    )
+
+
 # `def get_client() -> OpenAI:` — hàm trả về một OpenAI object (không None).
 # Đây là ví dụ điển hình của pattern "LAZY SINGLETON":
 #   - SINGLETON = chỉ có DUY NHẤT MỘT instance của client trong toàn chương trình.
@@ -226,33 +279,12 @@ def get_client() -> OpenAI:
     if _client is None:
         # Khối này chỉ chạy khi _client chưa được tạo (lần đầu gọi get_client).
 
-        # `load_dotenv()` — gọi hàm load_dotenv (đã import ở trên).
-        # Hàm này đọc file .env trong thư mục hiện tại và nạp các biến
-        # như VLLM_BASE_URL=http://localhost:8000 vào os.environ.
-        # Đọc file .env vào os.environ. Có file ./.env thì auto detect.
-        load_dotenv()
-
-        # `os.environ["VLLM_BASE_URL"]` — đọc biến môi trường tên VLLM_BASE_URL.
-        # os.environ là một dictionary (từ điển) chứa tất cả biến môi trường.
-        # Truy cập bằng cú pháp dictionary: environ["TÊN_BIẾN"].
-        # Nếu biến không tồn tại → Python ném KeyError (crash ngay — fail fast).
-        base_url = os.environ["VLLM_BASE_URL"]
-
-        # `os.environ.get("VLLM_API_KEY", "not-needed")` — tương tự đọc biến
-        # môi trường, nhưng dùng .get() thay vì []. Khác biệt:
-        # - environ["KEY"] → crash nếu KEY không có
-        # - environ.get("KEY", "default") → trả về "default" nếu KEY không có
-        # vLLM chạy local không cần API key thật → "not-needed" là giá trị giả.
-        api_key = os.environ.get("VLLM_API_KEY", "not-needed")
-
-        # `OpenAI(base_url=base_url, api_key=api_key)` — tạo một instance (đối
-        # tượng) của lớp OpenAI. Giống như gọi "constructor" trong OOP.
-        # `base_url=base_url` = tham số có tên (keyword argument): đặt URL máy chủ.
-        # Tại sao truyền tên tham số? — Vì OpenAI có rất nhiều tham số tùy chọn;
-        # dùng tên tham số giúp rõ ràng hơn.
-        # Tạo OpenAI client trỏ vào vLLM. Đây chính là pattern "portability" — chỉ
-        # cần đổi base_url trong .env là chạy được với GPT-4 cloud, Ollama, ...
-        _client = OpenAI(base_url=base_url, api_key=api_key)
+        # Đọc cấu hình model (models.json, fallback .env). load_model_config()
+        # tự gọi load_dotenv nên `import src.agent` vẫn không có side-effect.
+        # base_url + api_key lấy từ config → đổi model/endpoint = sửa models.json,
+        # không phải sửa code. Đây chính là pattern "portability" kiểu Pi.
+        cfg = load_model_config()
+        _client = OpenAI(base_url=cfg.base_url, api_key=cfg.api_key)
 
     # `return _client` — trả về giá trị cho bên gọi hàm.
     # `return` là từ khóa kết thúc hàm và trả về giá trị.
@@ -271,13 +303,10 @@ def get_model() -> str:
     Tách riêng khỏi get_client để chỗ gọi API đọc tên model rõ ràng. load_dotenv
     là idempotent nên gọi ở đây cũng an toàn nếu vì lý do gì client chưa dựng.
     """
-    # load_dotenv() là "idempotent" = gọi bao nhiêu lần cũng an toàn, kết quả
-    # luôn như nhau. Nếu .env đã được load rồi, gọi lại không làm gì thêm.
-    load_dotenv()
-    # Trả về tên model — ví dụ: "Qwen/Qwen2.5-Coder-7B-Instruct"
-    # Dấu [] sẽ crash nếu VLLM_MODEL_NAME không có trong .env — đây là
-    # "fail fast": phát hiện lỗi cấu hình sớm thay vì âm thầm dùng giá trị sai.
-    return os.environ["VLLM_MODEL_NAME"]
+    # Tên model lấy từ cùng nguồn cấu hình (models.json theo id, fallback .env).
+    # load_model_config() được cache (lru_cache) nên gọi lại rẻ và nhất quán với
+    # base_url/api_key mà get_client đã dùng.
+    return load_model_config().model
 
 
 # `def _setup_logging() -> None:` — hàm cấu hình hệ thống logging.
@@ -522,7 +551,7 @@ def run_agent(goal: str, workspace: Path, max_iters: int = 15,
             messages=messages,
             tools=TOOL_SCHEMAS,
             tool_choice="auto",
-            max_tokens=2048,
+            max_tokens=load_model_config().max_tokens,
         )
 
         # `if temperature is not None:` — chỉ thêm key "temperature" vào dict
