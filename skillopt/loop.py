@@ -56,13 +56,19 @@ def _cases(results: list[dict]) -> list[dict]:
 
 
 def _rollout(skill_text: str | None, split_name: str, tasks_file: Path, *, jobs: int,
-             scratch: Path, cache: dict) -> tuple[float, list[dict]]:
-    """Chạy agent với skill_text trên split → (pass_rate, cases). Cache theo (hash, split)."""
+             scratch: Path, cache: dict, agent_timeout: float | None = 420) -> tuple[float, list[dict]]:
+    """Chạy agent với skill_text trên split → (pass_rate, cases). Cache theo (hash, split).
+
+    agent_timeout: trần wall-clock MỖI task (giây) → chặn task kẹt ăn hết thời gian của
+    run dài không người trông. Mặc định 420s (probe thấy task nặng nhất ~258s → còn dư).
+    """
     key = (skill_hash(skill_text) if skill_text else "EMPTY", split_name)
     if key in cache:
         return cache[key]
     cmd = [sys.executable, "eval/run.py", "--tasks-file", str(tasks_file),
            "--jobs", str(jobs), "--temperature", "0", "--resume"]
+    if agent_timeout:
+        cmd += ["--agent-timeout", str(agent_timeout)]
     out = scratch / f"{split_name}_{key[0]}.jsonl"
     cmd += ["--out", str(out)]
     if skill_text is not None:
@@ -85,9 +91,13 @@ def _format_rejected(buffer: list[dict]) -> str:
 
 def _slow_update(prev_skill: str, curr_skill: str, sample_file: Path, *, jobs: int,
                  scratch: Path, cache: dict) -> str:
-    """Ranh giới epoch: so prev vs curr trên 1 mẫu → 4 nhóm → nội dung slow-update."""
-    _, prev_cases = _rollout(prev_skill, "slow_prev", sample_file, jobs=jobs, scratch=scratch, cache=cache)
-    _, curr_cases = _rollout(curr_skill, "slow_curr", sample_file, jobs=jobs, scratch=scratch, cache=cache)
+    """Ranh giới epoch: so prev vs curr trên train → 4 nhóm → nội dung slow-update.
+
+    Dùng split_name "train" để TÁI DÙNG cache rollout của các step (prev/curr skill hầu
+    như đã được chấm trên train rồi) → slow-update gần như miễn phí, không re-roll thừa.
+    """
+    _, prev_cases = _rollout(prev_skill, "train", sample_file, jobs=jobs, scratch=scratch, cache=cache)
+    _, curr_cases = _rollout(curr_skill, "train", sample_file, jobs=jobs, scratch=scratch, cache=cache)
     pp = {c["task"]: c["passed"] for c in prev_cases}
     buckets = {"regressed": [], "persistent_fail": [], "improved": [], "stable_success": []}
     for c in curr_cases:
@@ -173,18 +183,21 @@ def optimize(seed_path: Path, splits_dir: Path, run_dir: Path, *, epochs: int, s
         # --- epoch boundary: slow / executive-strategy update (≥ epoch 1 meaningful) ---
         # Bỏ qua nếu vừa dừng giữa epoch vì hết ngân sách (khỏi chạy thêm rollout).
         if not stopped and (epoch >= 1 or epochs == 1):
-            slow = _slow_update(epoch_start_skill, current, train_f, jobs=jobs,
-                                scratch=scratch, cache=cache)
-            cand = replace_slow_update_field(current, slow)
-            cand_score, _ = _rollout(cand, "val", val_f, jobs=jobs, scratch=scratch, cache=cache)
-            accepted = cand_score >= current_score   # slow-update: không làm tệ đi thì giữ
-            if accepted:
-                current, current_score = cand, cand_score
-                if cand_score > best_score:
-                    best, best_score = cand, cand_score
-                    (run_dir / "best_skill.md").write_text(best, encoding="utf-8")
-            log({"event": "slow_update", "epoch": epoch, "cand_score": cand_score,
-                 "accepted": accepted, "slow_field": slow[:300]})
+            try:
+                slow = _slow_update(epoch_start_skill, current, train_f, jobs=jobs,
+                                    scratch=scratch, cache=cache)
+                cand = replace_slow_update_field(current, slow)
+                cand_score, _ = _rollout(cand, "val", val_f, jobs=jobs, scratch=scratch, cache=cache)
+                accepted = cand_score >= current_score   # slow-update: không làm tệ đi thì giữ
+                if accepted:
+                    current, current_score = cand, cand_score
+                    if cand_score > best_score:
+                        best, best_score = cand, cand_score
+                        (run_dir / "best_skill.md").write_text(best, encoding="utf-8")
+                log({"event": "slow_update", "epoch": epoch, "cand_score": cand_score,
+                     "accepted": accepted, "slow_field": slow[:300]})
+            except Exception as e:  # noqa: BLE001 — slow-update KHÔNG được giết run dài
+                log({"event": "slow_update_error", "epoch": epoch, "error": repr(e)[:300]})
 
     summary = {"epochs": epochs, "steps_per_epoch": steps, "L": L, "jobs": jobs,
                "seed_val_score": current_score, "best_val_score": best_score,
