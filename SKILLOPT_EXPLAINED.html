@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="vi"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SkillOpt — gradient descent trên một file text (và cách chúng ta lắp ráp)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+<style>
+  :root{--bg:#0f1117;--bg2:#161922;--bg3:#1f2330;--fg:#e7ecef;--fg-dim:#9aa5b1;--accent:#7bdcb5;--cyan:#7bf0ff;--magenta:#ff8aff;--result:#ffd966;--red:#ff7b7b;--border:#2a3040;--shadow:0 4px 24px rgba(0,0,0,.4);}
+  *{box-sizing:border-box;} html{scroll-behavior:smooth;}
+  body{margin:0;background:var(--bg);color:var(--fg);font-family:'Inter',-apple-system,'Segoe UI',Roboto,sans-serif;line-height:1.7;font-size:16px;}
+  a{color:var(--accent);text-decoration:none;} a:hover{color:var(--cyan);}
+  code{font-family:'JetBrains Mono',ui-monospace,monospace;background:var(--bg3);color:var(--cyan);padding:.08em .35em;border-radius:4px;font-size:.86em;}
+  pre{margin:1em 0;background:var(--bg3)!important;border:1px solid var(--border);border-radius:10px;padding:1em 1.2em;font-size:.84em;line-height:1.55;overflow:auto;}
+  pre code{background:none;padding:0;font-size:1em;}
+  .sidebar{position:fixed;top:0;left:0;width:262px;height:100vh;background:var(--bg2);border-right:1px solid var(--border);padding:24px 16px;overflow-y:auto;z-index:100;}
+  .sidebar .brand{font-weight:800;font-size:16px;margin:0 0 3px;}
+  .sidebar .brand .g{background:linear-gradient(90deg,var(--accent),var(--cyan),var(--magenta));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+  .sidebar .sub{color:var(--fg-dim);font-size:12px;margin:0 0 18px;}
+  .sidebar nav a{display:block;color:var(--fg-dim);font-size:13.5px;padding:7px 10px;border-radius:7px;border-left:2px solid transparent;margin:2px 0;}
+  .sidebar nav a:hover{background:var(--bg3);color:var(--fg);}
+  .sidebar nav a.active{color:var(--accent);border-left-color:var(--accent);background:var(--bg3);}
+  .sidebar nav a .n{color:var(--accent);font-weight:700;margin-right:7px;}
+  .progress{position:fixed;top:0;left:262px;right:0;height:3px;background:var(--bg3);z-index:99;}
+  .progress-bar{height:100%;width:0;background:linear-gradient(90deg,var(--cyan),var(--accent));}
+  main{margin-left:262px;}
+  .section{max-width:900px;margin:0 auto;padding:56px 46px;border-bottom:1px solid var(--border);}
+  .section h2{font-size:28px;font-weight:800;letter-spacing:-.02em;margin:0 0 6px;color:var(--accent);}
+  .section h2 .n{color:var(--fg-dim);font-weight:600;font-size:.66em;margin-right:.5em;}
+  .section h3{font-size:18px;color:var(--cyan);margin:1.5em 0 .4em;font-weight:600;}
+  .lead{font-size:18px;color:var(--fg-dim);margin:0 0 1.3em;}
+  p{margin:.7em 0;} ul,ol{margin:.6em 0 1em 1.3em;} li{margin:.4em 0;}
+  strong{color:var(--fg);font-weight:700;} em{color:var(--cyan);font-style:normal;}
+  .hero{max-width:900px;margin:0 auto;padding:80px 46px 44px;border-bottom:1px solid var(--border);}
+  .hero h1{font-size:46px;font-weight:800;letter-spacing:-.03em;margin:0 0 .2em;line-height:1.1;background:linear-gradient(90deg,var(--accent) 0%,var(--cyan) 45%,var(--magenta) 85%,var(--accent) 100%);background-size:300% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:flow 9s ease-in-out infinite;}
+  @keyframes flow{0%,100%{background-position:0% 50%;}50%{background-position:100% 50%;}}
+  .hero .tagline{font-size:19px;color:var(--fg);margin:.3em 0;}
+  .hero .meta{color:var(--fg-dim);font-size:14px;margin-top:1em;}
+  .card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin:.6em 0;box-shadow:var(--shadow);}
+  .card .t{font-weight:700;color:var(--fg);margin:0 0 .3em;font-size:15px;}
+  .grid{display:grid;gap:13px;margin:1em 0;} .grid.c2{grid-template-columns:1fr 1fr;} .grid.c3{grid-template-columns:1fr 1fr 1fr;}
+  @media(max-width:780px){.grid.c2,.grid.c3{grid-template-columns:1fr;} .sidebar{display:none;} main{margin-left:0;} .progress{left:0;}}
+  .callout{border-left:3px solid var(--accent);background:var(--bg2);padding:13px 17px;border-radius:0 10px 10px 0;margin:1.1em 0;}
+  .callout.warn{border-left-color:var(--result);} .callout.key{border-left-color:var(--magenta);}
+  .callout .lbl{display:block;font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--accent);font-weight:700;margin-bottom:3px;}
+  .callout.warn .lbl{color:var(--result);} .callout.key .lbl{color:var(--magenta);}
+  .diagram{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:11px;margin:1.3em 0;padding:18px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;}
+  .dbox{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 14px;text-align:center;min-width:84px;}
+  .dbox.hl{border-color:var(--accent);} .dbox.bad{border-color:var(--red);} .dbox.good{border-color:var(--accent);}
+  .dbox .s{display:block;color:var(--fg-dim);font-size:11.5px;margin-top:3px;}
+  .darrow{color:var(--accent);font-size:21px;} .dcol{display:flex;flex-direction:column;gap:9px;}
+  .stats{display:flex;gap:16px;flex-wrap:wrap;margin:1.1em 0;}
+  .stat{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:13px 19px;text-align:center;}
+  .stat .v{font-size:27px;font-weight:800;color:var(--accent);} .stat .l{color:var(--fg-dim);font-size:12.5px;}
+  table{width:100%;border-collapse:collapse;margin:1em 0;font-size:14px;}
+  th{background:var(--bg2);color:var(--accent);text-align:left;padding:9px 11px;border-bottom:2px solid var(--border);}
+  td{padding:8px 11px;border-bottom:1px solid var(--border);vertical-align:top;}
+  .tag{display:inline-block;background:var(--bg3);border:1px solid var(--border);color:var(--cyan);border-radius:20px;padding:2px 10px;font-size:12px;margin:2px;}
+  .dim{color:var(--fg-dim);} .ok{color:var(--accent);font-weight:700;} .no{color:var(--red);font-weight:700;}
+  .rank{display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;border-radius:50%;background:var(--accent);color:#0f1117;font-weight:800;font-size:13px;margin-right:8px;}
+  .src{font-size:13px;color:var(--fg-dim);} .src a{word-break:break-all;}
+  .pillar{display:grid;grid-template-columns:34px 1fr;gap:14px;align-items:start;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin:.7em 0;box-shadow:var(--shadow);}
+  .pillar .num{width:34px;height:34px;line-height:34px;text-align:center;border-radius:9px;background:var(--bg3);border:1px solid var(--accent);color:var(--accent);font-weight:800;font-size:16px;}
+  .pillar .h{font-weight:700;color:var(--fg);font-size:16px;margin:0 0 .25em;}
+  .bk{display:grid;grid-template-columns:1fr 1fr;gap:13px;margin:1.2em 0;}
+  @media(max-width:780px){.bk{grid-template-columns:1fr;}}
+  .bk .col{border:1px solid var(--border);border-radius:12px;padding:14px 16px;background:var(--bg2);}
+  .bk .col.keep{border-top:3px solid var(--accent);}
+  .bk .col.decline{border-top:3px solid var(--red);}
+  .bk .col h4{margin:.1em 0 .5em;font-size:15px;}
+  .bk .col.keep h4{color:var(--accent);} .bk .col.decline h4{color:var(--red);}
+  .bk .col ul{margin:.3em 0 0 1.1em;} .bk .col li{font-size:13.5px;margin:.45em 0;}
+  .star{color:var(--result);font-weight:800;}
+  .frozen{color:var(--cyan);} .trainable{color:var(--result);}
+  .flow{display:flex;flex-direction:column;gap:10px;margin:1.3em 0;padding:20px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;}
+  .flow .row{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:9px;}
+  .flow .vsep{text-align:center;color:var(--accent);font-size:20px;line-height:1;}
+  .stage{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 12px;text-align:center;min-width:96px;}
+  .stage b{display:block;color:var(--fg);font-size:13.5px;} .stage span{display:block;color:var(--fg-dim);font-size:11px;margin-top:2px;}
+  .stage.gate{border-color:var(--magenta);} .stage.gate b{color:var(--magenta);}
+  .stage.roll{border-color:var(--cyan);} .stage.roll b{color:var(--cyan);}
+  .band{border:1px dashed var(--border);border-radius:12px;padding:8px 12px 14px;margin:2px 0;}
+  .band .cap{font-size:11.5px;text-transform:uppercase;letter-spacing:1px;color:var(--fg-dim);font-weight:700;margin:0 0 8px;}
+  .band.epoch{border-color:var(--result);} .band.epoch .cap{color:var(--result);}
+  .placeholder{border:2px dashed var(--result);border-radius:12px;padding:18px 20px;background:rgba(255,217,102,.05);margin:1.2em 0;}
+  .placeholder .lbl{display:block;font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--result);font-weight:700;margin-bottom:6px;}
+</style></head>
+<body>
+<div class="sidebar">
+  <p class="brand"><span class="g">SkillOpt, theo code của ta</span></p>
+  <p class="sub">Gradient descent trên một file text — và cách chúng ta lắp ráp một bản tối giản trung thực</p>
+  <nav id="toc">
+    <a href="#rq"><span class="n">01</span>Câu hỏi nghiên cứu</a>
+    <a href="#analogy"><span class="n">02</span>Gradient descent trên file text</a>
+    <a href="#pipeline"><span class="n">03</span>Pipeline đầy đủ</a>
+    <a href="#truth"><span class="n">04</span>Gánh nặng vs trang trí</a>
+    <a href="#impl"><span class="n">05</span>Triển khai theo từng file</a>
+    <a href="#honest"><span class="n">06</span>Trung thực khi đo</a>
+    <a href="#sources"><span class="n">07</span>Nguồn</a>
+  </nav>
+</div>
+<div class="progress"><div class="progress-bar" id="pbar"></div></div>
+<main>
+<div class="hero">
+  <h1>SkillOpt: huấn luyện một <em>file text</em>, không đụng trọng số</h1>
+  <p class="tagline">Một coding agent local có thể <strong>khá lên</strong> không — nếu ta đóng băng model và chỉ "huấn luyện" một <strong>tài liệu kỹ năng</strong> mà nó đọc trước khi làm việc? Đây là cách SkillOpt vận hành, và cách <strong>chúng ta</strong> lắp một bản tối giản nhưng trung thực với thuật toán gốc.</p>
+  <div class="callout"><span class="lbl">Đọc thế nào</span> Đây là tài liệu <strong>học</strong>: mọi tuyên bố về code đều lấy thẳng từ <code>skillopt/</code> trong repo của bạn (đã đọc từng dòng). Mọi <em>con số kết quả</em> hiện đang <strong>chờ chạy thật</strong> — mục 06 có một ô placeholder ghi rõ điều đó. Quy ước màu: <span class="trainable">🔥 vàng = phần được huấn luyện</span>; <span class="frozen">🔒 xanh = phần đóng băng</span>.</div>
+  <p class="meta">SkillOpt = <code>microsoft/SkillOpt</code> (arXiv 2605.23904, MIT — <strong>cần mở browser xác nhận, preprint 2026</strong>) · Của chúng ta = Qwen3-14B local (vừa là target vừa là optimizer) · seed = TDD skill của addyosmani (MIT) · Knox 361</p>
+</div>
+
+<section id="rq" class="section">
+  <h2><span class="n">01</span>Câu hỏi nghiên cứu</h2>
+  <p class="lead">Một agent có thể tự khá lên bằng cách tối ưu một <em>tài liệu bên ngoài</em>, trong khi trọng số bị đóng băng — thay vì fine-tune, và thay vì để người viết skill bằng tay?</p>
+
+  <p>Có ba cách quen thuộc để làm một coding agent giỏi hơn ở một loại task:</p>
+  <div class="grid c3">
+    <div class="card">
+      <p class="t">① Fine-tune trọng số</p>
+      <p>Sửa hàng tỉ tham số của model bằng gradient descent thật. Mạnh, nhưng tốn GPU, cần dữ liệu, và khó giải thích "model học được gì".</p>
+    </div>
+    <div class="card">
+      <p class="t">② Người viết skill tay</p>
+      <p>Một kỹ sư viết một tài liệu hướng dẫn (kiểu <code>SKILL.md</code> của Anthropic) rồi nhét vào context. Rẻ, dễ đọc — nhưng phụ thuộc trực giác con người, không tự sửa theo bằng chứng.</p>
+    </div>
+    <div class="card">
+      <p class="t">③ SkillOpt: tối ưu skill tự động</p>
+      <p>Giữ <strong>nguyên</strong> trọng số. Để một optimizer <em>tự</em> đề xuất sửa cái tài liệu đó dựa trên bằng chứng fail/success, qua một cổng kiểm tra. Đây là cái chúng ta dựng.</p>
+    </div>
+  </div>
+
+  <p>SkillOpt định nghĩa "skill" là <strong>"một <em>policy</em> bằng ngôn ngữ tự nhiên được chèn vào context của agent trước khi chạy"</strong> — "một artifact ngôn ngữ tự nhiên đóng gói các quy trình, heuristic chuyên ngành, chính sách dùng tool, ràng buộc đầu ra và các kiểu lỗi". Nói cách khác, nó <strong>cùng loại</strong> với một <code>SKILL.md</code> của Anthropic — khác biệt nằm ở <em>cách tạo ra</em>, chứ không phải <em>nó là gì</em>: Anthropic skill do <strong>người viết</strong>; SkillOpt skill được <strong>tối ưu tự động</strong> qua các edit add/delete/replace có cổng kiểm chứng.</p>
+
+  <div class="callout key"><span class="lbl">Một câu</span> Chúng ta xây một optimizer <em>huấn luyện</em> một tài liệu skill kiểu Claude-Code, thay vì người viết tay và thay vì fine-tune. Đây <strong>không phải</strong> Voyager (Voyager học một thư viện <em>code thực thi được</em>, không phải một tài liệu prose).</div>
+
+  <div class="callout warn"><span class="lbl">⚠️ Phạm vi — không overclaim</span> Bản của chúng ta là một <strong>lát cắt nhỏ, một-model, chỉ-coding</strong>: Qwen3-14B local vừa là target vừa là optimizer. Chúng ta <strong>KHÔNG tái lập</strong> paper (paper triển khai skill học được trong cả Claude Code lẫn Codex, đa benchmark). Chúng ta <strong>KHÔNG fine-tune</strong>. Một kết quả <strong>null/âm</strong> (skill tối ưu không hơn baseline) cũng là một phát hiện hợp lệ và sẽ được báo cáo trung thực.</div>
+</section>
+
+<section id="analogy" class="section">
+  <h2><span class="n">02</span>"Gradient descent trên một file text"</h2>
+  <p class="lead">Cách hiểu cốt lõi: thay biểu thức toán bằng <em>chữ</em>, nhưng giữ nguyên khung của một bước SGD có cổng kiểm tra.</p>
+
+  <p>Trong SGD bình thường: tham số <code>θ</code> → forward pass → loss → gradient → cập nhật <code>θ</code>. SkillOpt giữ <strong>đúng cái khung đó</strong>, chỉ thay từng mảnh bằng tương đương dạng văn bản:</p>
+
+  <div class="diagram">
+    <div class="dcol">
+      <div class="dbox" style="border-color:var(--result)"><span class="trainable">🔥 Skill S<sub>t</sub></span><span class="s">tài liệu .md = tham số</span></div>
+    </div>
+    <div class="darrow">→</div>
+    <div class="dcol">
+      <div class="dbox roll" style="border-color:var(--cyan)">Rollout + score<span class="s">forward pass + loss</span></div>
+    </div>
+    <div class="darrow">→</div>
+    <div class="dcol">
+      <div class="dbox" style="border-color:var(--accent)">Optimizer-LLM<span class="s">"textual gradient" (edit JSON)</span></div>
+    </div>
+    <div class="darrow">→</div>
+    <div class="dcol">
+      <div class="dbox" style="border-color:var(--magenta)">Gate trên val<span class="s">guarded update / model selection</span></div>
+    </div>
+    <div class="darrow">↺</div>
+    <div class="dcol">
+      <div class="dbox" style="border-color:var(--result)"><span class="trainable">🔥 S<sub>t+1</sub></span><span class="s">chỉ nhận nếu val tăng</span></div>
+    </div>
+  </div>
+
+  <p>Cái đẹp là <strong>không có một gradient số học nào cả</strong>. "Gradient" ở đây là một model đọc các ca fail/success rồi viết ra <em>phải sửa gì trong tài liệu</em>. Mọi khái niệm của SGD đều có một bản sao bằng chữ:</p>
+
+  <table>
+    <thead><tr><th>Thành phần SkillOpt (trong code của ta)</th><th>Tương đương ML</th></tr></thead>
+    <tbody>
+      <tr><td><span class="trainable">🔥</span> Skill <code>S_t</code> — tài liệu <code>.md</code> (<code>skills/seed_skill.md</code>)</td><td>Tham số được huấn luyện (trainable params)</td></tr>
+      <tr><td><span class="frozen">🔒</span> Agent (Qwen3-14B) + optimizer model (cũng Qwen3-14B)</td><td>Trọng số <strong>đóng băng</strong> — không bao giờ sửa</td></tr>
+      <tr><td>Rollout trên train + chấm pass/fail (<code>eval/run.py</code>)</td><td>Forward pass + loss</td></tr>
+      <tr><td>Optimizer-LLM đề xuất <code>ADD / DEL / REPLACE</code> (<code>reflect()</code>)</td><td><em>Textual gradient</em> (gradient bằng chữ)</td></tr>
+      <tr><td>Reflect trên một minibatch ca fail/success</td><td>Minibatch SGD</td></tr>
+      <tr><td><code>merge()</code> — gộp edit 2 kênh, ưu tiên failure</td><td>Gradient aggregation (gộp gradient)</td></tr>
+      <tr><td><code>clip()</code> giữ tối đa <code>L</code> edit (ta dùng hằng <code>L=4</code>)</td><td>Gradient clipping / learning rate</td></tr>
+      <tr><td>Cổng validation (chặt: <code>cand &gt; current</code>)</td><td>Guarded update / model selection</td></tr>
+      <tr><td>Buffer edit bị từ chối (reset mỗi epoch)</td><td>Bộ nhớ "gradient âm" (negative-gradient memory)</td></tr>
+      <tr><td>Slow-update ở ranh giới epoch (vùng protected)</td><td>Momentum / slow target / EMA</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout"><span class="lbl">Vì sao "constant L=4" lại là learning rate</span> Mỗi step áp tối đa <strong>4 edit</strong>. Đó là độ lớn của một "bước" trên không gian văn bản — y như learning rate giới hạn độ lớn cập nhật <code>θ</code>. Ta cố tình để <code>L</code> là <strong>hằng số</strong> (không lịch trình cosine, không autonomous-LR) — đơn giản, dễ kiểm soát, đúng tinh thần "smallest change".</div>
+</section>
+
+<section id="pipeline" class="section">
+  <h2><span class="n">03</span>Pipeline đầy đủ</h2>
+  <p class="lead">Substrate (phần nền) → vòng lặp 6 bước mỗi step → một slow-update ở ranh giới epoch. Đây là hình của paper, dựng lại bằng box CSS.</p>
+
+  <h3>Substrate — chỗ "ghép skill" (the seam)</h3>
+  <p>Tất cả bắt đầu ở <code>src/prompts.py</code>. <code>SYSTEM_PROMPT</code> bị <strong>đóng băng</strong>; skill là phần học được, ghép <em>sau</em> nó. Khi không có skill, prompt phải <strong>y nguyên từng byte</strong> — đây là điều kiện sống còn để không làm hỏng hành vi agent hiện tại.</p>
+  <div class="flow">
+    <div class="row">
+      <div class="stage" style="border-color:var(--cyan)"><b>🔒 SYSTEM_PROMPT</b><span>đóng băng (prompts.py:45)</span></div>
+      <div class="darrow">+</div>
+      <div class="stage" style="border-color:var(--result)"><b>🔥 skill.md</b><span>tham số S_t</span></div>
+      <div class="darrow">→</div>
+      <div class="stage"><b>build_system_prompt()</b><span>None → byte-identical</span></div>
+      <div class="darrow">→</div>
+      <div class="stage roll"><b>run_agent(skill_path)</b><span>eval/run.py --skill-path</span></div>
+      <div class="darrow">→</div>
+      <div class="stage"><b>hidden-test score</b><span>snapshot / hide / restore</span></div>
+    </div>
+  </div>
+
+  <h3>Step loop — 6 bước (skillopt/loop.py)</h3>
+  <div class="band">
+    <p class="cap">Lặp lại <code>steps</code> lần trong mỗi epoch (buffer từ-chối reset đầu epoch)</p>
+    <div class="flow" style="margin:0;border:none;padding:0;background:none">
+      <div class="row">
+        <div class="stage roll"><b>1 ROLLOUT</b><span>chạy agent trên <em>train</em></span></div>
+        <div class="darrow">→</div>
+        <div class="stage"><b>2 REFLECT</b><span>fail + success → edit JSON</span></div>
+        <div class="darrow">→</div>
+        <div class="stage"><b>3 MERGE</b><span>ưu tiên failure</span></div>
+        <div class="darrow">→</div>
+        <div class="stage"><b>4 CLIP</b><span>giữ ≤ L=4</span></div>
+      </div>
+      <div class="vsep">↓</div>
+      <div class="row">
+        <div class="stage"><b>5 APPLY</b><span>áp edit → ứng viên S<sub>t+1</sub><br>(vùng protected được giữ)</span></div>
+        <div class="darrow">→</div>
+        <div class="stage gate"><b>6 GATE (val)</b><span>cand &gt; current?</span></div>
+        <div class="darrow">→</div>
+        <div class="stage" style="border-color:var(--accent)"><b>ACCEPT</b><span>&gt; best → best_skill.md</span></div>
+        <div class="darrow">/</div>
+        <div class="stage" style="border-color:var(--red)"><b>REJECT</b><span>→ rejected buffer</span></div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Epoch boundary — slow update (folded vào loop.py)</h3>
+  <div class="band epoch">
+    <p class="cap">Cuối mỗi epoch (≥ epoch 1): cập nhật "executive strategy" chậm</p>
+    <div class="flow" style="margin:0;border:none;padding:0;background:none">
+      <div class="row">
+        <div class="stage roll"><b>RE-RUN mẫu</b><span>skill đầu-epoch vs cuối-epoch</span></div>
+        <div class="darrow">→</div>
+        <div class="stage"><b>4-bucket compare</b><span>regressed / improved /<br>persistent_fail / stable</span></div>
+        <div class="darrow">→</div>
+        <div class="stage"><b>1 optimizer call</b><span>viết slow-update field</span></div>
+        <div class="darrow">→</div>
+        <div class="stage" style="border-color:var(--result)"><b>vùng protected</b><span>replace_slow_update_field</span></div>
+        <div class="darrow">→</div>
+        <div class="stage gate"><b>GATE</b><span>không tệ đi (≥) thì giữ</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout"><span class="lbl">Tiết kiệm GPU: rollout cache</span> Khi một ứng viên <em>bị từ chối</em>, <code>current</code> không đổi → rollout train ở step sau lấy lại từ cache theo khoá <code>(skill_hash, split)</code>. GPU đơn (vLLM) là nút cổ chai, nên đây là chốt tiết kiệm lớn. Cộng thêm <code>eval/run.py --resume</code> (JSONL idempotent) + checkpoint sau <em>mỗi</em> step → dừng đúng deadline vẫn ra trạng thái hợp lệ.</div>
+</section>
+
+<section id="truth" class="section">
+  <h2><span class="n">04</span>Sự thật quan trọng: cái gì gánh nặng vs trang trí (ablation-driven)</h2>
+  <p class="lead">Chúng ta không port nguyên xi paper. Chúng ta build đúng những phần mà <em>ablation của paper</em> cho thấy là chịu lực, và <em>hoãn</em> những phần trang trí — đúng tinh thần "smallest change".</p>
+
+  <div class="bk">
+    <div class="col keep">
+      <h4>✓ ĐÃ BUILD — load-bearing</h4>
+      <ul>
+        <li><strong>Cổng validation chặt (<code>&gt;</code>) + rejected buffer.</strong> Hoà cũng loại; buffer cho optimizer biết edit nào vừa thất bại để khỏi đề xuất lại.</li>
+        <li><strong>Bounded <code>L=4</code> + truncation fallback.</strong> "Learning rate" cố định; nếu LLM ranking hỏng → cắt 4 cái đầu.</li>
+        <li><strong>Failure-first merge + concat fallback.</strong> Sửa lỗi ưu tiên hơn củng cố thành công; LLM hỏng → nối thẳng (failure trước).</li>
+        <li><strong>Vùng slow-update protected.</strong> Edit cấp-step <em>không</em> được đụng "executive strategy"; chỉ ghi ở ranh giới epoch.</li>
+        <li><strong>≥ 4 epoch</strong> (sàn 2) để đường slow-update chạy nhiều lần.</li>
+      </ul>
+    </div>
+    <div class="col decline">
+      <h4>✕ HOÃN — trang trí (theo ablation)</h4>
+      <ul>
+        <li><strong>Optimizer meta-skill</strong> (một skill để điều khiển chính optimizer).</li>
+        <li><strong>Parallel hierarchical merge</strong> (gộp edit song song nhiều tầng).</li>
+        <li><strong>Autonomous-LR</strong> (để model tự chọn số edit).</li>
+        <li><strong>Cosine schedule</strong> cho L (ta giữ hằng số).</li>
+        <li><strong>Rewrite mode</strong> (viết lại cả skill thay vì edit từng phần).</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout key"><span class="lbl">Vì sao vùng protected là thứ rẻ-nhất-cứu-nhiều-nhất</span> Trong ablation của paper, bỏ slow-update + protected region khiến điểm <strong>SpreadsheetBench rớt −22.5 điểm</strong> — mức sụt lớn nhất trong các ablation. Mà phần này chỉ tốn <strong>vài chục dòng xử lý chuỗi</strong> (tìm marker, định tuyến append/insert ra trước vùng, gỡ marker giả). Tỉ lệ "lực đỡ trên chi phí" cao nhất → ta build trung thực; những thứ đắt mà ablation cho thấy ít đỡ lực thì hoãn.</div>
+  <p class="dim">(Con số −22.5 trích từ ablation của paper SkillOpt — cần mở browser xác nhận trước khi đưa lên slide; xem mục 07.)</p>
+</section>
+
+<section id="impl" class="section">
+  <h2><span class="n">05</span>Triển khai của CHÚNG TA, theo từng file</h2>
+  <p class="lead">~4 file lõi (chủ ý gộp, không mirror 9 file) + một file phân tích. Mỗi đoạn code dưới đây lấy thẳng từ repo.</p>
+
+  <h3>Substrate — <code>src/prompts.py</code> (seam đóng băng)</h3>
+  <p>Khi <code>skill_text</code> rỗng/None, hàm trả <code>SYSTEM_PROMPT</code> <strong>y nguyên</strong> — agent hành xử hệt như cũ, không lệch một byte. Đây là điều kiện gating mọi thứ khác:</p>
+<pre><code class="language-python">def build_system_prompt(skill_text: str | None = None) -> str:
+    # None/rỗng → SYSTEM_PROMPT nguyên văn (mặc định, không đổi hành vi).
+    if not skill_text or not skill_text.strip():
+        return SYSTEM_PROMPT
+    # Có skill → ghép sau một header phân tách rõ ràng.
+    return SYSTEM_PROMPT + "\n\n## Learned skills (auto-optimized)\n" + skill_text.strip()</code></pre>
+
+  <h3><code>skillopt/skill.py</code> — tham số + 4 edit op + vùng protected</h3>
+  <p>Skill là một tài liệu markdown. 4 op (<code>append / insert_after / replace / delete</code>), mỗi op chỉ tác động lần xuất hiện <em>đầu tiên</em>. Trái tim là <strong>guard vùng protected</strong>: edit nhắm vào vùng "executive strategy" bị bỏ qua, còn append/insert không target được định tuyến ra <em>trước</em> vùng đó:</p>
+<pre><code class="language-python">elif op == "replace":
+    if not target or target not in skill:
+        status = "skipped_target_not_found"
+    elif _is_in_slow_update_region(skill, target):   # ⛔ chặn edit cấp-step
+        status = "skipped_protected_region"
+    else:
+        skill = skill.replace(target, content, 1)</code></pre>
+  <p>Content của mọi edit còn bị <code>_strip_markers()</code> gỡ marker SLOW-UPDATE (chống "chèn marker giả"), và <code>skill_hash()</code> (SHA-256, 16 ký tự) cho phép cache điểm gate theo từng phiên bản skill.</p>
+
+  <h3><code>skillopt/splits.py</code> — dataset 2:1:7, seed 42</h3>
+  <p>Chia 627 task thành 3 phần <strong>rời nhau</strong>, phân tầng theo difficulty, tất định theo seed. Test cố tình <em>lớn nhất</em> (~70%) để ước lượng generalization đáng tin:</p>
+<pre><code class="language-python">def make_splits(ratio: tuple[int, int, int] = (2, 1, 7), seed: int = 42, ...):
+    for diff in sorted(by_diff):
+        ids = sorted(by_diff[diff])   # ổn định TRƯỚC khi shuffle (tái lập)
+        rng.shuffle(ids)
+        n_tr = n * ratio[0] // r_sum
+        n_va = n * ratio[1] // r_sum
+        out["train"] += ids[:n_tr]
+        out["val"]   += ids[n_tr:n_tr + n_va]
+        out["test"]  += ids[n_tr + n_va:]</code></pre>
+
+  <h3><code>skillopt/optimizer_llm.py</code> — textual gradient</h3>
+  <p>Đây là "gradient bằng chữ". Trong <code>reflect()</code>, ca <strong>failure được gắn nhãn <code>finish_reason</code></strong> để optimizer biết <em>kiểu</em> lỗi — đây chính là tín hiệu mà eval harness của ta sinh ra (<code>no_action</code> = model nói mà không hành động; <code>timeout</code> = hết step; finish-nhưng-fail = giải sai):</p>
+<pre><code class="language-python">if kind == "failure":
+    intent = ("These task attempts FAILED. Each shows finish_reason (no_action=model talked "
+              "without acting; timeout=ran out of steps; finished-but-failed=wrong solution). "
+              "Propose corrective rules the skill is MISSING that would prevent these failures.")</code></pre>
+  <p><code>merge()</code> ưu tiên failure và có fallback nối thẳng; <code>clip()</code> là "learning rate" — chỉ gọi LLM xếp hạng khi vượt ngân sách, không thì cắt L cái đầu:</p>
+<pre><code class="language-python">def clip(skill: str, edits: list[dict], L: int) -> list[dict]:
+    if len(edits) <= L:
+        return edits  # dưới ngân sách → khỏi gọi LLM (tiết kiệm)
+    ...
+    return chosen or edits[:L]  # fallback: cắt L cái đầu</code></pre>
+  <p class="dim">Model local 14B trả JSON không phải lúc nào cũng chuẩn → mọi hàm có fallback an toàn, <strong>không bao giờ raise vào loop</strong>. Optimizer mặc định = chính target model; đổi được qua env <code>AGENT_OPTIMIZER_MODEL</code>.</p>
+
+  <h3><code>skillopt/loop.py</code> — step loop + gate + slow-update</h3>
+  <p>Cổng <strong>chặt</strong>: chỉ nhận khi điểm val <em>lớn hơn</em> (hoà cũng loại), và chỉ ghi <code>best_skill.md</code> khi vượt best. Bị loại → vào rejected buffer:</p>
+<pre><code class="language-python">decision = "reject"
+if cand_score > current_score:           # strict >, ties reject
+    current, current_score, decision = cand, cand_score, "accept"
+    if cand_score > best_score:
+        best, best_score, decision = cand, cand_score, "accept_new_best"
+        (run_dir / "best_skill.md").write_text(best, encoding="utf-8")
+else:
+    rejected.append({"edits": clipped, "drop": cand_score - current_score})</code></pre>
+  <p>Rollout cache khoá theo <code>(skill_hash, split)</code> — ứng viên bị loại thì step sau khỏi chạy lại train rollout:</p>
+<pre><code class="language-python">key = (skill_hash(skill_text) if skill_text else "EMPTY", split_name)
+if key in cache:
+    return cache[key]</code></pre>
+  <p>Ranh giới epoch: so prev vs curr trên cùng mẫu → 4 nhóm → 1 lần gọi optimizer → ghi vào vùng protected. Gate slow-update <em>nới hơn</em> (không làm tệ đi thì giữ — <code>&gt;=</code>) vì đây là cập nhật chậm, dài hạn:</p>
+<pre><code class="language-python">buckets = {"regressed": [], "persistent_fail": [], "improved": [], "stable_success": []}
+for c in curr_cases:
+    prev_ok, curr_ok = pp.get(c["task"], False), c["passed"]
+    key = ("stable_success" if prev_ok and curr_ok else "improved" if curr_ok else
+           "regressed" if prev_ok else "persistent_fail")
+    buckets[key].append(c["task"])</code></pre>
+
+  <h3><code>skillopt/report.py</code> — phân tích trung thực</h3>
+  <p>Thuần stdlib (chỉ <code>math</code>): Wilson CI, McNemar (continuity-corrected, p qua <code>erfc</code> — không cần scipy), và overfit meter (train−test gap):</p>
+<pre><code class="language-python">def wilson_ci(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
+    if n == 0: return (0.0, 0.0)
+    p = k / n; d = 1 + z*z/n
+    centre = p + z*z/(2*n)
+    half = z * math.sqrt(p*(1-p)/n + z*z/(4*n*n))
+    return ((centre - half) / d, (centre + half) / d)</code></pre>
+
+  <div class="callout"><span class="lbl">Vì sao ~4 file</span> Owner chọn <strong>gộp</strong> thay vì mirror 9 file của repo gốc, vì AGENTS.md yêu cầu "giải thích từng dòng". Mỗi <em>stage</em> của thuật toán là một <em>hàm có tên</em>, không phải một file riêng. Không thêm abstraction nào ngoài cái pipeline cần.</div>
+</section>
+
+<section id="honest" class="section">
+  <h2><span class="n">06</span>Trung thực khi đo</h2>
+  <p class="lead">Tối ưu skill = chọn theo điểm val → val chính là "dữ liệu huấn luyện" cho skill. Nên con số <em>báo cáo</em> phải ở test (chỉ chấm một lần).</p>
+
+  <h3>Vì sao train / val / test phải rời nhau</h3>
+  <div class="diagram">
+    <div class="dbox" style="border-color:var(--cyan)">train (~20%)<span class="s">optimizer chạy rollout, lấy bằng chứng</span></div>
+    <div class="darrow">|</div>
+    <div class="dbox" style="border-color:var(--magenta)">val (~10%)<span class="s">CỔNG: chỉ accept/reject — KHÔNG train trên đó</span></div>
+    <div class="darrow">|</div>
+    <div class="dbox" style="border-color:var(--result)">test (~70%) 🔒<span class="s">KHOÁ — chấm đúng 3 lần ở cuối</span></div>
+  </div>
+  <p>Đây <strong>không phải</strong> 60/20/20 của fine-tuning. "Tham số" ở đây là một tài liệu text bé; rollout train tốn GPU nên train/val nhỏ, còn test chỉ chấm vài lần nên để to được — N test lớn là cái làm Wilson CI / McNemar có ý nghĩa. Test được <strong>chạm đúng một lần</strong> (3 nhánh empty/seed/optimized), accept rule (<code>&gt;</code>) và số epoch <strong>chốt trước</strong>, không peek test để chọn vòng.</p>
+
+  <h3>So sánh 3 điểm</h3>
+  <div class="grid c3">
+    <div class="card"><p class="t">empty</p><p>Chỉ prompt nền (không skill). Cận dưới — đo "skill có thêm được gì so với không có gì".</p></div>
+    <div class="card"><p class="t">seed</p><p>TDD skill của addyosmani, chưa tối ưu. Đo "skill người viết tay làm được gì".</p></div>
+    <div class="card"><p class="t">optimized</p><p><code>best_skill.md</code> mà cổng chọn ra. So với <em>cả hai</em> ở trên để đo đóng góp của optimizer.</p></div>
+  </div>
+
+  <h3>Ba thước đo + một cảnh báo overfit</h3>
+  <ul>
+    <li><strong>Wilson 95% CI</strong> — khoảng tin cậy cho tỉ lệ pass@1. N nhỏ → khoảng rộng, phải nói thẳng.</li>
+    <li><strong>McNemar paired test</strong> — so từng-task (đúng cho dữ liệu ghép cặp): bao nhiêu task <em>cải thiện</em> vs <em>thụt lùi</em> khi đổi sang optimized.</li>
+    <li><strong>Train−test gap</strong> — overfit meter: best val score (phía train) trừ test pass@1; gap lớn dương = nghi học vẹt trên val.</li>
+  </ul>
+
+  <div class="callout key"><span class="lbl">Null cũng là kết quả</span> Nếu optimized <strong>không</strong> vượt baseline trên test (CI chồng nhau / McNemar p ≥ 0.05) → đó là một <strong>null/negative result</strong>, và sẽ được ghi trung thực. Với một model 14B local vừa làm target vừa làm optimizer, lại bị trần "trọng số đóng băng", đây là một khả năng thật. Báo cáo trung thực quan trọng hơn một con số đẹp.</div>
+
+  <div class="placeholder">
+    <span class="lbl">⏳ Kết quả — CHỜ CHẠY THẬT</span>
+    <p style="margin:.2em 0">Các con số pass@1 / CI / McNemar / gap <strong>chưa có</strong> tại thời điểm viết tài liệu này. Vòng tối ưu cần vLLM chạy và một GPU-day. Khi <code>docs/SKILLOPT_RESULTS.md</code> được sinh ra (qua <code>skillopt/report.py</code>), mục này sẽ được điền bằng bảng 3-nhánh thật trên test.</p>
+    <p style="margin:.2em 0" class="dim">Pipeline báo cáo: <code>eval/run.py --skill-path ... --tasks-file test.txt</code> cho 3 nhánh → <code>report.py --empty ... --seed ... --optimized ... --out docs/SKILLOPT_RESULTS.md</code>. Không có số bịa ở đây.</p>
+  </div>
+</section>
+
+<section id="sources" class="section">
+  <h2><span class="n">07</span>Nguồn</h2>
+  <p class="lead">Thuật toán dựa trên SkillOpt; nền tảng dựa trên các công trình prior-art đã xác minh trên arXiv.</p>
+
+  <div class="callout warn"><span class="lbl">⚠️ Cần xác nhận bằng browser</span> Cutoff huấn luyện của trợ lý này <em>trước</em> ngày của SkillOpt. Hãy mở arXiv + GitHub trong browser để chắc chắn nó có thật <strong>trước khi</strong> đưa lên slide. Cite như một <strong>preprint 2026</strong>.</div>
+
+  <p class="src">
+    <strong>SkillOpt</strong> (thuật toán ta port): <em>Executive Strategy for Self-Evolving Agent Skills</em> — arXiv <a href="https://arxiv.org/abs/2605.23904">2605.23904</a> · code <a href="https://github.com/microsoft/SkillOpt">github.com/microsoft/SkillOpt</a> (MIT) · cached tại <code>docs/reference/skillopt/</code>.<br>
+    <strong>Voyager</strong> (thư viện skill code thực thi — KHÁC flavor của ta): arXiv <a href="https://arxiv.org/abs/2305.16291">2305.16291</a><br>
+    <strong>TextGrad</strong> (tối ưu bằng "textual gradient"): arXiv <a href="https://arxiv.org/abs/2406.07496">2406.07496</a><br>
+    <strong>GEPA</strong> (reflective prompt evolution): arXiv <a href="https://arxiv.org/abs/2507.19457">2507.19457</a><br>
+    <strong>OPRO</strong> (LLM as optimizer): arXiv <a href="https://arxiv.org/abs/2309.03409">2309.03409</a><br>
+    <strong>ExpeL</strong> (experiential learning agent): arXiv <a href="https://arxiv.org/abs/2308.10144">2308.10144</a>
+  </p>
+
+  <p class="dim" style="margin-top:1.2em"><strong>Seed skill:</strong> <code>test-driven-development/SKILL.md</code> từ <a href="https://github.com/addyosmani/agent-skills">addyosmani/agent-skills</a> (MIT) — vendored verbatim vào <code>skills/seed_skill.md</code> với attribution. Vì grading test của ta là <em>hidden</em>, "write a failing test first" ánh xạ thành agent tự viết test nháp để self-verify trước khi gọi <code>finish()</code>.</p>
+  <p class="dim">Mọi tuyên bố về code (4 edit op, vùng protected, gate chặt <code>&gt;</code>, rollout cache, finish_reason bucketing, 2:1:7 seed 42, Wilson/McNemar) đọc trực tiếp từ <code>skillopt/*.py</code> + <code>src/prompts.py</code> + <code>skills/seed_skill.md</code> ngày 2026-05-27. Con số kết quả: <strong>chờ chạy</strong>.</p>
+</section>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+<script>
+  const pbar=document.getElementById('pbar');
+  addEventListener('scroll',()=>{const h=document.documentElement;pbar.style.width=(h.scrollTop/(h.scrollHeight-h.clientHeight)*100)+'%';},{passive:true});
+  const links=[...document.querySelectorAll('#toc a')];
+  const secs=links.map(a=>document.querySelector(a.getAttribute('href')));
+  addEventListener('scroll',()=>{let i=secs.findIndex(s=>s&&s.getBoundingClientRect().top>120);if(i===-1)i=secs.length;i=Math.max(0,i-1);links.forEach((a,k)=>a.classList.toggle('active',k===i));},{passive:true});
+</script>
+</body></html>
