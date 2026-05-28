@@ -112,6 +112,23 @@ def test_splits_deterministic_disjoint_and_test_is_largest():
     assert len(test) > len(train) and len(test) > len(val)  # 2:1:7 → test largest
 
 
+def test_splits_small_total_nonempty_and_capped():
+    """Regression: at SMALL totals, train/val/test must all be non-empty AND `total` respected.
+
+    The old make_splits had two bugs that this catches: (a) max(3,...) ignored `total`
+    (sum came out > total); (b) per-bucket floor division emptied `val`. Only total=40
+    was tested before, where buckets are big enough to mask both.
+    """
+    from skillopt.splits import make_splits
+    for total in (5, 8, 12, 20):
+        s = make_splits(ratio=(2, 1, 7), seed=42, total=total)
+        sz = {k: len(v) for k, v in s.items()}
+        assert sz["train"] >= 1 and sz["val"] >= 1 and sz["test"] >= 1, f"empty split @ total={total}: {sz}"
+        assert sum(sz.values()) == total, f"total not respected @ {total}: sum={sum(sz.values())} != {total}"
+        tr, va, te = set(s["train"]), set(s["val"]), set(s["test"])
+        assert not (tr & va) and not (tr & te) and not (va & te), f"overlap @ total={total}"
+
+
 # --- report stats (Wilson CI + McNemar, pure stdlib) ----------------------
 
 def test_wilson_ci_sane():

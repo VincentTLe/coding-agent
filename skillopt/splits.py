@@ -25,38 +25,74 @@ from pathlib import Path
 from eval.run import TASKS_DIR, discover_tasks, read_meta, rel_id
 
 
+def _apportion(total: int, weights: list[int]) -> list[int]:
+    """Chia số nguyên `total` theo weights bằng LARGEST-REMAINDER (Hamilton).
+
+    Tổng kết quả == total (khi total >= 0). Khác phép `//` (floor) ở chỗ phần dư KHÔNG
+    bị vứt: nó được phát cho các phần tử có phần lẻ (exact - floor) lớn nhất. Đây là
+    cách sửa GỐC của cả 2 bug cũ — floor làm `val` rỗng, và `max(3,…)` làm `total` vô
+    tác dụng — thay cho cả hai.
+    """
+    n = len(weights)
+    s = sum(weights)
+    if total <= 0 or s <= 0:
+        return [0] * n
+    exact = [total * w / s for w in weights]
+    base = [int(x) for x in exact]                 # floor
+    rem = total - sum(base)                         # số suất dư cần phát
+    # phát cho phần tử có phần lẻ lớn nhất; tie-break theo index nhỏ hơn (tất định)
+    order = sorted(range(n), key=lambda i: (exact[i] - base[i], -i), reverse=True)
+    for k in range(rem):
+        base[order[k % n]] += 1
+    return base
+
+
 def make_splits(ratio: tuple[int, int, int] = (2, 1, 7), seed: int = 42,
                 total: int | None = None, tasks_root: Path | None = None) -> dict[str, list[str]]:
     """Chia task → {"train","val","test"} (rời nhau), phân tầng theo difficulty, tất định.
 
-    ratio = (train, val, test). total = cắt tổng số task (None = dùng hết 627).
+    ratio = (train, val, test). total = cắt tổng số task (None = dùng hết).
+    Dùng largest-remainder ở CẢ 2 cấp: (1) phân bổ `total` cho từng bucket độ khó theo
+    kích thước bucket, (2) chia mỗi bucket thành train/val/test theo `ratio`. Nhờ vậy
+    `total` luôn được tôn trọng (sum == min(total, n_all)) và `val` không bị floor nuốt.
+    Lưới an toàn cuối: nếu đã chọn >= 3 task mà split nào rỗng, mượn 1 từ split lớn nhất
+    — đảm bảo loop không bao giờ nhận train/val rỗng kể cả ở total rất nhỏ.
     """
     root = tasks_root or TASKS_DIR
     tasks = discover_tasks(root)
 
-    # Gom task-id theo difficulty.
+    # Gom task-id theo difficulty, sắp xếp ổn định rồi xáo trộn (tất định theo seed).
     by_diff: dict[str, list[str]] = {}
     for t in tasks:
         _, diff = read_meta(t)
         by_diff.setdefault((diff or "unknown").lower(), []).append(rel_id(t))
-
     rng = random.Random(seed)
-    out: dict[str, list[str]] = {"train": [], "val": [], "test": []}
-    r_sum = sum(ratio)
-    n_all = sum(len(v) for v in by_diff.values())
+    diffs = sorted(by_diff)
+    for d in diffs:
+        by_diff[d] = sorted(by_diff[d])
+        rng.shuffle(by_diff[d])
 
-    for diff in sorted(by_diff):
-        ids = sorted(by_diff[diff])   # sắp xếp ổn định TRƯỚC khi shuffle (tái lập)
-        rng.shuffle(ids)
-        if total is not None:         # giữ tỉ lệ difficulty trong tổng đã cắt
-            keep = max(3, round(total * len(ids) / n_all))
-            ids = ids[:keep]
-        n = len(ids)
-        n_tr = n * ratio[0] // r_sum
-        n_va = n * ratio[1] // r_sum
-        out["train"] += ids[:n_tr]
-        out["val"] += ids[n_tr:n_tr + n_va]
-        out["test"] += ids[n_tr + n_va:]
+    n_all = sum(len(v) for v in by_diff.values())
+    target = n_all if total is None else max(0, min(total, n_all))
+    # Bao nhiêu task lấy từ mỗi bucket (theo kích thước bucket) — largest-remainder.
+    takes = _apportion(target, [len(by_diff[d]) for d in diffs])
+
+    out: dict[str, list[str]] = {"train": [], "val": [], "test": []}
+    for d, take in zip(diffs, takes):
+        chosen = by_diff[d][:take]
+        n_tr, n_va, n_te = _apportion(take, list(ratio))   # chia train/val/test trong bucket
+        out["train"] += chosen[:n_tr]
+        out["val"] += chosen[n_tr:n_tr + n_va]
+        out["test"] += chosen[n_tr + n_va:n_tr + n_va + n_te]
+
+    # Lưới an toàn: loop bắt buộc cần train & val non-empty. Nếu đã chọn >= 3 task mà
+    # split nào rỗng → mượn 1 phần tử từ split LỚN NHẤT (tất định, vẫn rời rạc).
+    if sum(len(v) for v in out.values()) >= 3:
+        for need in ("train", "val", "test"):
+            if not out[need]:
+                donor = max(("train", "val", "test"), key=lambda k: len(out[k]))
+                if len(out[donor]) >= 2:
+                    out[need].append(out[donor].pop())
     return out
 
 
