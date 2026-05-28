@@ -504,7 +504,7 @@ def evaluate_task(payload: tuple) -> dict:
     """
     # "Giải nén" (unpack) tuple payload thành 6 biến riêng lẻ.
     # Thứ tự phải khớp với thứ tự khi tạo tuple trong hàm main().
-    task_path, max_iters, time_budget, repeat_idx, log_dir, temperature = payload
+    task_path, max_iters, time_budget, repeat_idx, log_dir, temperature, skill_path = payload
 
     # Chuyển chuỗi đường dẫn thành Path object để dùng các method của Path.
     # (Worker process nhận payload qua pickle — Path object có thể không serialize được
@@ -591,7 +591,8 @@ def evaluate_task(payload: tuple) -> dict:
                 # sửa code, lặp cho đến khi xong hoặc hết turn.
                 # workspace=task_dir: agent sẽ làm việc trong thư mục task_dir.
                 res = run_agent(goal, workspace=task_dir, max_iters=max_iters,
-                                time_budget_s=time_budget, temperature=temperature)
+                                time_budget_s=time_budget, temperature=temperature,
+                                skill_path=skill_path)
                 # `.get("finish_reason", "unknown")` — đọc key "finish_reason" từ dict res.
                 # Nếu key không tồn tại → trả về "unknown" (tham số thứ 2 của .get()).
                 finish_reason = res.get("finish_reason", "unknown")
@@ -639,6 +640,7 @@ def evaluate_task(payload: tuple) -> dict:
         # Slice âm: Python đếm từ cuối chuỗi. Output có thể rất dài, chỉ giữ phần đuôi quan trọng.
         "pytest_tail": output[-1000:],
         "repeat_idx": repeat_idx,             # chỉ số lần lặp
+        "skill_path": skill_path,             # skill đã chèn (None nếu không) — phục vụ so A/B
     }
 
 
@@ -882,6 +884,13 @@ def main() -> int:
     ap.add_argument("--out", type=Path, default=None, help="file JSONL kết quả")
     ap.add_argument("--min-pass-rate", type=float, default=None,
                     help="nếu đặt: exit !=0 khi pass-rate dưới ngưỡng (CI gate)")
+    # SkillOpt substrate: chèn skill học được vào system prompt cho MỌI rollout của lần chạy này.
+    ap.add_argument("--skill-path", type=Path, default=None,
+                    help="file skill (.md) chèn sau SYSTEM_PROMPT; bỏ trống = không skill (hành vi gốc)")
+    # Chọn task theo danh sách tường minh (mỗi dòng 1 task-id) — OR-semantics, dùng cho
+    # split train/val/test của SkillOpt. Khác --filter (vốn AND nhiều điều kiện).
+    ap.add_argument("--tasks-file", type=Path, default=None,
+                    help="file liệt kê task-id (mỗi dòng 1 id, vd 'bench/he_010') để chọn đúng các task đó")
 
     # `ap.parse_args()` — đọc sys.argv (tham số dòng lệnh thực tế) và trả về Namespace object.
     # args.jobs, args.filter, args.resume, v.v. — truy cập từng giá trị qua dấu chấm.
@@ -902,6 +911,16 @@ def main() -> int:
     # Tìm tất cả task, rồi lọc theo filters.
     all_tasks = discover_tasks(TASKS_DIR)
     tasks = select_tasks(all_tasks, filters)
+    # --tasks-file: nếu có, chọn ĐÚNG các task có id nằm trong file (OR-semantics),
+    # ghi đè --filter. Mỗi dòng 1 task-id; dòng trống / bắt đầu '#' bị bỏ qua.
+    if args.tasks_file:
+        wanted = {ln.strip() for ln in args.tasks_file.read_text(encoding="utf-8").splitlines()
+                  if ln.strip() and not ln.strip().startswith("#")}
+        tasks = [t for t in all_tasks if rel_id(t) in wanted]
+        missing = wanted - {rel_id(t) for t in all_tasks}
+        if missing:
+            print(f"WARNING: {len(missing)} task-id trong --tasks-file không khớp task nào: "
+                  f"{sorted(missing)[:5]}{'...' if len(missing) > 5 else ''}")
     if not tasks:
         print(f"No tasks matched (discovered {len(all_tasks)} total, filters={filters})")
         return 2
@@ -945,7 +964,8 @@ def main() -> int:
                 # Tạo tuple payload để gửi cho worker.
                 # Dùng str(t) vì Path không pickle tốt qua process boundary.
                 work.append((str(t), args.max_iters, args.agent_timeout, r, str(log_dir),
-                             args.temperature))
+                             args.temperature,
+                             str(args.skill_path) if args.skill_path else None))
 
     total = len(work)
     print(f"Discovered {len(all_tasks)} tasks; selected {len(tasks)}; "
@@ -996,7 +1016,8 @@ def main() -> int:
                     w = futs[fut]  # lấy payload tương ứng từ dict futs
                     r = {"task": rel_id(Path(w[0])), "category": "?", "difficulty": "?",
                          "passed": False, "iters_used": 0, "finish_reason": "worker_error",
-                         "duration_s": 0.0, "pytest_tail": repr(e), "repeat_idx": w[3]}
+                         "duration_s": 0.0, "pytest_tail": repr(e), "repeat_idx": w[3],
+                         "skill_path": w[6] if len(w) > 6 else None}
 
                 results.append(r)
 

@@ -97,7 +97,8 @@ from src.tools import TOOL_SCHEMAS, execute_tool
 # `from src.prompts import SYSTEM_PROMPT` — nhập biến SYSTEM_PROMPT từ file
 # src/prompts.py. Đây là chuỗi dài mô tả cách agent phải hoạt động.
 # System prompt — tách ra file riêng để sau này dễ versioning cho training data.
-from src.prompts import SYSTEM_PROMPT
+# build_system_prompt: ghép skill học được (SkillOpt) vào sau SYSTEM_PROMPT.
+from src.prompts import SYSTEM_PROMPT, build_system_prompt
 
 
 # ---------------------------------------------------------------------------
@@ -356,7 +357,8 @@ def _setup_logging() -> None:
 # `-> dict` = hàm trả về một dictionary (từ điển key→value).
 def run_agent(goal: str, workspace: Path, max_iters: int = 15,
               time_budget_s: float | None = None,
-              temperature: float | None = None) -> dict:
+              temperature: float | None = None,
+              skill_path: Path | str | None = None) -> dict:
     """Run the ReAct loop until the model stops calling tools, or max_iters.
 
     ReAct = Reasoning + Acting interleaved. Each iteration:
@@ -421,8 +423,15 @@ def run_agent(goal: str, workspace: Path, max_iters: int = 15,
     # chứa cả system prompt VÀ goal của user (2 message ban đầu).
     # Dùng OpenAI TypedDict để Pylance pass-through; dict literal vẫn assign được
     # vì TypedDict là structural typing (chỉ check keys + value types).
+    # Skill injection (SkillOpt substrate): nếu caller truyền skill_path, đọc nội
+    # dung skill và ghép vào sau SYSTEM_PROMPT qua build_system_prompt. KHÔNG truyền
+    # skill_path (mặc định None) → build_system_prompt(None) trả về SYSTEM_PROMPT
+    # nguyên văn → hành vi byte-identical với trước (REPL, eval mặc định không đổi).
+    skill_text = Path(skill_path).read_text(encoding="utf-8") if skill_path else None
+    system_content = build_system_prompt(skill_text)
+
     messages: list[ChatCompletionMessageParam] = [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": system_content},
         {"role": "user", "content": goal},
     ]
 

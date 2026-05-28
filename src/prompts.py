@@ -109,3 +109,31 @@ Rules:
 # Kết thúc triple-quoted string bằng ba dấu nháy đôi: """
 # Mọi ký tự từ dấu """ mở đầu đến dấu """ đóng này đều là nội dung chuỗi —
 # model sẽ nhận được toàn bộ văn bản đó như là "system prompt".
+
+
+# ---------------------------------------------------------------------------
+# build_system_prompt — ghép skill học được vào sau prompt nền (SkillOpt substrate)
+# ---------------------------------------------------------------------------
+# Ý tưởng SkillOpt: SYSTEM_PROMPT ở trên là phần ĐÓNG BĂNG (không bao giờ sửa),
+# còn "skill" là một đoạn văn bản HỌC ĐƯỢC (procedural memory) được ghép thêm vào
+# sau nó. Hàm này nhận skill_text tùy chọn:
+#   - skill_text None hoặc rỗng  → trả về SYSTEM_PROMPT Y NGUYÊN (byte-identical).
+#     Đây là điều kiện sống còn: khi không truyền skill, agent phải hành xử HỆT cũ
+#     (REPL, eval mặc định, mọi caller hiện tại) — không một byte nào đổi.
+#   - có skill_text             → nối thêm một khối có nhãn rõ ràng phía sau.
+# Việc tách hàm này ra giúp: (1) chỗ duy nhất quyết định cách ghép skill,
+# (2) test được dễ (None/"" → giống hệt; có chữ → chứa cả nền lẫn skill).
+def build_system_prompt(skill_text: str | None = None) -> str:
+    """Trả về system prompt cuối cùng: SYSTEM_PROMPT (+ skill nếu có).
+
+    skill_text None/rỗng → SYSTEM_PROMPT nguyên văn (mặc định, không đổi hành vi).
+    Có skill → ghép sau một header phân tách rõ ràng.
+    """
+    # `if not skill_text or not skill_text.strip():` — coi None, "" và chuỗi chỉ
+    # gồm khoảng trắng đều là "không có skill" → trả về prompt nền nguyên văn.
+    if not skill_text or not skill_text.strip():
+        return SYSTEM_PROMPT
+    # Có skill thật: nối SYSTEM_PROMPT + 1 dòng trống + header + nội dung skill.
+    # Header cố định để model biết đây là "kỹ năng học được", và để optimizer của
+    # SkillOpt biết ranh giới phần được phép sửa.
+    return SYSTEM_PROMPT + "\n\n## Learned skills (auto-optimized)\n" + skill_text.strip()

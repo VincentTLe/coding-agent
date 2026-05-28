@@ -9,6 +9,7 @@ load_model_config() reads models.json by id, with $AGENT_MODEL override and a
 from __future__ import annotations
 
 from src.agent import ModelConfig, load_model_config
+from src.prompts import SYSTEM_PROMPT, build_system_prompt
 
 
 def test_load_model_config_reads_models_json():
@@ -29,3 +30,18 @@ def test_agent_model_env_override(monkeypatch):
     finally:
         # Don't leak the cached override into other tests.
         load_model_config.cache_clear()
+
+
+def test_build_system_prompt_none_is_byte_identical():
+    """No/empty/whitespace skill → byte-identical SYSTEM_PROMPT (default unchanged)."""
+    assert build_system_prompt(None) == SYSTEM_PROMPT
+    assert build_system_prompt("") == SYSTEM_PROMPT
+    assert build_system_prompt("   \n  \t ") == SYSTEM_PROMPT
+
+
+def test_build_system_prompt_appends_skill():
+    """With skill text → starts with the full base prompt AND contains the skill."""
+    out = build_system_prompt("RULE: write a failing test first.")
+    assert out.startswith(SYSTEM_PROMPT)
+    assert "RULE: write a failing test first." in out
+    assert "Learned skills" in out
