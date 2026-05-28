@@ -110,3 +110,28 @@ def test_splits_deterministic_disjoint_and_test_is_largest():
     assert train and val and test  # all non-empty
     assert not (train & val) and not (train & test) and not (val & test)  # disjoint
     assert len(test) > len(train) and len(test) > len(val)  # 2:1:7 → test largest
+
+
+# --- report stats (Wilson CI + McNemar, pure stdlib) ----------------------
+
+def test_wilson_ci_sane():
+    from skillopt.report import wilson_ci
+    lo, hi = wilson_ci(5, 10)
+    assert 0 <= lo < 0.5 < hi <= 1
+    assert wilson_ci(0, 0) == (0.0, 0.0)
+    lo2, hi2 = wilson_ci(10, 10)
+    assert hi2 <= 1.0 and lo2 < 1.0  # never exceeds 1
+
+
+def test_mcnemar_detects_asymmetry():
+    from skillopt.report import mcnemar
+    assert mcnemar(0, 0)[1] == 1.0
+    assert mcnemar(1, 20)[1] < 0.05   # strong improvement → significant
+    assert mcnemar(10, 10)[1] > 0.5   # symmetric → not significant
+
+
+def test_skillopt_modules_import():
+    """All loop/optimizer/report modules import without vLLM (no calls at import)."""
+    import skillopt.loop  # noqa: F401
+    import skillopt.optimizer_llm  # noqa: F401
+    import skillopt.report  # noqa: F401
