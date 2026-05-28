@@ -106,9 +106,18 @@ def _slow_update(prev_skill: str, curr_skill: str, sample_file: Path, *, jobs: i
 
 
 def optimize(seed_path: Path, splits_dir: Path, run_dir: Path, *, epochs: int, steps: int,
-             L: int, jobs: int, slow_samples: int) -> dict:
-    """Chạy vòng lặp SkillOpt. Trả summary + ghi best_skill.md + trajectory.jsonl."""
+             L: int, jobs: int, slow_samples: int,
+             max_minutes: float | None = None, smoke: bool = False) -> dict:
+    """Chạy vòng lặp SkillOpt. Trả summary + ghi best_skill.md + trajectory.jsonl.
+
+    max_minutes: ngân sách wall-clock — chạm ngưỡng thì DỪNG SẠCH ở ranh giới step (đã
+    checkpoint best_skill.md + trajectory.jsonl sau mỗi step), summary có stopped_early=True.
+    smoke: cấu hình nhanh (1 epoch / 1 step / slow_samples=2) để verify end-to-end.
+    """
+    if smoke:
+        epochs, steps, slow_samples = 1, 1, 2
     run_dir.mkdir(parents=True, exist_ok=True)
+    deadline = (time.monotonic() + max_minutes * 60) if max_minutes else None
     scratch = REPO / "eval" / "results" / "skillopt" / run_dir.name
     scratch.mkdir(parents=True, exist_ok=True)
     train_f, val_f = splits_dir / "train.txt", splits_dir / "val.txt"
@@ -127,10 +136,17 @@ def optimize(seed_path: Path, splits_dir: Path, run_dir: Path, *, epochs: int, s
 
     log({"event": "init", "seed_val_score": current_score, "best_score": best_score})
 
+    stopped = False
     for epoch in range(epochs):
+        if stopped:
+            break
         epoch_start_skill = current
         rejected: list[dict] = []   # buffer reset mỗi epoch
         for step in range(steps):
+            if deadline and time.monotonic() > deadline:   # hết ngân sách → dừng SẠCH
+                log({"event": "stopped", "reason": "max_minutes", "epoch": epoch, "step": step})
+                stopped = True
+                break
             tr_score, cases = _rollout(current, "train", train_f, jobs=jobs, scratch=scratch, cache=cache)
             fails = [c for c in cases if not c["passed"]]
             succ = [c for c in cases if c["passed"]]
@@ -155,7 +171,8 @@ def optimize(seed_path: Path, splits_dir: Path, run_dir: Path, *, epochs: int, s
             (run_dir / "current_skill.md").write_text(current, encoding="utf-8")
 
         # --- epoch boundary: slow / executive-strategy update (≥ epoch 1 meaningful) ---
-        if epoch >= 1 or epochs == 1:
+        # Bỏ qua nếu vừa dừng giữa epoch vì hết ngân sách (khỏi chạy thêm rollout).
+        if not stopped and (epoch >= 1 or epochs == 1):
             slow = _slow_update(epoch_start_skill, current, train_f, jobs=jobs,
                                 scratch=scratch, cache=cache)
             cand = replace_slow_update_field(current, slow)
@@ -171,7 +188,7 @@ def optimize(seed_path: Path, splits_dir: Path, run_dir: Path, *, epochs: int, s
 
     summary = {"epochs": epochs, "steps_per_epoch": steps, "L": L, "jobs": jobs,
                "seed_val_score": current_score, "best_val_score": best_score,
-               "best_skill": str(run_dir / "best_skill.md")}
+               "stopped_early": stopped, "best_skill": str(run_dir / "best_skill.md")}
     (run_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     log({"event": "done", **summary})
     return summary
@@ -187,7 +204,12 @@ if __name__ == "__main__":
     ap.add_argument("--L", type=int, default=4, help="edit budget (textual learning rate)")
     ap.add_argument("--jobs", type=int, default=8, help="parallel rollouts (set to vLLM-saturating value)")
     ap.add_argument("--slow-samples", type=int, default=16)
+    ap.add_argument("--max-minutes", type=float, default=None,
+                    help="ngân sách wall-clock: chạm ngưỡng thì dừng sạch ở ranh giới step")
+    ap.add_argument("--smoke", action="store_true",
+                    help="cấu hình nhanh (1 epoch/1 step/slow_samples=2) verify end-to-end")
     a = ap.parse_args()
     s = optimize(a.seed, a.splits, a.run_dir, epochs=a.epochs, steps=a.steps, L=a.L,
-                 jobs=a.jobs, slow_samples=a.slow_samples)
+                 jobs=a.jobs, slow_samples=a.slow_samples,
+                 max_minutes=a.max_minutes, smoke=a.smoke)
     print(json.dumps(s, indent=2))
