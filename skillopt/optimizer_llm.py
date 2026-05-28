@@ -50,36 +50,74 @@ def _call(system: str, user: str, *, max_tokens: int = 2048, temperature: float 
 
 
 def _extract_json(text: str) -> dict:
-    """Bóc khối JSON object đầu tiên từ text (model hay bọc bằng ```json / lời dẫn)."""
+    """Bóc dict JSON đầu tiên từ text — chịu được code-fence, lời dẫn, nhiều blob.
+
+    Local 14B thường "nghĩ trước rồi trả lời" → output có thể chứa 1-2 JSON-like blob
+    (vd 1 cho thinking, 1 cho edits). Phương án cũ dùng find/rfind giữa '{' đầu tới '}'
+    cuối → cắt nhầm SPAN cả 2 blob → JSON không parse được → silent {}, run mất gradient.
+    Bản fix: ưu tiên ```json fence (parse full), rồi quét MỌI '{' và dùng raw_decode
+    để lấy JSON balanced-brace đầu tiên CÓ 'edits' hoặc 'selected'; cuối cùng fallback
+    bất kỳ dict balanced. Bao mọi exception → {}.
+    """
     if not text:
         return {}
-    # ưu tiên khối ```json ... ```
-    m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
-    raw = m.group(1) if m else None
-    if raw is None:  # else: lấy từ '{' đầu tới '}' cuối
-        i, j = text.find("{"), text.rfind("}")
-        raw = text[i:j + 1] if (i != -1 and j > i) else ""
-    try:
-        return json.loads(raw)
-    except Exception:  # noqa: BLE001
-        return {}
+    m = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
+    if m:
+        try:
+            obj = json.loads(m.group(1))
+            if isinstance(obj, dict):
+                return obj
+        except Exception:
+            pass
+    dec = json.JSONDecoder()
+    # vòng 1: tìm dict có 'edits' hoặc 'selected' (đúng JSON ta cần)
+    for i, ch in enumerate(text):
+        if ch != "{":
+            continue
+        try:
+            obj, _ = dec.raw_decode(text[i:])
+        except Exception:
+            continue
+        if isinstance(obj, dict) and ("edits" in obj or "selected" in obj):
+            return obj
+    # vòng 2: bất kỳ dict balanced-brace nào (cho slow-update / fallback chung)
+    for i, ch in enumerate(text):
+        if ch != "{":
+            continue
+        try:
+            obj, _ = dec.raw_decode(text[i:])
+            if isinstance(obj, dict):
+                return obj
+        except Exception:
+            continue
+    return {}
 
 
 def _sanitize_edits(raw_edits: list) -> list[dict]:
-    """Giữ lại các edit hợp lệ: op trong _VALID_OPS, có content/target phù hợp."""
+    """Lọc edit hợp lệ: op chuẩn hoá, target/content là str thuần, KHÔNG chứa marker
+    SLOW-UPDATE (chống mọi đường phá vùng bảo vệ), và có đúng tham số cho op.
+    """
     out: list[dict] = []
     for e in raw_edits if isinstance(raw_edits, list) else []:
         if not isinstance(e, dict):
             continue
-        op = str(e.get("op", "")).strip()
+        # Chuẩn hoá op: lower + đổi '-' → '_' (bắt 'INSERT_AFTER', 'insert-after').
+        op = str(e.get("op", "")).strip().lower().replace("-", "_")
         if op not in _VALID_OPS:
             continue
-        edit = {"op": op, "target": str(e.get("target", "") or ""),
-                "content": str(e.get("content", "") or "")}
-        # replace/delete/insert_after cần target; append cần content
-        if op in {"replace", "delete", "insert_after"} and not edit["target"]:
-            if op != "insert_after":   # insert_after không target → sẽ fallback append
-                continue
+        raw_t, raw_c = e.get("target", ""), e.get("content", "")
+        # NGHIÊM về kiểu: chặn True/list/dict bị str()-hoá thành rác "True"/"['a']".
+        if raw_t is not None and not isinstance(raw_t, str):
+            continue
+        if raw_c is not None and not isinstance(raw_c, str):
+            continue
+        target, content = (raw_t or ""), (raw_c or "")
+        # CHẶN edit đụng marker SLOW-UPDATE qua bất kỳ trường nào (target / content).
+        if "<!-- SLOW-UPDATE:" in target or "<!-- SLOW-UPDATE:" in content:
+            continue
+        edit = {"op": op, "target": target, "content": content}
+        if op in {"replace", "delete"} and not edit["target"]:
+            continue
         if op in {"append", "insert_after", "replace"} and not edit["content"]:
             continue
         out.append(edit)

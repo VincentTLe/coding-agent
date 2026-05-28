@@ -49,14 +49,21 @@ def _region_span(skill: str) -> tuple[int, int] | None:
 
 
 def _is_in_slow_update_region(skill: str, target: str) -> bool:
-    """True nếu lần xuất hiện ĐẦU của target rơi vào trong vùng protected."""
+    """True nếu target ĐỤNG vào vùng protected (overlap), KHÔNG chỉ check start.
+
+    Bug pre-fix: chỉ kiểm `span[0] <= idx < span[1]` (chỉ vị trí bắt đầu) → một target
+    bắt đầu NGOÀI vùng nhưng kéo dài INTO/THROUGH vùng vẫn pass guard → replace/delete
+    xoá marker BEGIN → phá vùng vĩnh viễn. Bản fix: kiểm tra overlap thật giữa range
+    của target [idx, idx+len(target)) và range của vùng [span[0], span[1]).
+    """
     span = _region_span(skill)
     if span is None or not target:
         return False
     idx = skill.find(target)
     if idx == -1:
         return False
-    return span[0] <= idx < span[1]
+    # Hai khoảng overlap khi: idx < span[1] AND span[0] < idx + len(target).
+    return idx < span[1] and span[0] < idx + len(target)
 
 
 def _strip_markers(text: str) -> str:
@@ -83,7 +90,9 @@ def apply_edits(skill: str, edits: list[dict]) -> tuple[str, list[dict]]:
     reports: list[dict] = []
     for e in edits:
         op = (e.get("op") or "").strip()
-        target = e.get("target") or ""
+        # Strip marker khỏi CẢ target VÀ content — chống "đặt tên" marker để né guard
+        # (cùng với _is_in_slow_update_region đã overlap-aware, là 2 lớp phòng thủ).
+        target = _strip_markers(e.get("target") or "")
         content = _strip_markers(e.get("content") or "")
         status = "applied"
 
@@ -124,10 +133,20 @@ def apply_edits(skill: str, edits: list[dict]) -> tuple[str, list[dict]]:
 
 
 def ensure_slow_update_region(skill: str) -> str:
-    """Đảm bảo skill có ĐÚNG 1 vùng slow-update (rỗng nếu chưa có). Gọi lúc khởi tạo."""
-    if _region_span(skill) is not None:
-        return skill
-    return skill.rstrip() + "\n\n" + SLOW_UPDATE_BEGIN + "\n" + SLOW_UPDATE_END + "\n"
+    """Đảm bảo skill có ĐÚNG 1 vùng slow-update; CHUẨN HOÁ marker mồ côi (BEGIN-not-END
+    hoặc END-not-BEGIN, hoặc marker thừa ngoài vùng).
+
+    Nếu có vùng hợp lệ → strip mọi marker NGOÀI vùng (chống ô nhiễm). Nếu không có vùng
+    (kể cả khi có marker mồ côi do edit cũ phá), strip sạch rồi gắn vùng rỗng ở cuối.
+    """
+    span = _region_span(skill)
+    if span is not None:
+        prefix = skill[:span[0]].replace(SLOW_UPDATE_BEGIN, "").replace(SLOW_UPDATE_END, "")
+        suffix = skill[span[1]:].replace(SLOW_UPDATE_BEGIN, "").replace(SLOW_UPDATE_END, "")
+        return prefix + skill[span[0]:span[1]] + suffix
+    # không có vùng → strip mồ côi (nếu có) rồi gắn vùng rỗng ở cuối
+    clean = skill.replace(SLOW_UPDATE_BEGIN, "").replace(SLOW_UPDATE_END, "")
+    return clean.rstrip() + "\n\n" + SLOW_UPDATE_BEGIN + "\n" + SLOW_UPDATE_END + "\n"
 
 
 def replace_slow_update_field(skill: str, content: str) -> str:

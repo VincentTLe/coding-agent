@@ -69,6 +69,47 @@ def test_edit_content_cannot_inject_fake_markers():
     assert SLOW_UPDATE_END not in out
 
 
+def test_boundary_spanning_target_is_skipped_not_destructive():
+    """Regression for the pre-fix bug: a target that STARTS outside the protected region
+    but EXTENDS INTO it must be rejected — old guard only checked start → could destroy
+    the BEGIN marker and permanently corrupt the slow-update region."""
+    skill = replace_slow_update_field("# rules\npreamble.\n", "EXECUTIVE STRATEGY: hi.")
+    pre = skill.find("preamble.")
+    post = skill.find(SLOW_UPDATE_END) + len(SLOW_UPDATE_END)
+    target = skill[pre:post]   # spans from outside the region THROUGH the END marker
+    for op in ("replace", "delete"):
+        out, reports = apply_edits(skill, [{"op": op, "target": target, "content": "OWNED"}])
+        # Either defense is acceptable — the SAFETY PROPERTY is what matters: no destruction.
+        # (Strip-markers from target makes it not match → "skipped_target_not_found"; if a
+        # marker-free target overlapped, the overlap guard would say "skipped_protected_region".)
+        assert reports[0]["status"].startswith("skipped"), f"{op} not skipped: {reports[0]}"
+        assert SLOW_UPDATE_BEGIN in out and SLOW_UPDATE_END in out, "markers destroyed!"
+        assert "EXECUTIVE STRATEGY: hi." in out, "protected body destroyed!"
+
+
+def test_overlap_guard_direct():
+    """Direct test of the overlap-aware guard: a target without markers but whose first
+    occurrence falls INSIDE the protected region body must be rejected."""
+    skill = replace_slow_update_field("# rules\npreamble.\n", "EXEC STRATEGY: think long.")
+    out, reports = apply_edits(skill, [{"op": "replace", "target": "EXEC STRATEGY", "content": "x"}])
+    assert reports[0]["status"] == "skipped_protected_region"
+    assert "EXEC STRATEGY" in out  # body untouched
+
+
+def test_ensure_slow_update_region_normalizes_orphans():
+    """ensure_slow_update_region must repair skills with only-BEGIN or only-END markers,
+    yielding exactly one canonical region."""
+    only_begin = f"some text\n{SLOW_UPDATE_BEGIN}\nbody but no END\n"
+    fixed = ensure_slow_update_region(only_begin)
+    assert fixed.count(SLOW_UPDATE_BEGIN) == 1 and fixed.count(SLOW_UPDATE_END) == 1
+    assert fixed.find(SLOW_UPDATE_BEGIN) < fixed.find(SLOW_UPDATE_END)
+
+    only_end = f"prefix\n{SLOW_UPDATE_END}\nmore\n"
+    fixed2 = ensure_slow_update_region(only_end)
+    assert fixed2.count(SLOW_UPDATE_BEGIN) == 1 and fixed2.count(SLOW_UPDATE_END) == 1
+    assert fixed2.find(SLOW_UPDATE_BEGIN) < fixed2.find(SLOW_UPDATE_END)
+
+
 def test_replace_slow_update_field_overwrites_region_only():
     skill = replace_slow_update_field("tactical part.", "v1 strategy")
     skill2 = replace_slow_update_field(skill, "v2 strategy")
@@ -145,6 +186,32 @@ def test_mcnemar_detects_asymmetry():
     assert mcnemar(0, 0)[1] == 1.0
     assert mcnemar(1, 20)[1] < 0.05   # strong improvement → significant
     assert mcnemar(10, 10)[1] > 0.5   # symmetric → not significant
+
+
+def test_sanitize_rejects_marker_containing_edits():
+    """The optimizer can't sneak SLOW-UPDATE markers into target/content — defense-in-
+    depth alongside skill.py's overlap-aware guard."""
+    from skillopt.optimizer_llm import _sanitize_edits
+    bad = [
+        {"op": "replace", "target": f"x {SLOW_UPDATE_BEGIN}", "content": "y"},
+        {"op": "append", "content": f"z {SLOW_UPDATE_END} z"},
+        {"op": "insert_after", "target": "ok", "content": f"sneaky {SLOW_UPDATE_BEGIN}"},
+    ]
+    assert _sanitize_edits(bad) == []
+    # legit edits still pass
+    ok = _sanitize_edits([{"op": "append", "content": "rule one"},
+                          {"op": "INSERT-AFTER", "target": "x", "content": "y"}])  # case/separator normalize
+    assert {e["op"] for e in ok} == {"append", "insert_after"}
+
+
+def test_extract_json_handles_prose_plus_blob():
+    """Robust _extract_json grabs the right dict from prose+multi-blob output (Qwen3 pattern)."""
+    from skillopt.optimizer_llm import _extract_json
+    text = ('Let me think... {"thinking": "I need to add a rule."} '
+            'Here are the edits: {"edits": [{"op":"append","content":"new rule"}]}')
+    obj = _extract_json(text)
+    assert "edits" in obj and isinstance(obj["edits"], list)
+    assert obj["edits"][0]["op"] == "append"
 
 
 def test_skillopt_modules_import():

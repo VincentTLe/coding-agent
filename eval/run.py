@@ -895,6 +895,10 @@ def main() -> int:
     # `ap.parse_args()` — đọc sys.argv (tham số dòng lệnh thực tế) và trả về Namespace object.
     # args.jobs, args.filter, args.resume, v.v. — truy cập từng giá trị qua dấu chấm.
     args = ap.parse_args()
+    # Fail-fast: --skill-path không tồn tại → exit ngay, đừng để worker chạy mới phát hiện.
+    if args.skill_path is not None and not args.skill_path.exists():
+        print(f"--skill-path not found: {args.skill_path}")
+        return 2
 
     # Kiểm tra thư mục tasks tồn tại.
     if not TASKS_DIR.exists():

@@ -75,9 +75,23 @@ def _rollout(skill_text: str | None, split_name: str, tasks_file: Path, *, jobs:
         skill_file = scratch / f"skill_{key[0]}.md"
         skill_file.write_text(skill_text, encoding="utf-8")
         cmd += ["--skill-path", str(skill_file)]
-    subprocess.run(cmd, cwd=REPO, check=False)
+    # Trần wall-clock cho CẢ subprocess (chống vLLM/queue/pool deadlock): scale theo
+    # số task + jobs. Khác với --agent-timeout (chỉ trần MỖI task) — đây trần cả lần gọi.
+    try:
+        n_tasks = sum(1 for ln in tasks_file.read_text(encoding="utf-8").splitlines() if ln.strip())
+    except Exception:
+        n_tasks = 16
+    sub_timeout = (agent_timeout or 420) * max(1, (n_tasks + jobs - 1) // max(1, jobs)) + 600
+    try:
+        subprocess.run(cmd, cwd=REPO, check=False, timeout=sub_timeout)
+    except subprocess.TimeoutExpired:
+        # subprocess hang → KHÔNG cache (để lần sau thử lại), trả rỗng.
+        return 0.0, []
     results = _read_jsonl(out)
-    score = sum(1 for r in results if r.get("passed")) / len(results) if results else 0.0
+    if not results:
+        # subprocess không ghi gì → KHÔNG cache (chống "poison" gate bằng score=0 giả).
+        return 0.0, []
+    score = sum(1 for r in results if r.get("passed")) / len(results)
     cases = _cases(results)
     cache[key] = (score, cases)
     return score, cases
@@ -183,21 +197,26 @@ def optimize(seed_path: Path, splits_dir: Path, run_dir: Path, *, epochs: int, s
         # --- epoch boundary: slow / executive-strategy update (≥ epoch 1 meaningful) ---
         # Bỏ qua nếu vừa dừng giữa epoch vì hết ngân sách (khỏi chạy thêm rollout).
         if not stopped and (epoch >= 1 or epochs == 1):
-            try:
-                slow = _slow_update(epoch_start_skill, current, train_f, jobs=jobs,
-                                    scratch=scratch, cache=cache)
-                cand = replace_slow_update_field(current, slow)
-                cand_score, _ = _rollout(cand, "val", val_f, jobs=jobs, scratch=scratch, cache=cache)
-                accepted = cand_score >= current_score   # slow-update: không làm tệ đi thì giữ
-                if accepted:
-                    current, current_score = cand, cand_score
-                    if cand_score > best_score:
-                        best, best_score = cand, cand_score
-                        (run_dir / "best_skill.md").write_text(best, encoding="utf-8")
-                log({"event": "slow_update", "epoch": epoch, "cand_score": cand_score,
-                     "accepted": accepted, "slow_field": slow[:300]})
-            except Exception as e:  # noqa: BLE001 — slow-update KHÔNG được giết run dài
-                log({"event": "slow_update_error", "epoch": epoch, "error": repr(e)[:300]})
+            if deadline and time.monotonic() > deadline:
+                # Hết ngân sách ngay trước slow-update → KHÔNG chạy thêm rollout, dừng SẠCH.
+                stopped = True
+                log({"event": "stopped", "reason": "max_minutes_at_epoch_boundary", "epoch": epoch})
+            else:
+                try:
+                    slow = _slow_update(epoch_start_skill, current, train_f, jobs=jobs,
+                                        scratch=scratch, cache=cache)
+                    cand = replace_slow_update_field(current, slow)
+                    cand_score, _ = _rollout(cand, "val", val_f, jobs=jobs, scratch=scratch, cache=cache)
+                    accepted = cand_score >= current_score   # slow-update: không làm tệ đi thì giữ
+                    if accepted:
+                        current, current_score = cand, cand_score
+                        if cand_score > best_score:
+                            best, best_score = cand, cand_score
+                            (run_dir / "best_skill.md").write_text(best, encoding="utf-8")
+                    log({"event": "slow_update", "epoch": epoch, "cand_score": cand_score,
+                         "accepted": accepted, "slow_field": slow[:300]})
+                except Exception as e:  # noqa: BLE001 — slow-update KHÔNG được giết run dài
+                    log({"event": "slow_update_error", "epoch": epoch, "error": repr(e)[:300]})
 
     summary = {"epochs": epochs, "steps_per_epoch": steps, "L": L, "jobs": jobs,
                "seed_val_score": current_score, "best_val_score": best_score,
