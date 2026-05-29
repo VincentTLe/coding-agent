@@ -48,6 +48,10 @@ import logging
 # kiểm tra file tồn tại không, v.v.
 import os
 
+# `import sys` — dùng sys.stderr cho handler logging "động" (xem _DynamicStderrHandler):
+# eval redirect_stderr cho từng task nên log phải bám sys.stderr TẠI LÚC ghi, không bind cứng.
+import sys
+
 # `import time` — nhập module time.
 # Dùng để đo thời gian (time.monotonic() trả về số giây kể từ một điểm
 # tham chiếu cố định — dùng để tính xem đã chạy bao nhiêu giây).
@@ -285,7 +289,13 @@ def get_client() -> OpenAI:
         # base_url + api_key lấy từ config → đổi model/endpoint = sửa models.json,
         # không phải sửa code. Đây chính là pattern "portability" kiểu Pi.
         cfg = load_model_config()
-        _client = OpenAI(base_url=cfg.base_url, api_key=cfg.api_key)
+        # timeout + max_retries TƯỜNG MINH: mặc định SDK (~600s/request, retry nhiều lần)
+        # khiến 1 call vLLM kẹt treo cả turn ~10-30 phút — time_budget_s chỉ check GIỮA các
+        # turn nên không cắt được call đang treo, và harness await fut.result() không timeout.
+        # Đặt trần mỗi request (120s) + 1 retry → call hỏng bị cắt nhanh, không nuốt cả budget
+        # của run dài không người trông (audit HIGH). Có thể đưa vào models.json sau.
+        _client = OpenAI(base_url=cfg.base_url, api_key=cfg.api_key,
+                         timeout=120.0, max_retries=1)
 
     # `return _client` — trả về giá trị cho bên gọi hàm.
     # `return` là từ khóa kết thúc hàm và trả về giá trị.
@@ -313,29 +323,43 @@ def get_model() -> str:
 # `def _setup_logging() -> None:` — hàm cấu hình hệ thống logging.
 # Dấu gạch dưới đầu (_setup_logging) báo hiệu đây là hàm "private" —
 # chỉ dùng trong file này, không dùng từ bên ngoài.
-def _setup_logging() -> None:
-    """Cấu hình logging 1 lần duy nhất (có guard), gọi từ run_agent.
+class _DynamicStderrHandler(logging.Handler):
+    """Ghi log ra sys.stderr ĐỌC ĐỘNG tại lúc emit (KHÔNG bind cứng một stream).
 
-    `format="%(message)s"` = chỉ in nội dung message, không in timestamp/level —
-    gọn cho demo. Level INFO = thấy mọi log.info(). Guard `_logging_ready` để
-    không basicConfig lại ở các lần run_agent sau (tránh giẫm cấu hình caller).
+    Vì sao cần: eval gọi run_agent BÊN TRONG `redirect_stderr(file_log_của_task)` cho
+    TỪNG task. `logging.basicConfig` (cách cũ) bind handler vào sys.stderr DUY NHẤT 1 lần
+    mỗi process; ở ProcessPool 'spawn' worker bị tái dùng qua nhiều task, task đầu bind vào
+    file-log#1, các task sau redirect sang file mới nhưng guard bỏ qua basicConfig → handler
+    vẫn trỏ stream cũ (đã đóng) → 590/627 log per-task = 0 byte (mất trace để audit).
+    Handler này đọc `sys.stderr` ngay lúc emit nên luôn ghi vào file-log của task hiện tại.
+    """
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            sys.stderr.write(self.format(record) + "\n")
+        except Exception:           # logging KHÔNG được phép giết caller
+            self.handleError(record)
+
+
+def _setup_logging() -> None:
+    """Gắn 1 lần (có guard) handler ghi log "agent" ra sys.stderr ĐỘNG tại lúc emit.
+
+    `format="%(message)s"` = chỉ in nội dung message (gọn cho demo). `propagate=False` để
+    log không lọt lên root (tránh nhân đôi + tránh dính handler cũ của caller). Dùng
+    _DynamicStderrHandler thay vì basicConfig để log bám đúng redirect_stderr mỗi task của
+    eval (xem docstring handler) — sửa bug log 0 byte ở pool worker tái dùng.
     """
     # `global _logging_ready` — cần gán lại biến module-level này.
     global _logging_ready
 
-    # `if not _logging_ready:` — kiểm tra "nếu CHƯA sẵn sàng".
-    # `not` là toán tử phủ định: lật ngược giá trị boolean.
-    # not False = True, not True = False.
-    # Vậy: if not _logging_ready = "nếu _logging_ready là False" = "nếu chưa cấu hình".
+    # `if not _logging_ready:` — chỉ gắn handler 1 lần mỗi process (handler đã "động" nên
+    # gắn 1 lần là đủ để theo mọi redirect về sau).
     if not _logging_ready:
-        # `logging.basicConfig(...)` — cấu hình toàn bộ hệ thống logging.
-        # `level=logging.INFO` = chỉ in log từ mức INFO trở lên (INFO, WARNING, ERROR).
-        #   Các mức: DEBUG < INFO < WARNING < ERROR < CRITICAL
-        # `format="%(message)s"` = chỉ in nội dung message, không kèm timestamp.
-        #   Ví dụ format đầy đủ hơn: "%(asctime)s - %(levelname)s - %(message)s"
-        logging.basicConfig(level=logging.INFO, format="%(message)s")
-        # Đánh dấu đã cấu hình xong — lần sau gọi _setup_logging() sẽ không
-        # chạy basicConfig nữa (tránh ghi đè cấu hình logging của caller).
+        log.setLevel(logging.INFO)
+        log.propagate = False
+        handler = _DynamicStderrHandler()
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        log.addHandler(handler)
         _logging_ready = True
 
 
@@ -595,6 +619,12 @@ def run_agent(goal: str, workspace: Path, max_iters: int = 15,
             # Lời gọi này BLOCK (chặn) chương trình cho đến khi nhận được phản hồi
             # từ model — có thể mất vài giây đến vài chục giây.
             resp = client.chat.completions.create(**create_kwargs)  # type: ignore[arg-type]
+            # Một số endpoint trả 200 nhưng choices RỖNG (lỗi phía server / context tràn).
+            # Không guard thì resp.choices[0] bên dưới ném IndexError → crash worker. Coi
+            # như api_error để harness ghi nhận đúng thay vì "agent_crash".
+            if not resp.choices:
+                cprint(Color.WARN, f"\nAPI returned empty choices on turn {i}. Stopping.")
+                return {"finish_reason": "api_error", "iters_used": i}
         except OpenAIError as e:
             # `e` là biến chứa thông tin lỗi — có thể in ra để debug.
             # `f"\nAPI error on turn {i}: {e}. Stopping."` = f-string chèn i và e vào.
@@ -741,6 +771,15 @@ def run_agent(goal: str, workspace: Path, max_iters: int = 15,
         # `if i == max_iters:` — `==` là so sánh BẰNG (khác với = là gán).
         # Nếu đây là turn cuối cùng được phép → dừng, không chạy tool nữa.
         if i == max_iters:
+            # Turn cuối mà model GỌI finish() ngay tại đây = nó ĐÃ tuyên bố xong, không
+            # phải bị cụt vì hết turn. Phân loại "finished" (đừng để rơi xuống "max_iters").
+            # Quan trọng vì optimizer của SkillOpt keys luật khắc phục theo finish_reason —
+            # nhầm finished→max_iters sẽ đánh lừa nó. (Tool result của turn cuối dù sao cũng
+            # không được gửi lại cho model nên return luôn là đúng.)
+            if any(getattr(tc, "function", None) and tc.function.name == "finish"
+                   for tc in msg.tool_calls):
+                cprint(Color.FINISH, "\nAgent called finish() on the final turn — task complete.")
+                return {"finish_reason": "finished", "iters_used": i}
             # `break` — thoát khỏi vòng lặp for ngay lập tức.
             # Không chạy thêm bất kỳ lần lặp nào. Code tiếp tục sau dấu } của for.
             break

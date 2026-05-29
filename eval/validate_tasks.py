@@ -153,8 +153,15 @@ def validate_one(task_path: str) -> dict:
     # `and` — toán tử logic: cả hai vế phải True thì kết quả mới True.
     ok = ref_pass and not stub_pass
 
+    # TIMEOUT phân biệt với BROKEN: nếu reference fail CHỈ vì pytest hết 60s (máy bận, không
+    # phải logic sai) thì KHÔNG được quarantine (xoá vĩnh viễn) task tốt. run_pytest đánh dấu
+    # "TIMEOUT" trong output cho trường hợp này.
+    timed_out = "TIMEOUT" in (ref_out or "")
+
     if ok:
         note = "ok"
+    elif timed_out:
+        note = "TIMEOUT: reference run hit the 60s pytest cap (machine busy?) — NOT quarantined"
     elif not ref_pass:
         # Lời giải tham chiếu không pass → task "broken".
         # `ref_out.strip().splitlines()[-1][:160]` — lấy dòng cuối của output (thường là summary
@@ -167,8 +174,8 @@ def validate_one(task_path: str) -> dict:
         # stub_pass = True → stub đã pass ngay từ đầu → task "vacuous" (rỗng/vô nghĩa).
         note = "VACUOUS: stub already passes (tests too weak)"
 
-    # Trả về dict kết quả.
-    return {"task": rel, "ok": ok, "note": note}
+    # Trả về dict kết quả. `timeout` để khâu quarantine bỏ qua (không xoá task chỉ vì chậm).
+    return {"task": rel, "ok": ok, "note": note, "timeout": timed_out}
 
 
 def main() -> int:
@@ -234,11 +241,17 @@ def main() -> int:
     good = len(results) - len(bad)
     print(f"\nVALID: {good}/{len(results)}   INVALID: {len(bad)}")
 
-    # Nếu có task hỏng VÀ người dùng dùng flag --quarantine → di chuyển task hỏng.
-    if bad and args.quarantine:
+    # Chỉ quarantine task HỎNG THẬT (broken/vacuous), KHÔNG quarantine task chỉ bị TIMEOUT
+    # (chạy lâu do máy bận ≠ task sai) — nếu không sẽ xoá dần task tốt khỏi suite.
+    quarantinable = [r for r in bad if not r.get("timeout")]
+    timed_out = [r for r in bad if r.get("timeout")]
+    if timed_out:
+        print(f"NOTE: {len(timed_out)} task TIMEOUT (không quarantine) — chạy lại lúc máy rảnh.")
+    # Nếu có task hỏng thật VÀ người dùng dùng flag --quarantine → di chuyển task hỏng.
+    if quarantinable and args.quarantine:
         # `QUARANTINE.mkdir(parents=True, exist_ok=True)` — tạo thư mục _quarantine/ nếu chưa có.
         QUARANTINE.mkdir(parents=True, exist_ok=True)
-        for r in bad:
+        for r in quarantinable:
             # `TASKS_DIR / r["task"]` — đường dẫn tuyệt đối của task hỏng.
             # r["task"] ví dụ: "bench/he_000" → TASKS_DIR / "bench" / "he_000".
             src = TASKS_DIR / r["task"]
@@ -252,8 +265,8 @@ def main() -> int:
                 # Sau khi move: src không còn tồn tại, dst là thư mục task cũ.
                 # discover_tasks() sẽ bỏ qua _quarantine/ vì tên bắt đầu bằng _.
                 shutil.move(str(src), str(dst))
-        print(f"Quarantined {len(bad)} tasks → {QUARANTINE} (discovery skips '_' dirs).")
-    elif bad:
+        print(f"Quarantined {len(quarantinable)} tasks → {QUARANTINE} (discovery skips '_' dirs).")
+    elif quarantinable:
         # Có task hỏng nhưng không dùng --quarantine → chỉ thông báo, không di chuyển.
         print("Re-run with --quarantine to move the invalid tasks out of the suite.")
 

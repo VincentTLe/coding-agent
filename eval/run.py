@@ -46,6 +46,10 @@ import json
 # và có thể tắt bật theo cấp độ mà không cần xóa code.
 import logging
 
+# `import re` — biểu thức chính quy, dùng phân tích dòng tổng kết của pytest
+# ("N passed" / "M failed") để chấm điểm CHẮC CHẮN có test chạy, không chỉ dựa exit code.
+import re
+
 # `import os` — nạp module os: tương tác với hệ điều hành.
 # Ở đây dùng os.environ để đọc/ghi biến môi trường (environment variables) — các
 # cài đặt hệ thống như PATH, HOME, PYTHONDONTWRITEBYTECODE.
@@ -162,6 +166,11 @@ from src.agent import run_agent  # noqa: E402
 # `/` toán tử nối Path: ROOT / "eval" / "tasks" = đường dẫn tuyệt đối tới eval/tasks/.
 TASKS_DIR = ROOT / "eval" / "tasks"       # thư mục chứa tất cả task
 RESULTS_DIR = ROOT / "eval" / "results"  # thư mục lưu kết quả chạy
+# Nơi cất tạm file test bị giấu — NGOÀI task_dir (agent không thấy) và TRONG eval/results
+# (đã gitignore). Giấu test bằng cách DI CHUYỂN file ra đây thay vì xoá: nội dung sống trên
+# disk nên nếu run bị HARD-KILL (SIGKILL/OOM/reboot bỏ qua finally), startup sweep khôi phục
+# được — chống bug "test bị xoá vĩnh viễn rồi --resume chấm trên cây hỏng" (audit HIGH).
+HIDDEN_BACKUP_DIR = RESULTS_DIR / ".hidden_tests"
 
 
 # ---------------------------------------------------------------------------
@@ -331,6 +340,35 @@ def rel_id(task_dir: Path) -> str:
     return task_dir.relative_to(TASKS_DIR).as_posix()
 
 
+def _hide_backup_path(f: Path) -> Path:
+    """Vị trí cất file test bị giấu: HIDDEN_BACKUP_DIR mirror cấu trúc dưới TASKS_DIR.
+    Vd eval/tasks/bench/he_001/test_x.py -> eval/results/.hidden_tests/bench/he_001/test_x.py.
+    Mirror để startup sweep tái lập đúng đường dẫn gốc (TASKS_DIR / <rel>)."""
+    return HIDDEN_BACKUP_DIR / f.relative_to(TASKS_DIR)
+
+
+def restore_orphaned_hidden_tests() -> int:
+    """Khôi phục mọi file test còn kẹt trong HIDDEN_BACKUP_DIR (do một run trước bị HARD-KILL
+    nên không kịp trả test về). Trả số file đã phục hồi. Gọi 1 lần ở đầu main() để 'chữa lành'
+    cây fixtures TRƯỚC khi chấm — chặn bug self-propagating: --resume chấm trên task thiếu test
+    → pytest exit 5 → false-fail lan ra mọi run sau."""
+    if not HIDDEN_BACKUP_DIR.exists():
+        return 0
+    restored = 0
+    for bak in HIDDEN_BACKUP_DIR.rglob("*"):
+        if not bak.is_file():
+            continue
+        orig = TASKS_DIR / bak.relative_to(HIDDEN_BACKUP_DIR)
+        if orig.exists():
+            bak.unlink()                       # bản gốc còn nguyên → backup thừa, dọn
+        else:
+            orig.parent.mkdir(parents=True, exist_ok=True)
+            bak.replace(orig)                  # trả test về đúng chỗ
+            restored += 1
+    shutil.rmtree(HIDDEN_BACKUP_DIR, ignore_errors=True)   # dọn thư mục backup rỗng
+    return restored
+
+
 # ---------------------------------------------------------------------------
 # SNAPSHOT / RESTORE / PYTEST  (giữ nguyên ý nghĩa bản cũ)
 # ---------------------------------------------------------------------------
@@ -354,10 +392,15 @@ def snapshot_files(task_dir: Path) -> dict[Path, str]:
     # `task_dir.rglob("*")` — tìm kiếm đệ quy TẤT CẢ file và thư mục (*: khớp mọi tên).
     for f in task_dir.rglob("*"):
         # `f.is_file()` — True nếu f là file (không phải thư mục).
-        if f.is_file():
-            # `snap[f] = ...` — thêm entry vào dict: key là Path f, value là nội dung.
-            # `f.read_text(encoding="utf-8", errors="replace")` — đọc nội dung file dạng text.
-            snap[f] = f.read_text(encoding="utf-8", errors="replace")
+        if not f.is_file():
+            continue
+        # Bỏ qua build artifact BINARY tái sinh được (.pyc / __pycache__): đọc text với
+        # errors="replace" rồi write_text lại sẽ HỎNG nội dung binary khi restore. Không cần
+        # snapshot (pytest tự tạo lại; lúc chấm đã set PYTHONDONTWRITEBYTECODE).
+        if "__pycache__" in f.parts or f.suffix == ".pyc":
+            continue
+        # `snap[f] = ...` — thêm entry vào dict: key là Path f, value là nội dung file (text).
+        snap[f] = f.read_text(encoding="utf-8", errors="replace")
     return snap
 
 
@@ -472,15 +515,18 @@ def run_pytest(task_dir: Path) -> tuple[bool, str]:
             env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
         )
     except subprocess.TimeoutExpired:
-        # Trả về tuple (False, thông báo lỗi).
-        return False, "ERROR: pytest timed out after 60s"
+        # Đánh dấu TIMEOUT rõ ràng trong output → validate_tasks phân biệt được "chạy lâu"
+        # với "logic sai" (không quarantine nhầm task chỉ vì máy bận).
+        return False, "ERROR: pytest TIMEOUT after 60s"
 
-    # `result.returncode` — mã thoát (exit code) của subprocess sau khi kết thúc.
-    # Quy ước Unix: 0 = thành công (pytest chạy xong, mọi test pass).
-    #               Khác 0 = thất bại (có test fail, lỗi cú pháp...).
-    # `result.returncode == 0` — biểu thức so sánh, trả về True/False.
-    # `result.stdout + result.stderr` — nối stdout và stderr thành 1 chuỗi đầy đủ.
-    return result.returncode == 0, result.stdout + result.stderr
+    out = result.stdout + result.stderr
+    # Exit code 0 CHƯA đủ để tính PASS: pytest trả 0 cả khi 0 test được collect hoặc TẤT CẢ
+    # bị skip (vd file test biến mất, hoặc toàn @skip) → sẽ là PASS GIẢ, làm điểm phồng và
+    # che lỗi hide-tests. Yêu cầu CÓ ÍT NHẤT 1 test thực sự passed VÀ không có failed/error.
+    passed_ct = sum(int(n) for n in re.findall(r"(\d+) passed", out))
+    has_fail = bool(re.search(r"\d+ (?:failed|error)", out))
+    passed = (result.returncode == 0) and passed_ct >= 1 and not has_fail
+    return passed, out
 
 
 # ---------------------------------------------------------------------------
@@ -582,8 +628,12 @@ def evaluate_task(payload: tuple) -> dict:
             for f in hidden_tests:
                 # `f.exists()` — kiểm tra file còn tồn tại không.
                 if f.exists():
-                    # `f.unlink()` — xóa file.
-                    f.unlink()
+                    # DI CHUYỂN test ra backup ngoài task_dir (KHÔNG xoá) → nội dung sống
+                    # trên disk để hard-kill vẫn khôi phục được; và vì backup nằm NGOÀI
+                    # workspace của agent nên agent không thể đọc test để gian lận.
+                    bak = _hide_backup_path(f)
+                    bak.parent.mkdir(parents=True, exist_ok=True)
+                    f.replace(bak)             # move atomic (cùng filesystem dưới ROOT)
 
             try:
                 # Chạy agent với task hiện tại.
@@ -606,10 +656,15 @@ def evaluate_task(payload: tuple) -> dict:
                 # `{e!r}` trong f-string: !r gọi repr() trên e, in dạng debugging đầy đủ.
                 print(f"AGENT CRASHED: {e!r}")
 
-            # Trả lại file test sau khi agent đã xong.
-            # `for f, content in hidden_tests.items():` — lặp qua (Path, nội dung).
+            # Trả lại file test sau khi agent đã xong (di chuyển backup về chỗ cũ).
+            # `for f, content in hidden_tests.items():` — lặp qua (Path, nội dung gốc).
             for f, content in hidden_tests.items():  # trả test lại để chấm
-                f.write_text(content, encoding="utf-8")
+                bak = _hide_backup_path(f)
+                f.parent.mkdir(parents=True, exist_ok=True)
+                if bak.exists():
+                    bak.replace(f)             # move backup về (trường hợp thường)
+                else:
+                    f.write_text(content, encoding="utf-8")  # backup mất → ghi từ snap (RAM)
 
         # Trước khi chấm: dọn mọi path lạ (file/dir agent tạo, vd lời giải phụ hay
         # venv/ rò rỉ) → pytest chỉ collect đúng test gốc + edit của agent lên file gốc.
@@ -899,6 +954,19 @@ def main() -> int:
     if args.skill_path is not None and not args.skill_path.exists():
         print(f"--skill-path not found: {args.skill_path}")
         return 2
+    # Fail-fast: --repeats>1 + --jobs>1 = nhiều worker chấm CÙNG 1 task_dir song song. Hide/
+    # snapshot/restore thao tác TẠI CHỖ trên task_dir → các repeat đua nhau xoá/khôi phục
+    # test ⇒ điểm sai. Cô lập per-task chưa làm; tạm CHẶN tổ hợp này (audit HIGH).
+    if args.repeats > 1 and args.jobs > 1:
+        print("ERROR: --repeats>1 cùng --jobs>1 sẽ đua trên cùng task_dir (hide/restore tại chỗ). "
+              "Dùng --jobs 1 cho repeats, hoặc chạy mỗi repeat ra --out riêng.")
+        return 2
+
+    # Chữa lành fixtures TRƯỚC khi chấm: trả lại mọi test còn kẹt trong backup do một run
+    # trước bị hard-kill. Nếu bỏ qua, --resume sẽ chấm task thiếu test → false-fail lan ra.
+    _healed = restore_orphaned_hidden_tests()
+    if _healed:
+        print(f"⚠ restored {_healed} hidden-test file(s) orphaned by a prior interrupted run")
 
     # Kiểm tra thư mục tasks tồn tại.
     if not TASKS_DIR.exists():
@@ -942,6 +1010,39 @@ def main() -> int:
     # `or` trong Python: trả về vế trái nếu truthy, ngược lại trả về vế phải.
     # None or "abc" → "abc"; Path("/foo") or "abc" → Path("/foo").
     out_path = args.out or (RESULTS_DIR / f"run-{ts}.jsonl")
+
+    # AUDITABILITY: ghi sidecar <out>.config.json → mỗi file kết quả TỰ MÔ TẢ (model, sampling,
+    # giới hạn, git SHA, argv). Không có nó thì mọi so sánh A/B trong report chỉ là 2 file JSONL
+    # không rõ sinh ra từ cấu hình nào (audit HIGH). Bọc try để sidecar không bao giờ làm hỏng eval.
+    try:
+        from src.agent import get_model
+        _sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT,
+                              capture_output=True, text=True).stdout.strip() or "unknown"
+        _cfg = {"timestamp": ts, "model": get_model(), "temperature": args.temperature,
+                "max_iters": args.max_iters, "agent_timeout": args.agent_timeout,
+                "jobs": args.jobs, "repeats": args.repeats,
+                "skill_path": str(args.skill_path) if args.skill_path else None,
+                "tasks_file": str(args.tasks_file) if args.tasks_file else None,
+                "git_sha": _sha, "argv": sys.argv[1:]}
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        _cfg_path = out_path.parent / (out_path.name + ".config.json")
+        # --resume CHỈ key theo (task, repeat_idx) nên có thể trộn 2 lần chạy khác CẤU HÌNH
+        # vào CÙNG 1 out file (chimera 2 model/skill). Trước khi ghi đè sidecar, nếu đang resume
+        # vào file đã có và config "đồng nhất" KHÁC lần trước → cảnh báo to (audit HIGH).
+        if args.resume and out_path.exists() and _cfg_path.exists():
+            try:
+                old = json.loads(_cfg_path.read_text(encoding="utf-8"))
+                keys = ("model", "temperature", "max_iters", "agent_timeout", "skill_path")
+                diff = {k: (old.get(k), _cfg.get(k)) for k in keys if old.get(k) != _cfg.get(k)}
+                if diff:
+                    print(f"⚠ RESUME CONFIG MISMATCH vào {out_path.name}: {diff}\n"
+                          "   → out-file sẽ TRỘN kết quả của 2 cấu hình khác nhau (không đồng nhất). "
+                          "Dùng --out riêng cho mỗi cấu hình để so sánh A/B chuẩn.")
+            except Exception:
+                pass
+        _cfg_path.write_text(json.dumps(_cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
 
     # Thư mục chứa log từng task.
     log_dir = RESULTS_DIR / "logs"
