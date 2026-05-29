@@ -205,7 +205,7 @@ done — stopped on its own
 </section>
 
 <section>
-  <h2>The 10 Tools</h2>
+  <h2>The 11 Tools</h2>
   <table>
     <thead>
       <tr><th>Category</th><th>Tools</th></tr>
@@ -215,6 +215,7 @@ done — stopped on its own
       <tr><td><em>Discovery</em></td><td><code>list_dir</code> &middot; <code>glob_files</code> &middot; <code>grep_files</code></td></tr>
       <tr><td><em>Execution</em></td><td><code>run_bash</code> &middot; <code>run_python</code></td></tr>
       <tr><td><em>Delegation</em></td><td><code>spawn_subagent</code></td></tr>
+      <tr><td><em>Completion</em></td><td><code>finish</code> — agent calls this to END the session (prose alone does <em>not</em> end it)</td></tr>
     </tbody>
   </table>
   <ul>
@@ -249,26 +250,20 @@ done — stopped on its own
 
 <section>
   <h2>Results: does it actually work?</h2>
-  <p style="text-align:center; font-size:1.5em; margin:0.3em 0;">
-    On the full <strong>627-task</strong> suite: <em>pass-rate</em> <strong class="count" data-to="79.9">79.9%</strong>
+  <p style="text-align:center; font-size:1.25em; margin:0.3em 0;">
+    <strong>HumanEval+</strong> (leak-free): <strong>~80%</strong> &nbsp;·&nbsp;
+    full de-leaked re-run <em>in&nbsp;progress</em>
   </p>
-  <table style="width:52%; margin:0.4em auto;">
-    <thead>
-      <tr><th>Difficulty</th><th>Pass-rate</th></tr>
-    </thead>
-    <tbody>
-      <tr><td>Easy</td><td><strong>93%</strong></td></tr>
-      <tr><td>Medium</td><td><strong>83%</strong></td></tr>
-      <tr><td>Hard</td><td><strong>63%</strong></td></tr>
-    </tbody>
-  </table>
-  <p style="text-align:center; font-size:0.8em; opacity:.7; margin:0;">
-    easy &raquo; medium &raquo; hard — degrades <em>gracefully</em> (a real benchmark, not luck)
+  <p style="text-align:center; font-size:0.82em; opacity:.8; margin:0.2em auto; max-width:80%;">
+    <strong>Honesty note (caught in review):</strong> an earlier 79.9% aggregate was inflated —
+    ~93% of the 424 MBPP tasks leaked 2 of 3 graded asserts into the prompt. We <em>fixed</em> the
+    harness (spec-only goals) and are re-running clean. HumanEval was never affected (~80%); MBPP
+    drops to ~66% once de-leaked. The real headline is the <em>fix</em>, not the old number.
   </p>
   <p class="fragment" style="margin-top:0.5em;">
     <strong>The key insight (from the eval traces):</strong> the dominant failure wasn't
-    <em>bad code</em> — the model sometimes <strong>replied in prose instead of calling a tool</strong>.
-    When it actually engages a tool, it's <strong>~92% correct</strong>.
+    <em>bad code</em> — the model often <strong>replied in prose instead of calling a tool</strong>
+    (a tool-use failure, not a reasoning failure). This held on the clean re-run too.
   </p>
   <p class="fragment" style="margin-top:0.2em;">
     A <em>guardrail</em> (nudge it to <strong>act</strong>) recovered most of those.
@@ -324,9 +319,9 @@ done — stopped on its own
     width: 1280, height: 800, margin: 0.04, minScale: 0.2, maxScale: 2.0,
   });
 
-  // Count-up on the headline result. Bulletproof by design: if gsap fails to load the
-  // static "79.9%" in the HTML stays; reduced-motion is respected; onComplete pins the
-  // exact final value (no float drift); runs once per element (data-done).
+  // Count-up animation for any .count headline number (no-op now that the results slide
+  // shows honest static text instead of a single aggregate; kept for when the clean
+  // re-run number is added back). Reduced-motion respected; runs once per element.
   function countUp(slide) {
     if (!slide || !window.gsap) return;
     const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
