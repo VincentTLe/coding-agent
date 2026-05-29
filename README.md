@@ -4,7 +4,7 @@
 
 🇻🇳 Tiếng Việt: [README.vi.md](README.vi.md)
 
-This is a coding agent built from first principles: no LangChain, no LangGraph, no CrewAI. The ReAct loop, the tool layer, the sandbox, and the context management are all hand-written against the raw OpenAI-compatible chat-completions API. The model runs locally — **Qwen3-14B served by vLLM** on a single NVIDIA A6000 — and is given **10 tools** to operate inside a **sandboxed workspace**. The interesting part is reliability: the agent runs `pytest`, reads the failures, patches the source, and re-runs until the suite is green, and the interactive REPL survives long sessions through **token-budget context compaction**. A **627-task benchmark harness** measures all of this with honest, hidden-test scoring.
+This is a coding agent built from first principles: no LangChain, no LangGraph, no CrewAI. The ReAct loop, the tool layer, the sandbox, and the context management are all hand-written against the raw OpenAI-compatible chat-completions API. The model runs locally — **Qwen3-14B served by vLLM** on a single NVIDIA A6000 — and is given **11 tools** to operate inside a **sandboxed workspace**. The interesting part is reliability: the agent runs `pytest`, reads the failures, patches the source, and re-runs until the suite is green, and the interactive REPL survives long sessions through **token-budget context compaction**. A **627-task benchmark harness** measures all of this with honest, hidden-test scoring.
 
 Built as Math/Stat 361 undergraduate research at Knox College (advisor: Prof. Andrew Leahy).
 
@@ -14,7 +14,7 @@ Built as Math/Stat 361 undergraduate research at Knox College (advisor: Prof. An
 
 - **Built from scratch** — the agent loop, tool dispatch, sandbox, and streaming UI are hand-written. The only third-party pieces are the OpenAI SDK (HTTP transport) and vLLM (model serving).
 - **Runs a local open-weight model** — Qwen3-14B via vLLM, OpenAI-compatible endpoint, fully on-prem on one A6000. No hosted API.
-- **10 tools across 4 groups** — file I/O, code discovery, execution, and delegation (see table below).
+- **11 tools across 5 groups** — file I/O, code discovery, execution, delegation, and completion (see table below).
 - **Verifies its own work** — it executes the test suite, inspects failures, edits the source, and loops until tests pass. Demonstrated end-to-end fixing a buggy repo to **11/11 passing**.
 - **Sandboxed and crash-resistant** — every file operation is confined to an explicit workspace directory via a path-traversal guard; tool failures are returned to the model as text rather than crashing the loop.
 - **Context compaction** — the interactive REPL estimates token usage and auto-summarizes old history past a 24k-token threshold while keeping the 10 most recent messages verbatim, so it stays inside a 32K context window on long tasks.
@@ -59,7 +59,7 @@ The loop is plain ReAct (reason → act → observe), implemented directly again
 
 ---
 
-## The 10 tools
+## The 11 tools
 
 All defined in [`src/tools.py`](src/tools.py) — implementation, JSON schema, and a single `execute_tool()` dispatcher side by side.
 
@@ -75,6 +75,7 @@ All defined in [`src/tools.py`](src/tools.py) — implementation, JSON schema, a
 | **Execution** | `run_bash` | Run a shell command (pytest, git, pip…), 600s timeout. |
 | | `run_python` | Run a short Python snippet, 60s timeout. |
 | **Delegation** | `spawn_subagent` | Run a child agent in a separate process for an isolated subtask (300s timeout, 8 iterations). |
+| **Completion** | `finish` | Explicitly end the session with a one-line summary; replying in prose without a tool call does **not** finish the task. |
 
 **Why `spawn_subagent` is a separate process:** the child gets its own message history (context isolation), a crash in the child can't take down the parent, and a hard 300s timeout plus an 8-iteration cap bound recursion.
 
@@ -140,7 +141,7 @@ python eval/run.py 01_strings                # a single task
 
 End-to-end verified on `demo_repo/`: starting from a buggy `is_prime`/`factorial`/`calculator`, the agent ran `run_bash(pytest)` → `read_file` → `apply_patch` → `run_bash(pytest)` and reached **11/11 tests passing** — fixing only the source, never the tests.
 
-At scale, the eval harness ([`eval/README.md`](eval/README.md)) runs **627 tasks**: 163 HumanEval+, 424 sanitized MBPP, 37 hand-authored hard tasks (debugging, refactor, multi-file, DP, graphs, data structures, OOP, parsing, algorithms, recursion), and 3 legacy demos. Each run snapshots and restores the task fixtures, scores with an independent `pytest` the agent never controls, and **hides the benchmark tests from the agent while it works** (restored only for grading) so it implements from the spec rather than hard-coding outputs; debug/refactor tasks keep tests visible so the agent can use `pytest` as a feedback signal. A guardrail nudges the model if it replies without acting and records `no_action` rather than failing silently, and a validation gate (`eval/validate_tasks.py`) proves every task is real before it counts. The latest full run scored **501/627 (79.9%)** with a clean easy→hard gradient (**easy 93% · medium 83% · hard 63%**); when the agent engages a tool it is **92% correct** (501/543), so most remaining failures are tool-use, not coding ability. Full per-task results and the per-category/difficulty breakdown live in **`eval/results/`** (see [`eval/README.md`](eval/README.md)).
+At scale, the eval harness ([`eval/README.md`](eval/README.md)) runs **627 tasks**: 163 HumanEval+, 424 sanitized MBPP, 37 hand-authored hard tasks (debugging, refactor, multi-file, DP, graphs, data structures, OOP, parsing, algorithms, recursion), and 3 legacy demos. Each run snapshots and restores the task fixtures, scores with an independent `pytest` the agent never controls, and **hides the benchmark tests from the agent while it works** (restored only for grading) so it implements from the spec rather than hard-coding outputs; debug/refactor tasks keep tests visible so the agent can use `pytest` as a feedback signal. A guardrail nudges the model if it replies without acting and records `no_action` rather than failing silently, and a validation gate (`eval/validate_tasks.py`) proves every task is real before it counts. The latest clean full run scored **422/627 (67.3%, 95% CI 64–71%)**: **HumanEval+ 79.8%**, **de-leaked MBPP 66.7%**, **curated hand-written hard 21.6%**; by difficulty **easy 74% · medium 74% · hard 54%**, with **66/627** tasks ending in `no_action`. An earlier run reported 79.9%, but that figure was inflated by an MBPP benchmark leak — for ~93% of the 424 MBPP tasks, 2 of the 3 graded asserts had leaked into the agent-visible goal; that leak is now fixed (spec-only goals, regenerated), while HumanEval+ was never affected. Full per-task results and the per-category/difficulty breakdown live in **`eval/results/`** (older runs there predate the fix; see [`eval/README.md`](eval/README.md)).
 
 **Honest scope.** This is undergraduate research, not a SWE-Bench entry. HumanEval/MBPP are well-known and partially saturated for modern models, so the benchmark tier is a breadth + harness-sanity signal while the curated hard tier is the more honest stress test; an open-weight 14B model is stochastic, so pass rates are best read over multiple runs (`--repeats K`). Known limitations: limited interruptibility and no tool-result caching. The vLLM server is run on demand on a shared GPU, not kept always-on.
 
@@ -155,7 +156,7 @@ coding-agent/
 │   └── solve.py            one-shot task runner
 ├── src/                    the agent library (importable, no side effects)
 │   ├── agent.py            ReAct loop — run_agent(goal, workspace, ...)
-│   ├── tools.py            10 tools + JSON schemas + dispatcher + sandbox
+│   ├── tools.py            11 tools + JSON schemas + dispatcher + sandbox
 │   └── prompts.py          system prompt
 ├── examples/               teaching ladder: 01→04, read to learn (not to run)
 ├── tests/                  pytest unit tests (sandbox, tools, dispatcher)

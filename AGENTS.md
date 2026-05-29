@@ -25,12 +25,13 @@ This file adds project-specific context and three project-specific rules.
 
 ## What's built (current state — verify against source before relying on it)
 
-- **Tools** live in `src/tools.py`: **10 tools** exposed via the `TOOLS` dict and
-  `TOOL_SCHEMAS` (OpenAI function-calling format), in four groups:
+- **Tools** live in `src/tools.py`: **11 tools** exposed via the `TOOLS` dict and
+  `TOOL_SCHEMAS` (OpenAI function-calling format), in five groups:
   - File I/O: `read_file`, `write_file`, `apply_patch`, `multi_edit`
   - Discovery: `list_dir`, `glob_files`, `grep_files`
   - Execution: `run_bash`, `run_python`
   - Delegation: `spawn_subagent` (passes its workspace down to the child)
+  - Completion: `finish` (explicit task-completion signal — replying in prose without a tool call does NOT end the task)
   Every file path is routed through `_safe_path(path, workspace)` — the
   **sandbox**. The workspace is an **explicit parameter** (`run_agent(goal,
   workspace, ...)`, `execute_tool(name, args, workspace)`); there is no global

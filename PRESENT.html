@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Coding Agent — Presentation Deck</title>
+  <link rel="stylesheet" href="libs/reveal.min.css">
+  <link rel="stylesheet" href="libs/black.min.css" id="theme">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg: #0f1117; --bg2: #161922; --bg3: #1f2330;
+      --fg: #e7ecef; --fg-dim: #9aa5b1;
+      --accent: #7bdcb5; --cyan: #7bf0ff; --magenta: #ff8aff;
+      --tool: #7bff7b; --result: #ffd966; --red: #ff7b7b;
+      --thinking: #ffffff; --border: #2a2f3d;
+    }
+    html, body { background: var(--bg); }
+    .reveal { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-weight: 400; color: var(--fg); font-size: 30px; }
+    .reveal .slides { text-align: left; }
+    .reveal h1, .reveal h2, .reveal h3, .reveal h4 { font-family: 'Inter', sans-serif; color: var(--fg); letter-spacing: -0.02em; text-transform: none; margin: 0 0 0.4em 0; line-height: 1.15; font-weight: 700; }
+    .reveal h1 { font-size: 2.4em; }
+    .reveal h2 { font-size: 1.5em; color: var(--accent); }
+    .reveal h3 { font-size: 1.1em; color: var(--cyan); font-weight: 600; }
+    .reveal p { margin: 0 0 0.5em 0; }
+    .reveal ul, .reveal ol { display: block; margin: 0 0 0.5em 1.3em; }
+    .reveal li { margin-bottom: 0.28em; line-height: 1.4; }
+    .reveal strong { color: var(--fg); font-weight: 700; }
+    .reveal em { color: var(--cyan); font-style: normal; }
+    .reveal a { color: var(--accent); text-decoration: none; border-bottom: 1px dotted var(--accent); }
+    .reveal code { font-family: 'JetBrains Mono', Consolas, monospace; background: var(--bg3); color: var(--cyan); padding: 0.06em 0.32em; border-radius: 4px; font-size: 0.82em; }
+    .reveal pre { width: 100%; box-shadow: none; margin: 0.4em 0; font-size: 0.5em; line-height: 1.45; }
+    .reveal pre code { background: var(--bg3); color: var(--fg); padding: 0.9em 1.1em; border-radius: 8px; border: 1px solid var(--border); display: block; white-space: pre; }
+    .reveal pre code .k { color: var(--magenta); font-weight: 600; }
+    .reveal pre code .s { color: var(--result); }
+    .reveal pre code .c { color: var(--fg-dim); font-style: italic; }
+    .reveal pre code .f { color: var(--accent); }
+    .reveal pre code .n { color: var(--magenta); }
+    .reveal table { margin: 0.4em 0; width: 100%; border-collapse: collapse; font-size: 0.7em; }
+    .reveal table th { background: var(--bg2); color: var(--accent); font-weight: 600; text-align: left; padding: 0.4em 0.7em; border-bottom: 2px solid var(--border); }
+    .reveal table td { padding: 0.38em 0.7em; border-bottom: 1px solid var(--border); color: var(--fg); }
+
+    .center { text-align: center; } .dim { color: var(--fg-dim); } .accent { color: var(--accent); }
+    .cyan { color: var(--cyan); } .magenta { color: var(--magenta); } .red { color: var(--red); }
+    .green { color: var(--tool); } .gold { color: var(--result); }
+    .small { font-size: 0.7em; } .tiny { font-size: 0.58em; }
+
+    /* ---- Title slide ---- */
+    .title-slide { text-align: center; }
+    .wordmark { font-size: 2.7em; font-weight: 800; letter-spacing: -0.03em;
+      background: linear-gradient(90deg, var(--accent) 0%, var(--cyan) 35%, var(--magenta) 70%, var(--accent) 100%);
+      background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+      animation: gradientFlow 8s ease-in-out infinite; margin: 0 0 0.2em 0; line-height: 1.1; }
+    @keyframes gradientFlow { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+    .subline { color: var(--fg-dim); font-size: 0.82em; margin: 0.12em 0; }
+    .byline { color: var(--accent); font-size: 0.72em; margin-top: 0.9em; }
+    .cursor { display: inline-block; width: 0.55em; height: 1.1em; background: var(--accent); margin-left: 2px; vertical-align: -0.12em; animation: blink 1.05s steps(1) infinite; }
+    @keyframes blink { 0%,50% { opacity: 1; } 50.01%,100% { opacity: 0; } }
+    .corner-cursor { position: absolute; right: 30px; bottom: 26px; font-family: 'JetBrains Mono', monospace; color: var(--accent); font-size: 0.6em; }
+
+    /* ---- pillars ---- */
+    .pillars { display: grid; grid-template-columns: repeat(3,1fr); gap: 1.1em; margin: 0.6em 0; }
+    .pillar { background: var(--bg2); border: 1px solid var(--border); border-top: 3px solid var(--accent); border-radius: 12px; padding: 0.9em 0.8em; text-align: center; }
+    .pillar.p2 { border-top-color: var(--cyan); } .pillar.p3 { border-top-color: var(--magenta); }
+    .pillar .pname { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 1.05em; letter-spacing: 0.04em; color: var(--accent); }
+    .pillar.p2 .pname { color: var(--cyan); } .pillar.p3 .pname { color: var(--magenta); }
+    .pillar .pdesc { font-size: 0.62em; color: var(--fg-dim); margin-top: 0.5em; line-height: 1.4; }
+
+    /* ---- terminal ---- */
+    .terminal { background: #000; color: var(--fg); font-family: 'JetBrains Mono', monospace; font-size: 0.56em; line-height: 1.55; padding: 0.8em 1em; border-radius: 8px; border: 1px solid var(--border); box-shadow: 0 8px 24px rgba(0,0,0,0.4); white-space: pre-wrap; margin: 0.4em 0; }
+    .terminal .you { color: var(--cyan); } .terminal .tool { color: var(--tool); }
+    .terminal .result { color: var(--result); } .terminal .red { color: var(--red); }
+    .terminal .dim { color: var(--fg-dim); } .terminal .assistant { color: var(--magenta); }
+
+    .caveat { color: var(--fg-dim); font-style: italic; font-size: 0.82em; margin-top: 0.5em; }
+
+    /* ---- ReAct cycle ---- */
+    .cycle { position: relative; width: 360px; height: 360px; margin: 0 auto; }
+    .cnode { position: absolute; width: 110px; height: 110px; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: var(--bg2); border: 2px solid var(--border); font-family: 'JetBrains Mono', monospace; }
+    .cnode .cn-t { font-weight: 700; font-size: 0.62em; color: var(--accent); }
+    .cnode .cn-s { font-size: 0.42em; color: var(--fg-dim); margin-top: 0.2em; }
+    .cnode.top { top: 0; left: 125px; } .cnode.right { top: 125px; right: 0; }
+    .cnode.bot { bottom: 0; left: 125px; } .cnode.left { top: 125px; left: 0; }
+    .cycle svg { position: absolute; inset: 0; width: 360px; height: 360px; overflow: visible; }
+
+    /* ---- tool chips ---- */
+    .toolgroups { display: grid; grid-template-columns: repeat(2,1fr); gap: 0.7em; margin: 0.4em 0; }
+    .tgroup { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 0.6em 0.7em; }
+    .tgroup .glabel { font-size: 0.55em; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; margin-bottom: 0.45em; }
+    .tg-file .glabel { color: var(--accent); } .tg-disc .glabel { color: var(--cyan); }
+    .tg-exec .glabel { color: var(--magenta); } .tg-del .glabel { color: var(--result); }
+    .tg-done .glabel { color: var(--tool); }
+    .chips { display: flex; flex-wrap: wrap; gap: 0.4em; }
+    .chip { font-family: 'JetBrains Mono', monospace; font-size: 0.58em; padding: 0.3em 0.6em; border-radius: 6px; background: var(--bg3); border: 1px solid var(--border); color: var(--fg); }
+    .tg-file .chip { border-color: var(--accent); } .tg-disc .chip { border-color: var(--cyan); }
+    .tg-exec .chip { border-color: var(--magenta); } .tg-del .chip { border-color: var(--result); }
+    .tg-done .chip { border-color: var(--tool); color: var(--tool); }
+
+    /* ---- sandbox ---- */
+    .sandbox { position: relative; border: 2px solid var(--accent); border-radius: 10px; padding: 0.7em 1em; margin: 0.5em auto 0; width: 70%; text-align: center; background: rgba(123,220,181,0.05); }
+    .sandbox .sb-label { font-size: 0.55em; color: var(--accent); font-family: 'JetBrains Mono', monospace; letter-spacing: 0.08em; }
+    .sandbox .sb-inner { font-size: 0.6em; color: var(--fg-dim); margin-top: 0.3em; }
+    .attack { font-family: 'JetBrains Mono', monospace; font-size: 0.6em; color: var(--red); text-align: center; margin-top: 0.4em; }
+
+    /* ---- big number / count-up ---- */
+    .bignum { font-family: 'JetBrains Mono', monospace; font-size: 3.4em; font-weight: 800; color: var(--accent); line-height: 1; letter-spacing: -0.02em; text-align: center; }
+    .bignum.sub { font-size: 0.26em; color: var(--fg-dim); font-weight: 400; display: block; margin-top: 0.4em; letter-spacing: 0; }
+
+    /* ---- slice bars ---- */
+    .slicebars { margin: 0.4em 0; }
+    .sbar-row { display: grid; grid-template-columns: 200px 1fr 70px; align-items: center; gap: 0.6em; margin: 0.4em 0; font-size: 0.68em; }
+    .sbar-track { background: var(--bg3); border-radius: 6px; height: 22px; overflow: hidden; border: 1px solid var(--border); }
+    .sbar-fill { height: 100%; border-radius: 6px 0 0 6px; background: linear-gradient(90deg, var(--accent), var(--cyan)); width: 0; }
+    .sbar-val { font-family: 'JetBrains Mono', monospace; color: var(--accent); text-align: right; }
+
+    /* ---- before/after split ---- */
+    .split2 { display: grid; grid-template-columns: 1fr auto 1fr; gap: 1em; align-items: center; margin: 0.5em 0; }
+    .panel { border-radius: 12px; padding: 1em 0.8em; text-align: center; border: 1px solid var(--border); }
+    .panel.bad { background: rgba(255,123,123,0.07); border-color: rgba(255,123,123,0.4); }
+    .panel.good { background: rgba(123,255,123,0.07); border-color: rgba(123,255,123,0.4); }
+    .panel .pn { font-family: 'JetBrains Mono', monospace; font-size: 2.2em; font-weight: 800; line-height: 1; }
+    .panel.bad .pn { color: var(--red); } .panel.good .pn { color: var(--tool); }
+    .panel .pl { font-size: 0.55em; letter-spacing: 0.12em; text-transform: uppercase; margin-top: 0.5em; }
+    .panel.bad .pl { color: var(--red); } .panel.good .pl { color: var(--tool); }
+    .arrow-mid { font-size: 1.6em; color: var(--fg-dim); }
+    .leaktext { position: relative; display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 0.62em; color: var(--fg-dim); margin-top: 0.3em; }
+    .leaktext .strike { position: absolute; left: 0; top: 50%; height: 2px; background: var(--red); width: 0; }
+
+    /* ---- error bars (slide 9) ---- */
+    .errbars { margin: 0.5em 0; position: relative; }
+    .eb-row { display: grid; grid-template-columns: 130px 1fr; align-items: center; gap: 0.7em; margin: 0.7em 0; font-size: 0.66em; position: relative; }
+    .eb-label { font-family: 'JetBrains Mono', monospace; color: var(--fg-dim); }
+    .eb-track { position: relative; height: 30px; }
+    .eb-bar { position: absolute; top: 12px; height: 6px; background: var(--cyan); border-radius: 3px; transform-origin: left; }
+    .eb-bar.b1 { background: var(--accent); } .eb-bar.b2 { background: var(--magenta); } .eb-bar.b3 { background: var(--cyan); }
+    .eb-whisk { position: absolute; top: 6px; width: 2px; height: 18px; background: var(--fg-dim); }
+    .eb-dot { position: absolute; top: 10px; width: 10px; height: 10px; border-radius: 50%; background: var(--fg); transform: translateX(-50%); }
+    .eb-axis { font-family: 'JetBrains Mono', monospace; font-size: 0.55em; color: var(--fg-dim); display: flex; justify-content: space-between; margin-top: 0.3em; }
+    .stamp { font-family: 'JetBrains Mono', monospace; font-weight: 800; font-size: 1.5em; color: var(--red); border: 3px solid var(--red); border-radius: 10px; padding: 0.1em 0.5em; display: inline-block; transform: rotate(-8deg); letter-spacing: 0.08em; }
+
+    /* ---- SkillOpt loop ---- */
+    .skloop { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 0.5em; margin: 0.5em 0; }
+    .sknode { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 0.5em 0.7em; text-align: center; font-size: 0.6em; min-width: 90px; }
+    .sknode.gate { border-color: var(--result); } .sknode.frozen { border-color: var(--cyan); }
+    .sknode .skt { font-weight: 700; color: var(--accent); font-family: 'JetBrains Mono', monospace; }
+    .sknode .sks { color: var(--fg-dim); font-size: 0.85em; margin-top: 0.2em; }
+    .skarr { color: var(--fg-dim); font-size: 1.1em; }
+    .lock { font-size: 1.4em; }
+
+    /* ---- vs columns ---- */
+    .vscols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1em; margin: 0.4em 0; }
+    .vscol { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 0.8em 0.9em; }
+    .vscol.them { border-top: 3px solid var(--magenta); } .vscol.us { border-top: 3px solid var(--accent); }
+    .vscol h3 { margin-bottom: 0.4em; } .vscol.them h3 { color: var(--magenta); }
+    .vsrow { font-size: 0.66em; padding: 0.3em 0; border-bottom: 1px solid var(--border); color: var(--fg); }
+    .vsrow:last-child { border-bottom: none; }
+    .bridge { text-align: center; font-size: 0.65em; color: var(--cyan); font-family: 'JetBrains Mono', monospace; margin: 0.5em 0; padding: 0.4em; border: 1px dashed var(--cyan); border-radius: 8px; background: rgba(123,240,255,0.05); }
+
+    /* ---- ledger ---- */
+    .ledger { margin: 0.4em 0; position: relative; }
+    .ledrow { display: flex; align-items: flex-start; gap: 0.6em; background: var(--bg2); border: 1px solid var(--border); border-left: 3px solid var(--result); border-radius: 8px; padding: 0.55em 0.8em; margin: 0.45em 0; font-size: 0.7em; }
+    .ledrow .glyph { color: var(--result); font-size: 1.1em; line-height: 1; }
+    .watermark { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 2.4em; font-weight: 800; color: var(--fg); opacity: 0.04; letter-spacing: 0.1em; pointer-events: none; transform: rotate(-6deg); }
+
+    /* ---- recap ---- */
+    .demo-cue { font-family: 'JetBrains Mono', monospace; font-size: 1.05em; color: var(--tool); background: #000; border: 1px solid var(--tool); border-radius: 10px; padding: 0.6em 1em; text-align: center; margin-top: 0.6em; box-shadow: 0 0 0 0 rgba(123,255,123,0.4); }
+
+    .reveal .progress { height: 4px; color: var(--accent); background: rgba(123,220,181,0.12); }
+    .reveal .progress span { background: var(--accent); }
+    .reveal .slide-number { background: rgba(15,17,23,0.7); color: var(--fg-dim); font-family: 'JetBrains Mono', monospace; font-size: 14px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); }
+    .reveal .controls { color: var(--accent); }
+    .invisinit { visibility: hidden; }
+  </style>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ========== SLIDE 1 ========== -->
+<section data-anim="1" class="title-slide center">
+  <h1 class="wordmark a1-title">Coding Agent from Scratch</h1>
+  <p class="subline a1-line">Turning a local, open-weight model into an agent that actually does software work</p>
+  <p class="subline a1-line">From first principles: ReAct loop + 11 tools + sandbox + eval harness — <em>no framework</em></p>
+  <p class="subline a1-line">A reimplementation I can explain line-by-line — not novel research, but fully <em>mine</em></p>
+  <p class="byline a1-line">Vincent Le · Knox College Math/Stat 361 · Advisor: Prof. Andrew Leahy</p>
+  <span class="corner-cursor">$ <span class="cursor"></span></span>
+  <aside class="notes">Hi everyone, I'm Vincent. For my Math/Stat 361 research with Professor Leahy I built a coding agent completely from scratch. One line: take a LOCAL, open-weight model running on my own GPU and turn it into something that can reliably DO software work. I want to be upfront — the ReAct loop itself is not my invention; Claude and Codex use the same pattern. What's mine is the reimplementation: I wrote every piece, I can explain every line, and I measured it honestly. That last word — honestly — is the spine of this whole talk. Let me show you what I built.</aside>
+</section>
+
+<!-- ========== SLIDE 2 ========== -->
+<section data-anim="2">
+  <h2>What I Built — and the One Thing That Makes It Different</h2>
+  <ul>
+    <li class="a2-bullet">A ReAct agent driving <strong>Qwen3-14B</strong>, served locally by vLLM (my GPU1, 32K context, <em>no cloud</em>)</li>
+    <li class="a2-bullet">Hand it a repo with failing tests → it runs pytest, reads failures, patches, re-runs <em>until green</em></li>
+  </ul>
+  <div class="pillars">
+    <div class="pillar p1 a2-pillar"><div class="pname">LOCAL</div><div class="pdesc">Your code never leaves the machine</div></div>
+    <div class="pillar p2 a2-pillar"><div class="pname">TRANSPARENT</div><div class="pdesc">Watch every tool call + reasoning live</div></div>
+    <div class="pillar p3 a2-pillar"><div class="pname">FROM SCRATCH</div><div class="pdesc">I understand every line</div></div>
+  </div>
+  <p class="caveat a2-caveat">Honest framing: it does <strong>NOT</strong> beat Claude/Codex on capability — that's not the point.</p>
+  <aside class="notes">So what is it? A ReAct agent driving Qwen3-14B, served locally by vLLM on my own GPU — 32K context, no API, no cloud. You hand it a repo where tests are broken and say 'fix the failing tests.' It runs pytest, reads the failures, edits the source, re-runs until green, and stops on its own. Now the question my advisor and I kept circling: what makes this special when Claude and Codex exist? Three things, and they're on the screen. It's LOCAL — your code never leaves the machine. It's TRANSPARENT — you watch every tool call and the model's reasoning live, which matters enormously for a research and teaching artifact. And it's FROM SCRATCH — I can explain every line. The honest caveat, last line: this does not beat Claude or Codex on raw capability. It was never trying to. It's a transparent, local, fully-owned system for studying how agents actually behave.</aside>
+</section>
+
+<!-- ========== SLIDE 3 ========== -->
+<section data-anim="3">
+  <h2>The ReAct Loop — How It Thinks and Acts</h2>
+  <div style="display:grid; grid-template-columns: 360px 1fr; gap:1em; align-items:center;">
+    <div class="cycle">
+      <svg viewBox="0 0 360 360">
+        <defs><marker id="ah" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" fill="#7bdcb5"/></marker></defs>
+        <path class="c-arrow" d="M 235 70 A 130 130 0 0 1 290 180" fill="none" stroke="#7bdcb5" stroke-width="3" marker-end="url(#ah)"/>
+        <path class="c-arrow" d="M 290 235 A 130 130 0 0 1 235 290" fill="none" stroke="#7bdcb5" stroke-width="3" marker-end="url(#ah)"/>
+        <path class="c-arrow" d="M 125 290 A 130 130 0 0 1 70 235" fill="none" stroke="#7bdcb5" stroke-width="3" marker-end="url(#ah)"/>
+        <path class="c-arrow" d="M 70 125 A 130 130 0 0 1 125 70" fill="none" stroke="#7bdcb5" stroke-width="3" marker-end="url(#ah)"/>
+      </svg>
+      <div class="cnode top c-node"><div class="cn-t">REASON</div><div class="cn-s">think</div></div>
+      <div class="cnode right c-node"><div class="cn-t">ACT</div><div class="cn-s">call tool</div></div>
+      <div class="cnode bot c-node"><div class="cn-t">OBSERVE</div><div class="cn-s">read result</div></div>
+      <div class="cnode left c-node"><div class="cn-t">REPEAT</div><div class="cn-s">loop</div></div>
+    </div>
+    <div>
+      <pre><code><span class="k">for</span> _ <span class="k">in</span> <span class="f">range</span>(max_iters):     <span class="c"># safety net</span>
+    msg = model.chat(messages, tools)
+    <span class="hl-line">messages.append(msg)</span>          <span class="c"># memory!</span>
+    <span class="k">if not</span> msg.tool_calls:       <span class="c"># done</span>
+        <span class="k">return</span> msg.content
+    <span class="k">for</span> call <span class="k">in</span> msg.tool_calls:
+        r = run_tool(call.name, call.args)
+        messages.append({<span class="s">"role"</span>:<span class="s">"tool"</span>,
+          <span class="s">"tool_call_id"</span>: call.id,
+          <span class="s">"content"</span>: r})</code></pre>
+      <ul class="small">
+        <li class="a3-note">Model is a <strong>STATELESS API</strong> — the <code>messages</code> list <em>IS the memory</em>; whole convo re-sent each turn</li>
+        <li class="a3-note">Each result returns as <code>role=tool</code>, paired by <code>tool_call_id</code></li>
+        <li class="a3-note"><code>max_iters</code> cap = safety net; agent ends only by calling <code>finish</code></li>
+      </ul>
+    </div>
+  </div>
+  <aside class="notes">This is the engine. Four steps in a loop: reason, act, observe, repeat. I send the model the conversation so far plus the JSON schemas for my tools. It either returns plain text — meaning it thinks it's done — or it returns tool calls. I execute each tool and append the result back as a message with role 'tool.' Then I loop. The single most important idea: the model is STATELESS. The vLLM server remembers nothing between calls. So this messages list — this growing Python list — IS the memory. Every turn I re-send the entire conversation; that's how it 'remembers' what it read and did. Each result carries a tool_call_id so the model knows which call this answer belongs to, since it can fire several at once. And there's a hard max_iters cap, so a confused agent can never spin forever. This is the part I most wanted to build myself — because if a framework hides it, I can't study it.</aside>
+</section>
+
+<!-- ========== SLIDE 4 ========== -->
+<section data-anim="4">
+  <h2>The 11 Tools + the Sandbox</h2>
+  <div class="toolgroups">
+    <div class="tgroup tg-file"><div class="glabel">File I/O</div><div class="chips">
+      <span class="chip a4-chip">read_file</span><span class="chip a4-chip">write_file</span>
+      <span class="chip a4-chip">apply_patch</span><span class="chip a4-chip">multi_edit</span></div></div>
+    <div class="tgroup tg-disc"><div class="glabel">Discovery</div><div class="chips">
+      <span class="chip a4-chip">list_dir</span><span class="chip a4-chip">glob_files</span>
+      <span class="chip a4-chip">grep_files</span></div></div>
+    <div class="tgroup tg-exec"><div class="glabel">Execution</div><div class="chips">
+      <span class="chip a4-chip">run_bash</span><span class="chip a4-chip">run_python</span></div></div>
+    <div class="tgroup tg-del"><div class="glabel">Delegation</div><div class="chips">
+      <span class="chip a4-chip">spawn_subagent</span></div></div>
+    <div class="tgroup tg-done" style="grid-column:1/3"><div class="glabel">Completion</div><div class="chips">
+      <span class="chip a4-chip">finish</span>
+      <span class="tiny dim" style="align-self:center; margin-left:0.5em;">prose alone does NOT end the session</span></div></div>
+  </div>
+  <div class="sandbox a4-box">
+    <div class="sb-label">_safe_path SANDBOX · one workspace</div>
+    <div class="sb-inner">every file op <code>resolve()</code>'d &amp; confined — CWE-22 defense · tools return <code>"ERROR: …"</code>, never raise</div>
+  </div>
+  <div class="attack a4-attack">../../etc/passwd  ⟶  ✗ bounced off the wall</div>
+  <aside class="notes">Eleven tools, grouped into five families — I won't read them all, the grouping is the point. File I/O to read and edit code. Discovery to navigate a repo. Execution — bash and Python — to actually run things. Delegation, where the agent can spawn a focused sub-agent. And finish, which is how the agent ends a session — importantly, just replying in prose does NOT end it; remember that, it comes back in two slides. The design idea that keeps this clean: each tool is a function plus a JSON schema in an append-only registry, so adding a tool never touches the loop. The load-bearing safety piece is the sandbox: every file path goes through one function, _safe_path, which resolves the path and rejects anything that escapes the workspace — a real path-traversal defense, CWE-22. And tools never raise an exception that kills the loop; a bad call comes back as an 'ERROR' string the model reads as feedback and retries.</aside>
+</section>
+
+<!-- ========== SLIDE 5 ========== -->
+<section data-anim="5">
+  <h2>Does It Actually Work? Honest 67.3%</h2>
+  <div style="display:grid; grid-template-columns: 0.85fr 1.15fr; gap:1.2em; align-items:center;">
+    <div>
+      <div class="bignum"><span class="a5-count" data-to="67.3">0.0%</span>
+        <span class="bignum sub">422 / 627 · 95% CI 64–71%</span></div>
+    </div>
+    <div class="slicebars">
+      <div class="sbar-row a5-bar"><div>HumanEval+ (163)</div><div class="sbar-track"><div class="sbar-fill" data-pct="79.8"></div></div><div class="sbar-val">79.8%</div></div>
+      <div class="sbar-row a5-bar"><div>MBPP de-leaked (424)</div><div class="sbar-track"><div class="sbar-fill" data-pct="66.7"></div></div><div class="sbar-val">66.7%</div></div>
+      <div class="sbar-row a5-bar"><div>curated HARD (37)</div><div class="sbar-track"><div class="sbar-fill" data-pct="21.6"></div></div><div class="sbar-val">21.6%</div></div>
+    </div>
+  </div>
+  <ul class="small">
+    <li class="a5-li"><strong>627-task benchmark:</strong> 163 HumanEval+ · 424 MBPP · 37 hand-written HARD tasks</li>
+    <li class="a5-li"><strong>Honest scoring:</strong> test files <em>hidden</em> from the agent while it works, restored only to grade; validation gate proves every task real (ref passes, stub fails)</li>
+    <li class="a5-li">By difficulty: easy 74% / medium 74% / hard 54%</li>
+  </ul>
+  <aside class="notes">Three hand-picked demos prove nothing, so I built a 627-task benchmark: 163 from HumanEval+, 424 from MBPP, and 37 hard problems I wrote by hand — debugging, refactors, multi-file, dynamic programming, graphs, OOP, parsing. Two things make the number trustworthy. First, the test files are HIDDEN from the agent the entire time it works — it physically cannot open the tests and hard-code outputs — and they're restored only at grading time. Second, a validation gate runs before any task counts: the reference solution must pass and an empty stub must fail, so every task is real. The honest headline: 67.3 percent, 422 of 627, 95 percent confidence interval 64 to 71. By slice: HumanEval about 80, de-leaked MBPP about 67, and the hard hand-written set 21.6 — that low number is honest and expected; those are genuinely hard. By difficulty it's 74 easy, 74 medium, 54 hard. Now — about that word 'de-leaked.'</aside>
+</section>
+
+<!-- ========== SLIDE 6 ========== -->
+<section data-anim="6">
+  <h2>I Found and Fixed My Own Benchmark Leak</h2>
+  <div class="split2">
+    <div class="panel bad a6-bad">
+      <div class="pn"><span class="a6-count" data-from="79.9" data-to="67.3">79.9%</span></div>
+      <div class="pl">Inflated</div>
+    </div>
+    <div class="arrow-mid a6-arrow">⟶</div>
+    <div class="panel good a6-good">
+      <div class="pn">67.3%</div>
+      <div class="pl">Honest</div>
+    </div>
+  </div>
+  <p class="center small a6-leak">
+    <span class="leaktext">2 of 3 graded asserts leaked into the MBPP prompt for ~93% of MBPP<span class="strike"></span></span>
+  </p>
+  <ul class="small">
+    <li class="a6-li">Earlier number was <strong>79.9%</strong> (501/627) — and it was <span class="red">INFLATED</span>: the agent could pattern-match answers</li>
+    <li class="a6-li">Bug in <code>eval/convert_benchmark.py</code>; caught in a multi-agent audit + cross-provider (Codex/GPT-5.5) review</li>
+    <li class="a6-li">Fixed: spec-only goals, regenerated all 424 tasks, re-ran clean. HumanEval (never leaked) unchanged ~80%</li>
+    <li class="a6-li"><strong>Catching &amp; fixing my OWN leak <em>is</em> the result.</strong></li>
+  </ul>
+  <aside class="notes">This is the slide I'm most proud of. An earlier version of my results said 79.9 percent. It was wrong — inflated. While hardening the project I found a bug in my OWN benchmark. My converter, convert_benchmark.py, was leaking two of the three graded assert statements straight into the goal text the agent could read — for about 93 percent of the 424 MBPP tasks. So the agent could literally pattern-match the expected outputs instead of solving the problem. I didn't catch this by luck — it surfaced during a multi-agent audit and a cross-provider review with Codex and GPT-5.5 looking at my harness. I fixed it: goals now show only the spec, I regenerated all 424 tasks, and re-ran clean. The number dropped from 79.9 to 67.3. HumanEval, which never had the leak, didn't move — still about 80, which is exactly the consistency check you'd want. I'm deliberately showing you the lower, true number. In a research talk, finding and fixing your own benchmark leak isn't a footnote — it IS the result.</aside>
+</section>
+
+<!-- ========== SLIDE 7 ========== -->
+<section data-anim="7">
+  <h2>The Real Failure Mode: It Talked Instead of Acting</h2>
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:1em;">
+    <div>
+      <h3 class="red">Before — talk, don't act</h3>
+      <div class="terminal a7-before"><span class="assistant">[assistant]</span> "Here is the fix:
+<span class="dim">def solve(n): return n*2</span>
+That should resolve it."
+<span class="red">↳ no tool call → loop exits</span>
+<span class="red">✗ FAIL  (no_action)</span></div>
+    </div>
+    <div>
+      <h3 class="green">After — guardrail nudges</h3>
+      <div class="terminal a7-after"><span class="result a7-nudge">[guardrail] you replied with text
+but nothing changed on disk —
+call a tool now.</span>
+<span class="tool a7-call">→ write_file("solve.py", ...)</span>
+<span class="tool">→ run_bash("pytest -q")</span>
+<span class="a7-result red">✗ FAIL</span></div>
+    </div>
+  </div>
+  <ul class="small">
+    <li class="a7-li">From the eval traces, the dominant failure wasn't bad <strong>CODE</strong> — the model replied in <strong>PROSE</strong> without calling a tool → loop thinks it's done → task fails (<code>no_action</code>: <strong>66/627</strong>)</li>
+    <li class="a7-li">Fix: a guardrail that detects "said something, did nothing" and nudges it to act (up to 2 nudges) — recovered most. A tool-use fix, not a smarter model. <strong>My genuine contribution.</strong></li>
+  </ul>
+  <aside class="notes">When I actually read the eval traces — which I could only do because the agent logs every step — I found the dominant failure wasn't bad code. It was the model replying in prose: it would describe the function, even write the code as text in its message, but never call write_file. The loop, by its own contract, sees 'no tool call' and assumes it's done — so the task fails even though the model 'knew' the answer. That's the no_action failure: 66 times out of 627. The fix isn't a bigger model — it's a guardrail. When the agent stops without ever having called a tool, I nudge it: 'you replied with text but nothing changed on disk, call a tool now.' Up to two nudges, then it gives up cleanly. That recovered most of those cases. This is the part I'd call my genuine empirical contribution: the win came from diagnosing a tool-use behavior in the traces, not from swapping in a smarter model. You can only find this if you can see it.</aside>
+</section>
+
+<!-- ========== SLIDE 8 ========== -->
+<section data-anim="8">
+  <h2>SkillOpt: Train a Skill Doc, Freeze the Weights</h2>
+  <div class="skloop">
+    <div class="sknode sk-n"><div class="skt">SKILL doc</div><div class="sks">NL prompt</div></div>
+    <span class="skarr sk-a">→</span>
+    <div class="sknode sk-n"><div class="skt">rollout</div><div class="sks">eval on train</div></div>
+    <span class="skarr sk-a">→</span>
+    <div class="sknode sk-n"><div class="skt">reflect</div><div class="sks">on failures</div></div>
+    <span class="skarr sk-a">→</span>
+    <div class="sknode sk-n"><div class="skt">propose edits</div><div class="sks">add/ins/repl/del</div></div>
+    <span class="skarr sk-a">→</span>
+    <div class="sknode gate sk-n"><div class="skt gold">GATE</div><div class="sks">val split</div></div>
+    <span class="skarr sk-a">→</span>
+    <div class="sknode sk-n"><div class="skt">keep / reject</div><div class="sks">↺ back to doc</div></div>
+  </div>
+  <div class="center" style="margin:0.5em 0;">
+    <div class="sknode frozen sk-frozen" style="display:inline-block; min-width:auto; padding:0.5em 1em;">
+      <span class="lock">🔒</span> <span class="cyan">weights FROZEN</span> — the network never changes
+    </div>
+  </div>
+  <ul class="small">
+    <li class="a8-li">Improve the agent by editing a natural-language <strong>SKILL document</strong> — never touching model weights</li>
+    <li class="a8-li">Validation gate: a candidate edit is kept <em>only</em> if it scores <strong>strictly higher</strong> on a val split (ties rejected) + a protected slow-update region</li>
+    <li class="a8-li">Think of it as <strong>gradient descent on TEXT</strong> — the prompt learns, the network doesn't</li>
+  </ul>
+  <aside class="notes">Here's the research-flavored angle, SkillOpt. The question: can I make the agent better without fine-tuning — without ever touching the model's weights? The idea is to optimize a natural-language SKILL document that gets appended to the system prompt. The loop mirrors training: I roll the agent out on a train split, the optimizer reflects on the failures and successes, and proposes edits to the skill — append, insert, replace, delete. Then the key part, a validation GATE: a candidate edit is only accepted if it scores strictly higher on a held-out val split; ties are rejected. There's also a protected 'slow-update' region for durable strategy that updates only at epoch boundaries. So it's gradient-descent-shaped, but the gradient is on TEXT and the network is frozen. It's a clean substrate — and it forced me to be very careful about measurement, which is the next slide.</aside>
+</section>
+
+<!-- ========== SLIDE 9 ========== -->
+<section data-anim="9">
+  <h2>SkillOpt Result: Under-Powered — Methodology IS the Point</h2>
+  <div class="errbars">
+    <div class="eb-row">
+      <div class="eb-label">empty &nbsp;0.786</div>
+      <div class="eb-track">
+        <div class="eb-bar b1 a9-bar" data-lo="69" data-hi="86" data-mid="78.6"></div>
+        <div class="eb-whisk a9-w" data-x="69"></div><div class="eb-whisk a9-w" data-x="86"></div>
+        <div class="eb-dot a9-dot" data-x="78.6"></div>
+      </div>
+    </div>
+    <div class="eb-row">
+      <div class="eb-label">seed &nbsp;&nbsp;0.738</div>
+      <div class="eb-track">
+        <div class="eb-bar b2 a9-bar" data-lo="64" data-hi="82" data-mid="73.8"></div>
+        <div class="eb-whisk a9-w" data-x="64"></div><div class="eb-whisk a9-w" data-x="82"></div>
+        <div class="eb-dot a9-dot" data-x="73.8"></div>
+      </div>
+    </div>
+    <div class="eb-row">
+      <div class="eb-label">optimized 0.774</div>
+      <div class="eb-track">
+        <div class="eb-bar b3 a9-bar" data-lo="67" data-hi="85" data-mid="77.4"></div>
+        <div class="eb-whisk a9-w" data-x="67"></div><div class="eb-whisk a9-w" data-x="85"></div>
+        <div class="eb-dot a9-dot" data-x="77.4"></div>
+      </div>
+    </div>
+    <div class="eb-axis"><span>60%</span><span>Wilson 95% CIs — all overlap → inconclusive</span><span>90%</span></div>
+  </div>
+  <div style="display:grid; grid-template-columns:1.4fr 0.6fr; gap:1em; align-items:center;">
+    <ul class="small">
+      <li class="a9-li">3-arm test on <strong>84 held-out tasks</strong>: empty 0.786 / seed 0.738 / optimized 0.774</li>
+      <li class="a9-li">Exact-binomial McNemar: opt vs empty <strong>p=1.000</strong>, opt vs seed <strong>p=0.453</strong> (all <strong>p≥0.29</strong>)</li>
+      <li class="a9-li">Re-running the <em>same</em> config flipped <strong>~6/84</strong> tasks (vLLM nondeterminism at temp=0) — deltas = noise</li>
+      <li class="a9-li">Reported with Wilson CI + exact McNemar + noise-floor heuristic. Honest stats &gt; a cherry-picked win.</li>
+    </ul>
+    <div class="center"><span class="stamp a9-stamp">INCONCLUSIVE</span></div>
+  </div>
+  <aside class="notes">And here's where honesty matters more than a headline. On a held-out 84-task test split, three arms: the empty skill scores 0.786, the seed skill 0.738, the optimized skill 0.774. So the optimized version sits between — it does not clearly help. I ran exact-binomial McNemar tests on the paired outcomes: optimized versus empty, p equals 1.000; optimized versus seed, p equals 0.453; nothing reached p below 0.05, everything was 0.29 or higher. Worse — and this is the honest killer — when I re-ran the exact same config, about 6 of 84 tasks flipped purely from vLLM's nondeterminism at temperature zero. So the differences between arms are the SAME SIZE as the run-to-run noise. The verdict is INCONCLUSIVE, under-powered. I report it with Wilson confidence intervals, exact McNemar, and a noise-floor heuristic. I want to be clear: the contribution here is the methodology — measuring it honestly enough to KNOW it's inconclusive — not a positive result I don't have.</aside>
+</section>
+
+<!-- ========== SLIDE 10 ========== -->
+<section data-anim="10">
+  <h2>What's Special vs Claude / Codex — Honestly</h2>
+  <div class="bridge a10-bridge">both use the same ReAct loop — reason → act → observe</div>
+  <div class="vscols">
+    <div class="vscol them">
+      <h3>Claude / Codex</h3>
+      <div class="vsrow a10-them">More <strong>powerful</strong> on hard tasks</div>
+      <div class="vsrow a10-them"><strong>Cloud</strong>-hosted — code leaves your box</div>
+      <div class="vsrow a10-them"><strong>Black-box</strong> — raw trace hidden</div>
+      <div class="vsrow a10-them">Enormous, unreadable end-to-end</div>
+    </div>
+    <div class="vscol us">
+      <h3>This agent</h3>
+      <div class="vsrow a10-us"><strong class="accent">LOCAL</strong> — my GPU, no API, data never leaves</div>
+      <div class="vsrow a10-us"><strong class="accent">TRANSPARENT</strong> — every tool call + reasoning live</div>
+      <div class="vsrow a10-us"><strong class="accent">FROM SCRATCH</strong> — I understand every line</div>
+      <div class="vsrow a10-us">+ SkillOpt (frozen-weight skill optimization)</div>
+    </div>
+  </div>
+  <p class="caveat a10-caveat">Honest caveat: cloud frontier models are more capable on hard tasks — this does <strong>NOT</strong> beat them. Different axis: <em>ownership &amp; transparency</em>.</p>
+  <aside class="notes">So, the question my advisor kept asking and I kept refining: what's special? Claude and Codex are more powerful than this — full stop, no argument. But they're cloud and black-box. My agent trades on a different axis. It's LOCAL: it runs on my own GPU, no API, your data never leaves the machine — which matters for private or regulated code. It's TRANSPARENT: verbose by design, you watch every tool call and the model's reasoning in real time, which is why I could find the no_action bug at all. It's FROM SCRATCH and fully explainable — I can defend every line — and it carries SkillOpt, the frozen-weight skill-optimization experiment. And the honest caveat, which I'll say out loud: on genuinely hard tasks the frontier cloud models win. I'm not claiming to beat them. I'm claiming something you can own, inspect, and trust.</aside>
+</section>
+
+<!-- ========== SLIDE 11 ========== -->
+<section data-anim="11">
+  <h2>Limitations — What I Won't Overclaim</h2>
+  <div class="ledger">
+    <div class="watermark">measured, not marketed</div>
+    <div class="ledrow a11-row"><span class="glyph">⚠</span><div><strong>Capability:</strong> 67.3% on toy-to-moderate tasks; only <strong>21.6%</strong> on hard hand-written tasks — not SWE-bench-grade repo surgery</div></div>
+    <div class="ledrow a11-row"><span class="glyph">⚠</span><div><strong>No true tool parallelism</strong>; a single shared workspace, no isolation across concurrent tasks</div></div>
+    <div class="ledrow a11-row"><span class="glyph">⚠</span><div><strong>Stochastic backend:</strong> same prompt, different runs (vLLM nondeterminism even at temp=0)</div></div>
+    <div class="ledrow a11-row"><span class="glyph">⚠</span><div><strong>SkillOpt is inconclusive &amp; under-powered</strong>; the agent loop is a reimplementation, not novel research</div></div>
+  </div>
+  <aside class="notes">Let me be straight about the limits, because overclaiming would undo the whole point of this talk. On capability: 67.3 percent is solid for toy-to-moderate tasks, but the hard hand-written set is only 21.6 — this is not SWE-bench-grade repository surgery. Engineering: there's no real tool parallelism, tools run one at a time, and there's a single shared workspace, so I don't isolate concurrent tasks. The backend is stochastic — the same task can pass one run and fail the next, even at temperature zero, because of vLLM nondeterminism; that's the same noise that made SkillOpt inconclusive. And SkillOpt itself is under-powered — I have no significant result. Finally, the ReAct loop is a faithful reimplementation, not a new algorithm. None of these are excuses; they're the honest boundary of what I can defend.</aside>
+</section>
+
+<!-- ========== SLIDE 12 ========== -->
+<section data-anim="12" class="center">
+  <h2 style="text-align:center;">Conclusion — and a Live Demo</h2>
+  <div class="pillars" style="margin-top:0.3em;">
+    <div class="pillar p1 a12-pillar"><div class="pname">LOCAL</div></div>
+    <div class="pillar p2 a12-pillar"><div class="pname">TRANSPARENT</div></div>
+    <div class="pillar p3 a12-pillar"><div class="pname">FROM SCRATCH</div></div>
+  </div>
+  <div class="center" style="margin:0.5em 0;">
+    <span class="bignum" style="font-size:2.2em; display:inline;"><span class="a12-count" data-to="67.3">0.0%</span></span>
+    <span class="dim small"> · 422/627 · caught &amp; fixed my own leak (79.9%→67.3%)</span>
+  </div>
+  <ul class="small" style="display:inline-block; text-align:left;">
+    <li class="a12-li">From-scratch, local, transparent ReAct agent I can explain end to end</li>
+    <li class="a12-li">Real finding: dominant failure was "talk, don't act" (<code>no_action</code>) — a guardrail recovered most</li>
+    <li class="a12-li">Next: harder multi-file tasks + true parallelism</li>
+  </ul>
+  <div class="demo-cue a12-demo">$ agent "fix the failing tests in demo_repo/" <span class="cursor"></span></div>
+  <aside class="notes">To close: I built a from-scratch, local, transparent coding agent that I can explain end to end — the loop, the tools, the sandbox, the eval harness. I measured it honestly: 67.3 percent on 627 tasks, and the result I'm proudest of is catching and fixing my own benchmark leak, which took the number DOWN from 79.9 to 67.3. The real research finding was behavioral: the dominant failure was the model talking instead of acting, and a small guardrail recovered most of it. SkillOpt is a clean idea with an honestly inconclusive result. Next steps are harder multi-file tasks and true parallelism. And now — let me show you the thing actually running. I'll hand it a repo with failing tests and we'll watch it reason, call tools, and drive the suite to green, live. Demo time.</aside>
+</section>
+
+</div>
+</div>
+
+<script src="libs/reveal.min.js"></script>
+<script src="libs/notes.min.js"></script>
+<script src="libs/gsap.min.js"></script>
+<script>
+  Reveal.initialize({
+    hash: true, controls: true, progress: true, slideNumber: 'c/t',
+    history: false, keyboard: true, overview: true, center: true, touch: true,
+    transition: 'slide', backgroundTransition: 'fade',
+    plugins: [RevealNotes],
+    width: 1280, height: 800, margin: 0.04, minScale: 0.2, maxScale: 2.0,
+  });
+
+  const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const $ = (slide, sel) => Array.from(slide.querySelectorAll(sel));
+
+  // Count-up helper: tween a proxy and write textContent. Honors reduced-motion.
+  function countUp(el, to, dur, suffix='%', from=0) {
+    if (!el) return;
+    const dec = (to % 1 !== 0) ? 1 : 0;
+    if (reduced()) { el.textContent = to.toFixed(dec) + suffix; return; }
+    const o = { v: from };
+    el.textContent = from.toFixed(dec) + suffix;
+    gsap.to(o, { v: to, duration: dur, ease: 'power2.out',
+      onUpdate() { el.textContent = o.v.toFixed(dec) + suffix; },
+      onComplete() { el.textContent = to.toFixed(dec) + suffix; } });
+  }
+
+  // Per-slide animation dispatch. Each branch resets to start (.from / gsap.set) so
+  // revisiting a slide replays cleanly and never leaves elements invisible.
+  function animateSlide(slide) {
+    if (!slide || !window.gsap) return;
+    const i = slide.dataset.anim;
+
+    gsap.matchMedia().add({
+      reduce: '(prefers-reduced-motion: reduce)',
+      motion: '(prefers-reduced-motion: no-preference)'
+    }, (ctx) => {
+      const motion = ctx.conditions.motion;
+      // Helper: entrance that respects reduced-motion by snapping to final state.
+      const inFrom = (els, vars) => {
+        if (!els || (els.length === 0)) return;
+        if (!motion) { gsap.set(els, { autoAlpha: 1, x: 0, y: 0, scale: 1, clearProps: 'transform' }); return; }
+        gsap.from(els, vars);
+      };
+
+      switch (i) {
+        case '1': {
+          inFrom($(slide, '.a1-title'), { autoAlpha: 0, y: 30, duration: 0.7, ease: 'power3.out' });
+          inFrom($(slide, '.a1-line'), { autoAlpha: 0, y: 18, duration: 0.5, stagger: 0.12, delay: 0.25, ease: 'power2.out' });
+          break;
+        }
+        case '2': {
+          inFrom($(slide, '.a2-bullet'), { autoAlpha: 0, x: -24, duration: 0.5, stagger: 0.1, ease: 'power2.out' });
+          inFrom($(slide, '.a2-pillar'), { autoAlpha: 0, y: 26, scale: 0.9, duration: 0.55, stagger: 0.15, delay: 0.3, ease: 'back.out(1.5)' });
+          inFrom($(slide, '.a2-caveat'), { autoAlpha: 0, duration: 0.6, delay: 0.95, ease: 'power1.out' });
+          break;
+        }
+        case '3': {
+          const arrows = $(slide, '.c-arrow');
+          const nodes = $(slide, '.c-node');
+          inFrom(nodes, { autoAlpha: 0, scale: 0.6, duration: 0.4, stagger: 0.12, ease: 'back.out(2)' });
+          if (motion) {
+            arrows.forEach(a => { const L = a.getTotalLength(); gsap.set(a, { strokeDasharray: L, strokeDashoffset: L }); });
+            gsap.to(arrows, { strokeDashoffset: 0, duration: 0.45, stagger: 0.18, delay: 0.45, ease: 'power1.inOut' });
+            // pulse nodes in sequence as the loop "activates"
+            gsap.fromTo(nodes, { boxShadow: '0 0 0 0 rgba(123,220,181,0)' },
+              { boxShadow: '0 0 18px 2px rgba(123,220,181,0.6)', duration: 0.3, stagger: 0.18, delay: 0.6, yoyo: true, repeat: 1 });
+          } else {
+            gsap.set(arrows, { strokeDashoffset: 0, strokeDasharray: 'none' });
+          }
+          inFrom($(slide, '.a3-note'), { autoAlpha: 0, x: 18, duration: 0.4, stagger: 0.1, delay: 0.7, ease: 'power2.out' });
+          // color sweep on the highlighted memory line
+          const hl = slide.querySelector('.hl-line');
+          if (hl && motion) gsap.fromTo(hl, { color: '#7bf0ff', backgroundColor: 'rgba(123,240,255,0.18)' },
+            { backgroundColor: 'rgba(123,240,255,0)', duration: 1.1, delay: 0.9, ease: 'power1.out' });
+          break;
+        }
+        case '4': {
+          inFrom($(slide, '.a4-chip'), { autoAlpha: 0, y: 16, scale: 0.85, duration: 0.4, stagger: 0.06, ease: 'power2.out' });
+          inFrom($(slide, '.a4-box'), { autoAlpha: 0, y: 20, duration: 0.5, delay: 0.7, ease: 'power2.out' });
+          const atk = slide.querySelector('.a4-attack');
+          if (atk) {
+            if (!motion) { gsap.set(atk, { autoAlpha: 1, x: 0 }); }
+            else gsap.fromTo(atk, { autoAlpha: 0, x: 120 },
+              { autoAlpha: 1, x: 0, duration: 0.5, delay: 1.0, ease: 'power3.out',
+                onComplete() { gsap.fromTo(atk, { x: 0 }, { x: -8, duration: 0.07, repeat: 5, yoyo: true, ease: 'none' }); } });
+          }
+          break;
+        }
+        case '5': {
+          countUp(slide.querySelector('.a5-count'), 67.3, 1.1);
+          inFrom($(slide, '.a5-li'), { autoAlpha: 0, y: 14, duration: 0.4, stagger: 0.1, delay: 0.4, ease: 'power2.out' });
+          inFrom($(slide, '.a5-bar'), { autoAlpha: 0, duration: 0.3, stagger: 0.12, ease: 'power1.out' });
+          $(slide, '.sbar-fill').forEach((f, idx) => {
+            const pct = parseFloat(f.dataset.pct);
+            if (!motion) { gsap.set(f, { width: pct + '%' }); return; }
+            gsap.fromTo(f, { width: '0%' }, { width: pct + '%', duration: 0.9, delay: 0.3 + idx * 0.12, ease: 'power3.out' });
+          });
+          break;
+        }
+        case '6': {
+          inFrom($(slide, '.a6-bad'), { autoAlpha: 0, x: -30, duration: 0.5, ease: 'power2.out' });
+          inFrom($(slide, '.a6-good'), { autoAlpha: 0, x: 30, duration: 0.5, delay: 0.15, ease: 'power2.out' });
+          inFrom($(slide, '.a6-arrow'), { autoAlpha: 0, scale: 0.5, duration: 0.4, delay: 0.4, ease: 'back.out(2)' });
+          // deflate count-down 79.9 -> 67.3
+          countUp(slide.querySelector('.a6-count'), 67.3, 1.2, '%', 79.9);
+          // strikethrough draw on the leaked-assert text
+          const strike = slide.querySelector('.a6-leak .strike');
+          if (strike) {
+            if (!motion) gsap.set(strike, { width: '100%' });
+            else gsap.fromTo(strike, { width: '0%' }, { width: '100%', duration: 0.7, delay: 0.9, ease: 'power2.inOut' });
+          }
+          inFrom($(slide, '.a6-li'), { autoAlpha: 0, y: 12, duration: 0.4, stagger: 0.1, delay: 0.5, ease: 'power2.out' });
+          break;
+        }
+        case '7': {
+          inFrom($(slide, '.a7-before'), { autoAlpha: 0, x: -24, duration: 0.5, ease: 'power2.out' });
+          if (motion) {
+            const tl = gsap.timeline({ delay: 0.4 });
+            tl.from(slide.querySelector('.a7-after'), { autoAlpha: 0, x: 24, duration: 0.45, ease: 'power2.out' })
+              .from(slide.querySelector('.a7-nudge'), { autoAlpha: 0, y: -10, duration: 0.4 }, '+=0.1')
+              .from(slide.querySelector('.a7-call'), { autoAlpha: 0, y: 10, duration: 0.4 }, '+=0.15')
+              .fromTo(slide.querySelector('.a7-result'), { color: '#ff7b7b' }, { color: '#ff7b7b', duration: 0.3 }, '+=0.1');
+          } else {
+            gsap.set($(slide, '.a7-after, .a7-nudge, .a7-call'), { autoAlpha: 1, x: 0, y: 0 });
+          }
+          inFrom($(slide, '.a7-li'), { autoAlpha: 0, y: 12, duration: 0.4, stagger: 0.12, delay: 0.7, ease: 'power2.out' });
+          break;
+        }
+        case '8': {
+          inFrom($(slide, '.sk-n'), { autoAlpha: 0, scale: 0.8, duration: 0.4, stagger: 0.1, ease: 'back.out(1.6)' });
+          inFrom($(slide, '.sk-a'), { autoAlpha: 0, duration: 0.3, stagger: 0.1, delay: 0.2, ease: 'power1.out' });
+          const fr = slide.querySelector('.sk-frozen');
+          inFrom([fr], { autoAlpha: 0, y: 16, duration: 0.5, delay: 0.7, ease: 'power2.out' });
+          if (fr && motion) gsap.to(fr, { x: -3, duration: 0.06, repeat: 7, yoyo: true, delay: 1.2, ease: 'none' });
+          inFrom($(slide, '.a8-li'), { autoAlpha: 0, y: 12, duration: 0.4, stagger: 0.1, delay: 0.9, ease: 'power2.out' });
+          break;
+        }
+        case '9': {
+          // draw error bars: width = (hi-lo), positioned at lo; whiskers + dots
+          $(slide, '.a9-bar').forEach((b, idx) => {
+            const lo = parseFloat(b.dataset.lo), hi = parseFloat(b.dataset.hi);
+            const scale = x => ((x - 60) / 30) * 100; // map 60-90% to 0-100% of track
+            const left = scale(lo), right = scale(hi);
+            gsap.set(b, { left: left + '%' });
+            if (!motion) { gsap.set(b, { width: (right - left) + '%', autoAlpha: 1 }); }
+            else gsap.fromTo(b, { width: '0%', autoAlpha: 1 }, { width: (right - left) + '%', duration: 0.8, delay: 0.2 + idx * 0.2, ease: 'power2.out' });
+          });
+          $(slide, '.a9-w').forEach(w => {
+            const pos = ((parseFloat(w.dataset.x) - 60) / 30) * 100;
+            gsap.set(w, { left: pos + '%' });
+          });
+          inFrom($(slide, '.a9-w'), { autoAlpha: 0, duration: 0.3, stagger: 0.05, delay: 0.7 });
+          $(slide, '.a9-dot').forEach(d => { gsap.set(d, { left: (((parseFloat(d.dataset.x) - 60) / 30) * 100) + '%' }); });
+          inFrom($(slide, '.a9-dot'), { autoAlpha: 0, scale: 0, duration: 0.3, stagger: 0.1, delay: 0.8, ease: 'back.out(2)' });
+          inFrom($(slide, '.a9-li'), { autoAlpha: 0, y: 12, duration: 0.4, stagger: 0.1, delay: 0.9, ease: 'power2.out' });
+          const stamp = slide.querySelector('.a9-stamp');
+          if (stamp) {
+            if (!motion) gsap.set(stamp, { autoAlpha: 1, scale: 1, rotation: -8 });
+            else gsap.fromTo(stamp, { autoAlpha: 0, scale: 2.2, rotation: 12 },
+              { autoAlpha: 1, scale: 1, rotation: -8, duration: 0.6, delay: 1.3, ease: 'back.out(2.2)' });
+          }
+          break;
+        }
+        case '10': {
+          inFrom($(slide, '.a10-bridge'), { autoAlpha: 0, scale: 0.92, duration: 0.5, ease: 'power2.out' });
+          inFrom($(slide, '.a10-them'), { autoAlpha: 0, x: -20, duration: 0.4, stagger: 0.1, delay: 0.3, ease: 'power2.out' });
+          inFrom($(slide, '.a10-us'), { autoAlpha: 0, x: 20, duration: 0.4, stagger: 0.1, delay: 0.4, ease: 'power2.out' });
+          inFrom($(slide, '.a10-caveat'), { autoAlpha: 0, duration: 0.6, delay: 1.0, ease: 'power1.out' });
+          break;
+        }
+        case '11': {
+          // deliberately calm: gentle staggered fade, no big motion
+          inFrom($(slide, '.a11-row'), { autoAlpha: 0, y: 16, duration: 0.5, stagger: 0.14, ease: 'power1.out' });
+          break;
+        }
+        case '12': {
+          inFrom($(slide, '.a12-pillar'), { autoAlpha: 0, y: 24, scale: 0.85, duration: 0.5, stagger: 0.14, ease: 'back.out(1.6)' });
+          countUp(slide.querySelector('.a12-count'), 67.3, 1.1);
+          inFrom($(slide, '.a12-li'), { autoAlpha: 0, y: 12, duration: 0.4, stagger: 0.1, delay: 0.5, ease: 'power2.out' });
+          const demo = slide.querySelector('.a12-demo');
+          if (demo) {
+            inFrom([demo], { autoAlpha: 0, y: 16, duration: 0.5, delay: 0.9, ease: 'power2.out' });
+            if (motion) gsap.to(demo, { boxShadow: '0 0 22px 4px rgba(123,255,123,0.5)', duration: 1.1, repeat: -1, yoyo: true, delay: 1.4, ease: 'sine.inOut' });
+          }
+          break;
+        }
+      }
+      return () => {}; // matchMedia cleanup (no persistent state to tear down)
+    });
+  }
+
+  Reveal.on('ready', e => { Reveal.layout(); animateSlide(e.currentSlide); });
+  Reveal.on('slidechanged', e => animateSlide(e.currentSlide));
+</script>
+</body>
+</html>
