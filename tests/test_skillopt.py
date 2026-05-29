@@ -214,6 +214,62 @@ def test_extract_json_handles_prose_plus_blob():
     assert obj["edits"][0]["op"] == "append"
 
 
+def test_extract_json_skips_fenced_block_without_edits():
+    """Regression (audit HIGH): the code-fence branch must NOT blindly return the FIRST
+    fenced dict. Qwen3 often fences a thinking/example blob BEFORE the real answer; the
+    old branch returned that thinking dict -> .get('edits',[]) == [] -> 0 edits -> step
+    becomes a silent no-op. Must skip fenced blocks lacking 'edits'/'selected'."""
+    from skillopt.optimizer_llm import _extract_json
+    text = ('```json\n{"thinking": "let me reason about which rules to add"}\n```\n'
+            'Now my actual answer:\n'
+            '```json\n{"edits": [{"op": "append", "content": "rule X"}]}\n```')
+    obj = _extract_json(text)
+    assert "edits" in obj, f"grabbed wrong fenced dict: {obj}"
+    assert obj["edits"][0]["op"] == "append"
+
+
+def test_extract_json_fenced_selected_also_found():
+    """The clip() path returns {'selected': [...]} — same fence-skip logic must apply."""
+    from skillopt.optimizer_llm import _extract_json
+    text = ('```\n{"note": "thinking out loud"}\n```\n'
+            '```json\n{"selected": [0, 2]}\n```')
+    obj = _extract_json(text)
+    assert obj.get("selected") == [0, 2]
+
+
+def test_report_prose_adapts_to_direction(tmp_path):
+    """Regression (audit): mechanism-line prose must be data-driven, not hard-code
+    'chiều DƯƠNG ... transfer'. When optimized is WORSE than seed it must say ÂM."""
+    import json as _json
+    from skillopt.report import compare
+    def mk(name, passes):
+        p = tmp_path / name
+        rows = [{"task": f"bench/he_{i:03d}", "difficulty": "easy", "passed": bool(b), "repeat_idx": 0}
+                for i, b in enumerate(passes)]
+        p.write_text("\n".join(_json.dumps(r) for r in rows), encoding="utf-8")
+        return p
+    empty = mk("e.jsonl", [1] * 15 + [0] * 5)   # 15/20
+    seed = mk("s.jsonl", [1] * 16 + [0] * 4)    # 16/20
+    opt = mk("o.jsonl", [1] * 8 + [0] * 12)     # 8/20 — optimized MUCH worse than seed
+    md = compare(empty, seed, opt)
+    mech = [l for l in md.splitlines() if l.startswith("- test:")][0]
+    assert "ÂM" in mech and "DƯƠNG" not in mech, mech
+    assert "tín hiệu dương thật" not in mech, "must not claim positive transfer when worse"
+
+
+def test_read_jsonl_tolerates_torn_final_line(tmp_path):
+    """Regression (audit): a crashed/killed rollout can leave a half-written final line.
+    _read_jsonl must skip the torn line, not crash the whole resumable run (mirror run.py's
+    load_done, which guards per line)."""
+    from skillopt.loop import _read_jsonl
+    f = tmp_path / "r.jsonl"
+    f.write_text('{"task": "a", "passed": true}\n'
+                 '{"task": "b", "passed": false}\n'
+                 '{"task": "c", "passed": tr', encoding="utf-8")  # torn final line
+    rows = _read_jsonl(f)
+    assert [r["task"] for r in rows] == ["a", "b"]
+
+
 def test_skillopt_modules_import():
     """All loop/optimizer/report modules import without vLLM (no calls at import)."""
     import skillopt.loop  # noqa: F401

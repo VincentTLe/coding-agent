@@ -41,7 +41,15 @@ REPO = Path(__file__).resolve().parent.parent
 def _read_jsonl(p: Path) -> list[dict]:
     if not p.exists():
         return []
-    return [json.loads(ln) for ln in p.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    out: list[dict] = []
+    for ln in p.read_text(encoding="utf-8").splitlines():
+        if not ln.strip():
+            continue
+        try:                       # bỏ qua dòng cuối bị cắt dở (rollout bị kill giữa chừng)
+            out.append(json.loads(ln))
+        except json.JSONDecodeError:
+            continue
+    return out
 
 
 def _cases(results: list[dict]) -> list[dict]:
@@ -56,8 +64,11 @@ def _cases(results: list[dict]) -> list[dict]:
 
 
 def _rollout(skill_text: str | None, split_name: str, tasks_file: Path, *, jobs: int,
-             scratch: Path, cache: dict, agent_timeout: float | None = 420) -> tuple[float, list[dict]]:
+             scratch: Path, cache: dict, agent_timeout: float | None = 420) -> tuple[float | None, list[dict]]:
     """Chạy agent với skill_text trên split → (pass_rate, cases). Cache theo (hash, split).
+
+    pass_rate = None nghĩa là ROLLOUT HỎNG vì hạ tầng (timeout / subprocess chết / thiếu
+    task) — KHÁC với 0.0 (điểm 0% thật). Caller PHẢI kiểm None để không gate bằng điểm ảo.
 
     agent_timeout: trần wall-clock MỖI task (giây) → chặn task kẹt ăn hết thời gian của
     run dài không người trông. Mặc định 420s (probe thấy task nặng nhất ~258s → còn dư).
@@ -85,12 +96,17 @@ def _rollout(skill_text: str | None, split_name: str, tasks_file: Path, *, jobs:
     try:
         subprocess.run(cmd, cwd=REPO, check=False, timeout=sub_timeout)
     except subprocess.TimeoutExpired:
-        # subprocess hang → KHÔNG cache (để lần sau thử lại), trả rỗng.
-        return 0.0, []
+        # subprocess hang → KHÔNG cache (để lần sau thử lại). Trả score=None (LỖI HẠ TẦNG),
+        # KHÔNG phải 0.0 — để caller phân biệt "rollout hỏng" với "điểm 0% thật" và không
+        # đầu độc gate bằng baseline/candidate ảo.
+        return None, []
     results = _read_jsonl(out)
-    if not results:
-        # subprocess không ghi gì → KHÔNG cache (chống "poison" gate bằng score=0 giả).
-        return 0.0, []
+    n_done = len({r.get("task") for r in results})
+    if not results or n_done < n_tasks:
+        # Rỗng HOẶC THIẾU task: subprocess chết giữa chừng nhưng KHÔNG qua TimeoutExpired
+        # (OOM/SIGKILL/host crash → run trả về với check=False). Chấm trên tập con cho ra
+        # score sai. Trả None (lỗi hạ tầng), KHÔNG cache, KHÔNG chấm → caller xử lý.
+        return None, []
     score = sum(1 for r in results if r.get("passed")) / len(results)
     cases = _cases(results)
     cache[key] = (score, cases)
@@ -149,6 +165,14 @@ def optimize(seed_path: Path, splits_dir: Path, run_dir: Path, *, epochs: int, s
 
     current = ensure_slow_update_region(seed_path.read_text(encoding="utf-8"))
     current_score, _ = _rollout(current, "val", val_f, jobs=jobs, scratch=scratch, cache=cache)
+    if current_score is None:
+        # Seed/baseline rollout HỎNG (hạ tầng) → KHÔNG được tiếp tục với baseline ảo 0.0
+        # (sẽ auto-accept candidate đầu + báo lift ảo). Dừng rõ ràng để người dùng sửa hạ
+        # tầng (vLLM/eval) rồi chạy lại.
+        raise RuntimeError("SkillOpt: seed/baseline val rollout failed (infra error: timeout/"
+                           "incomplete). Aborting — kiểm tra vLLM/eval rồi chạy lại, không tối "
+                           "ưu trên baseline ảo.")
+    seed_score = current_score          # điểm seed GỐC (current_score bị ghi đè khi accept)
     best, best_score = current, current_score
     (run_dir / "best_skill.md").write_text(best, encoding="utf-8")
     traj_f = run_dir / "trajectory.jsonl"
@@ -158,7 +182,7 @@ def optimize(seed_path: Path, splits_dir: Path, run_dir: Path, *, epochs: int, s
         with traj_f.open("a", encoding="utf-8") as f:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
-    log({"event": "init", "seed_val_score": current_score, "best_score": best_score})
+    log({"event": "init", "seed_val_score": seed_score, "best_score": best_score})
 
     stopped = False
     for epoch in range(epochs):
@@ -172,13 +196,22 @@ def optimize(seed_path: Path, splits_dir: Path, run_dir: Path, *, epochs: int, s
                 stopped = True
                 break
             tr_score, cases = _rollout(current, "train", train_f, jobs=jobs, scratch=scratch, cache=cache)
+            if tr_score is None:               # train rollout hỏng → không có tín hiệu, bỏ step
+                log({"event": "rollout_failed", "epoch": epoch, "step": step, "phase": "train"})
+                continue
             fails = [c for c in cases if not c["passed"]]
             succ = [c for c in cases if c["passed"]]
             fe = olm.reflect(current, fails, "failure", _format_rejected(rejected), L)
             se = olm.reflect(current, succ, "success", "", L)
             clipped = olm.clip(current, olm.merge(current, fe, se), L)
+            opt_calls = olm.drain_trace()      # AUDITABILITY: response thô của optimizer step này
             cand, reports = apply_edits(current, clipped)
             cand_score, _ = _rollout(cand, "val", val_f, jobs=jobs, scratch=scratch, cache=cache)
+            if cand_score is None:             # val rollout hỏng → KHÔNG gate trên điểm ảo
+                log({"event": "rollout_failed", "epoch": epoch, "step": step,
+                     "phase": "val_candidate", "n_edits": len(clipped), "edits": clipped,
+                     "optimizer_calls": opt_calls})
+                continue
 
             decision = "reject"
             if cand_score > current_score:           # strict >, ties reject
@@ -189,9 +222,15 @@ def optimize(seed_path: Path, splits_dir: Path, run_dir: Path, *, epochs: int, s
             else:
                 rejected.append({"edits": clipped, "drop": cand_score - current_score})
 
+            # AUDITABILITY: log NỘI DUNG edit (không chỉ n_edits) + snapshot skill ứng viên
+            # mỗi step → tái dựng được "luật học từ đâu" và diff từng bước (audit HIGH).
             log({"event": "step", "epoch": epoch, "step": step, "train_score": tr_score,
                  "cand_score": cand_score, "current_score": current_score, "best_score": best_score,
-                 "decision": decision, "n_edits": len(clipped), "edit_reports": reports})
+                 "decision": decision, "n_edits": len(clipped), "edits": clipped,
+                 "edit_reports": reports, "optimizer_calls": opt_calls})
+            steps_dir = run_dir / "steps"
+            steps_dir.mkdir(exist_ok=True)
+            (steps_dir / f"e{epoch}_s{step}_{decision}.md").write_text(cand, encoding="utf-8")
             (run_dir / "current_skill.md").write_text(current, encoding="utf-8")
 
         # --- epoch boundary: slow / executive-strategy update (≥ epoch 1 meaningful) ---
@@ -207,19 +246,23 @@ def optimize(seed_path: Path, splits_dir: Path, run_dir: Path, *, epochs: int, s
                                         scratch=scratch, cache=cache)
                     cand = replace_slow_update_field(current, slow)
                     cand_score, _ = _rollout(cand, "val", val_f, jobs=jobs, scratch=scratch, cache=cache)
-                    accepted = cand_score >= current_score   # slow-update: không làm tệ đi thì giữ
-                    if accepted:
-                        current, current_score = cand, cand_score
-                        if cand_score > best_score:
-                            best, best_score = cand, cand_score
-                            (run_dir / "best_skill.md").write_text(best, encoding="utf-8")
-                    log({"event": "slow_update", "epoch": epoch, "cand_score": cand_score,
-                         "accepted": accepted, "slow_field": slow[:300]})
+                    if cand_score is None:       # rollout hỏng → bỏ slow-update, giữ current
+                        log({"event": "slow_update", "epoch": epoch, "cand_score": None,
+                             "accepted": False, "reason": "rollout_failed"})
+                    else:
+                        accepted = cand_score >= current_score   # slow-update: không tệ đi thì giữ
+                        if accepted:
+                            current, current_score = cand, cand_score
+                            if cand_score > best_score:
+                                best, best_score = cand, cand_score
+                                (run_dir / "best_skill.md").write_text(best, encoding="utf-8")
+                        log({"event": "slow_update", "epoch": epoch, "cand_score": cand_score,
+                             "accepted": accepted, "slow_field": slow[:300]})
                 except Exception as e:  # noqa: BLE001 — slow-update KHÔNG được giết run dài
                     log({"event": "slow_update_error", "epoch": epoch, "error": repr(e)[:300]})
 
     summary = {"epochs": epochs, "steps_per_epoch": steps, "L": L, "jobs": jobs,
-               "seed_val_score": current_score, "best_val_score": best_score,
+               "seed_val_score": seed_score, "best_val_score": best_score,
                "stopped_early": stopped, "best_skill": str(run_dir / "best_skill.md")}
     (run_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     log({"event": "done", **summary})

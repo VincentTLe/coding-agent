@@ -34,8 +34,23 @@ def _optimizer_model() -> str:
     return os.environ.get("AGENT_OPTIMIZER_MODEL") or get_model()
 
 
+# AUDITABILITY: buffer ghi lại từng lượt gọi optimizer (label + response thô, đã cắt ngắn).
+# loop.py drain sau mỗi step và ghi vào trajectory → khi 1 step ra 0 edit, ta phân biệt được
+# "model trả rác" vs "JSON-extract trượt" vs "sanitize loại hết" (audit auditability HIGH).
+# Chỉ giữ response (prompt chứa cả skill 16KB → bloat; skill đã snapshot riêng mỗi step).
+_CALL_TRACE: list[dict] = []
+
+
+def drain_trace() -> list[dict]:
+    """Trả về và XÓA buffer trace optimizer (loop.py gọi sau mỗi step để ghi log)."""
+    out = list(_CALL_TRACE)
+    _CALL_TRACE.clear()
+    return out
+
+
 def _call(system: str, user: str, *, max_tokens: int = 2048, temperature: float = 0.0) -> str:
     """Gọi optimizer LLM 1 lượt (non-stream), trả về text. Lỗi mạng → chuỗi rỗng."""
+    label = system.split(":")[0][:48] if system else "call"   # nhãn ngắn suy từ system prompt
     try:
         resp = get_client().chat.completions.create(
             model=_optimizer_model(),
@@ -44,9 +59,15 @@ def _call(system: str, user: str, *, max_tokens: int = 2048, temperature: float 
             max_tokens=max_tokens,
             temperature=temperature,
         )
-        return resp.choices[0].message.content or ""
+        text = resp.choices[0].message.content if resp.choices else None
+        text = text or ""
+        _CALL_TRACE.append({"label": label, "response": text[:1500], "error": None})
+        return text
     except Exception as e:  # noqa: BLE001 — optimizer không bao giờ được giết vòng lặp
-        return f""  # rỗng → caller dùng fallback
+        # LỖI giờ được GHI LẠI (không nuốt im lặng): endpoint chết / model sai sẽ lộ trong
+        # trajectory thay vì biến run thành no-op vô hình giống "đã hội tụ".
+        _CALL_TRACE.append({"label": label, "response": "", "error": repr(e)[:200]})
+        return ""  # rỗng → caller dùng fallback
 
 
 def _extract_json(text: str) -> dict:
@@ -61,14 +82,18 @@ def _extract_json(text: str) -> dict:
     """
     if not text:
         return {}
-    m = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
-    if m:
+    # Code-fence(s): quét MỌI block ```...```, trả block ĐẦU TIÊN chứa 'edits'/'selected'.
+    # BUG cũ (audit HIGH): chỉ lấy fence ĐẦU rồi trả bất kỳ dict nào → Qwen3 hay fence một
+    # blob "thinking" TRƯỚC blob đáp án ⇒ trả nhầm dict thinking ⇒ .get('edits',[])==[] ⇒
+    # step thành no-op âm thầm. Giờ bỏ qua fence không có edits/selected, để rơi xuống
+    # raw_decode (vốn đã ưu tiên edits/selected) làm fallback.
+    for m in re.finditer(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL):
         try:
             obj = json.loads(m.group(1))
-            if isinstance(obj, dict):
-                return obj
         except Exception:
-            pass
+            continue
+        if isinstance(obj, dict) and ("edits" in obj or "selected" in obj):
+            return obj
     dec = json.JSONDecoder()
     # vòng 1: tìm dict có 'edits' hoặc 'selected' (đúng JSON ta cần)
     for i, ch in enumerate(text):
