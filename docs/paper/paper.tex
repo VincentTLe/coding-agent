@@ -1,0 +1,267 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{microtype}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage{titlesec}
+\titlespacing*{\section}{0pt}{1.0em}{0.35em}
+\titlespacing*{\subsection}{0pt}{0.6em}{0.25em}
+\setlist{nosep,leftmargin=1.4em}
+\newcommand{\code}[1]{\texttt{\small #1}}
+
+\title{\vspace{-1.6em}A Local ReAct Coding Agent with Hidden-Test Evaluation}
+\author{Vincent Le\\[-0.2em]
+\small Math/Stat 361 Research, Knox College \quad\textbar\quad Advisor: Prof.\ Andrew Leahy}
+\date{}
+
+\begin{document}
+\maketitle
+\vspace{-2.2em}
+
+\begin{abstract}
+\noindent
+I built a coding agent from scratch around a local Qwen3-14B model served by vLLM. The agent uses a
+standard ReAct loop: the model sees a goal, a message history, and tool schemas, then either calls tools
+or replies in text. It has eleven tools for file I/O, search, shell and Python execution, subagent
+delegation, and explicit completion, and every file path goes through a \code{\_safe\_path} sandbox that
+confines it to a workspace. This is not a claim about beating Claude or Codex. It is a small transparent
+agent I can explain line by line. I evaluated it on 627 tasks with hidden tests. While hardening the
+project I found a leak in my own MBPP conversion script: about 93\% of MBPP tasks exposed 2 of the 3
+graded asserts to the agent, which had inflated an earlier score of 79.9\%. After regenerating those tasks
+as spec-only prompts, the real score was 67.3\% (422/627, 95\% CI 64--71\%). I also ran a small SkillOpt
+experiment that optimizes a natural-language skill document while the model weights stay frozen; on 84
+test tasks the empty, seed, and optimized arms scored 0.786, 0.738, and 0.774, exact-binomial McNemar
+gave $p \ge 0.29$ for every pair, and re-running the empty arm flipped about 6 of 84 tasks. I treat that
+result as inconclusive.
+\end{abstract}
+
+\section{Introduction}
+I wanted a coding agent I could inspect without guessing what a framework was doing. The target was
+simple: take a natural-language task, operate on a local repository, edit files, run tests, and stop when
+the task is done. The model was a local Qwen3-14B, served through vLLM on one GPU with an
+OpenAI-compatible endpoint. The Python code used the OpenAI SDK, vLLM, and \code{python-dotenv}. No agent
+framework.
+
+That constraint mattered. A framework would have made progress faster and probably handled some edge
+cases better. It also would have hidden too much of the agent behind abstractions. This was a Math/Stat
+361 research project, and the final artifact had to be something I could defend at the source-code level.
+The goal was not performance. It was transparency.
+
+The agent uses ReAct, following Yao et al.~\cite{react}: the model alternates between reasoning through a
+task and acting through tools. That idea is not new. Claude, Codex, and similar systems use tool-calling
+loops with far better engineering around them. My system does not beat them and I do not claim it does.
+The question is narrower: how far does a small local implementation get, and what breaks when you evaluate
+it carefully?
+
+The answer is mixed, and the interesting part is the second half of that question. The most common failure
+was boring: the model answered in prose without calling a tool, on 66 of 627 tasks. The more important
+finding was an evaluation leak I had built myself, which had made an earlier benchmark result look much
+better than the system deserved. Agent evaluation is easy to fool by accident. A result can look stable
+while a dataset pipeline is quietly leaking information. Hidden tests, validation gates, and adversarial
+review are the difference between a measurement and a number.
+
+\section{System}
+The core function is \code{run\_agent(goal, workspace)}. Each iteration sends the current message history
+plus the tool schemas to the local endpoint. The model returns either plain text or \code{tool\_calls}. On
+tool calls, the agent executes each one, appends the result to the history as a \code{role="tool"}
+message, and loops. The cap is 15 iterations.
+
+One implementation detail became load-bearing. When the model returns an assistant message with
+\code{tool\_calls}, that message has to be stored in the history verbatim. If it is not, the next request
+references tool calls that no longer exist and the API rejects it with a 400. I hit this because the
+message history is not a transcript for humans. It is part of the protocol.
+
+The client uses an explicit 120-second timeout and one retry, instead of the SDK's much longer default. A
+local model on a shared GPU can stall long enough to make debugging unclear, and one stuck call could
+otherwise hang a whole turn. One retry tolerates a transient failure without hiding repeated ones behind
+long waits. Empty responses and API errors are caught and recorded as a finish reason rather than
+crashing the run.
+
+\subsection{The eleven tools}
+There are eleven tools: \code{read\_file}, \code{write\_file}, \code{apply\_patch}, \code{multi\_edit}
+(file I/O); \code{list\_dir}, \code{glob\_files}, \code{grep\_files} (discovery); \code{run\_bash},
+\code{run\_python} (execution); \code{spawn\_subagent} (delegation, in a separate process); and
+\code{finish}. The file tools are deliberately basic. Two of the edit tools are careful by construction:
+\code{apply\_patch} refuses to apply unless its target text matches exactly once, and \code{multi\_edit}
+validates every edit before writing any of them, so a bad edit never leaves a file half-written.
+
+I made \code{finish} a tool because plain text is ambiguous. If the model says ``done'' in prose, that
+might be a final answer or it might be commentary, and the runtime needs a clean signal. In this project,
+replying in prose without a tool call does not end the task. The agent either calls tools, calls
+\code{finish}, or runs out of iterations.
+
+\subsection{The sandbox}
+Every file path goes through one function, \code{\_safe\_path(path, workspace)}. It resolves \code{..},
+turns the path into a real location, follows symlinks, and rejects anything that escapes the workspace.
+The model never sees the \code{workspace} argument. It can ask to read \code{src/main.py}, but it cannot
+choose the root that path is resolved against; the runtime passes that root. This is not a complete
+security sandbox. \code{run\_bash} and \code{run\_python} can still execute arbitrary code, so they stay
+dangerous tools. The file sandbox solves one narrower problem: file operations should not read or write
+outside the assigned repository.
+
+The loop is verbose on purpose. The runtime logs each model call, each tool invocation, each tool result,
+and the model's reasoning when it is available. That is partly for debugging and mostly for studying the
+agent. A silent agent that changes a file and reports only ``success'' destroys the evidence trail, and
+the trail was the point.
+
+\section{Evaluation and the Leak}
+The benchmark has 627 tasks: 163 from HumanEval+, 424 from MBPP, 37 hand-written hard tasks, and 3 legacy
+demos. It runs the agent on each task in a workspace and scores the result with tests the agent never
+controls. During the run the grading tests are removed; the agent sees only the prompt and the visible
+repository. After it stops, the grader restores the tests and runs them. This matters because an agent
+with shell access can read anything left in the workspace. If the tests are there, they are not hidden. A
+validation gate runs first: the reference solution must pass and the stub must fail, or the task is
+pruned as broken.
+
+The leak came from the MBPP converter. It was supposed to turn each task into a spec-only goal while
+keeping the graded tests hidden. It did not. For about 93\% of the 424 MBPP tasks, it copied 2 of the 3
+graded asserts straight into the prompt the agent could read. The agent still had to write code, but it
+could see most of its own grader. The earlier full-benchmark score was 501 of 627, or 79.9\%, and it was
+inflated.
+
+I found it while hardening the project. I ran a multi-agent audit and cross-checked the evaluation setup
+with a second model (Codex/GPT-5.5). The audit forced me to read the data path instead of staring at pass
+rates, and once I looked at a generated MBPP prompt next to its hidden test, the leak was obvious. I
+regenerated all 424 MBPP tasks with spec-only goals and reran the full benchmark. The corrected score was
+422 of 627, or 67.3\% (95\% CI 64--71\%). HumanEval+ had never leaked and stayed at about 79.8\%, which
+acted as a consistency check: if it had also collapsed I would have suspected a broader benchmark change,
+but the drop stayed where the leak had been. The lower number is the one that fits the system I actually
+built.
+
+\section{Results}
+The corrected benchmark result is 67.3\%. Table~\ref{tab:results} gives the breakdown by source and by
+difficulty.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lrr}
+\toprule
+Source & Pass@1 & $n$ \\
+\midrule
+HumanEval+ (never leaked)   & 79.8\% & 163 \\
+MBPP, de-leaked             & 66.7\% & 424 \\
+Hand-written hard           & 21.6\% & 37 \\
+\midrule
+\textbf{Overall}            & \textbf{67.3\%} & \textbf{627} \\
+\bottomrule
+\end{tabular}
+\qquad
+\begin{tabular}{lr}
+\toprule
+Difficulty & Pass@1 \\
+\midrule
+Easy   & 74\% \\
+Medium & 74\% \\
+Hard   & 54\% \\
+\bottomrule
+\end{tabular}
+\caption{Pass@1 on the de-leaked 627-task benchmark (overall 95\% CI 64--71\%).}
+\label{tab:results}
+\end{table}
+
+The spread makes sense. HumanEval+ tasks are compact function-writing problems; MBPP has more variety once
+the leaked asserts are gone; the hand-written hard set was built to stress the agent. Easy and medium
+landing at the same rate is not a typo. The difficulty labels are coarse, and some ``easy'' tasks hide a
+trap while some ``medium'' tasks are direct once the spec points at the needed behavior.
+
+The most common failure was \code{no\_action}: on 66 of 627 tasks the model answered in prose without
+calling a tool. This is a strange failure because it is not a coding mistake. The model described what
+should be done and then stopped, which is useless to the runtime --- the agent cannot fix a repository by
+explaining the fix. I added a guardrail that nudges the model to act when it tries to answer without a
+tool call, and that recovered most of the cases. I do not treat it as a deep algorithmic improvement. It
+is closer to adding a sign that says ``use the tools.'' It still mattered, because tool use is the one
+behavior the whole system depends on.
+
+Other failures were ordinary: wrong solutions, incomplete edits, tasks that hit the 15-iteration cap, and
+some that simply ran into the limits of a 14B model. One more thing showed up that is worth stating: a
+single benchmark run gives one number, but the local stack is not deterministic even at temperature 0.
+vLLM produces run-to-run differences, which became concrete in the SkillOpt experiment below. So the
+score should be read as a measurement of this implementation under this benchmark, not as a property of
+Qwen3-14B or of ReAct in general.
+
+\section{SkillOpt}
+SkillOpt asks a narrower question: can I improve the agent by optimizing a natural-language \emph{skill
+document} while the model weights stay frozen? The skill is plain text that gets prepended to the prompt.
+An optimizer edits it with append, insert, replace, and delete operations, and a validation gate keeps a
+candidate only if it scores higher on a held-out split. The model is never fine-tuned. This sits near
+prior work on optimizing text and prompts --- OPRO~\cite{opro}, TextGrad~\cite{textgrad}, and
+GEPA~\cite{gepa} --- and near Voyager~\cite{voyager}, which stores and reuses skills in an agent. (I was
+pointed to a paper called ``SkillOpt'' but could not verify it, so I do not rely on it.)
+
+I evaluated three skill documents on a held-out test split of 84 tasks (Table~\ref{tab:skillopt}). The
+optimized arm did not beat the empty arm. It beat the seed, but the gap was small, and no pairwise
+exact-binomial McNemar test reached significance ($p \ge 0.29$ for every pair).
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lrl}
+\toprule
+Skill document & Pass@1 (84 tasks) & vs.\ empty \\
+\midrule
+Empty (no skill)     & 0.786 & --- \\
+Seed (human-written) & 0.738 & McNemar $p = 1.00$ \\
+Optimized            & 0.774 & McNemar $p = 0.45$ \\
+\bottomrule
+\end{tabular}
+\caption{SkillOpt three-way comparison on the held-out test split.}
+\label{tab:skillopt}
+\end{table}
+
+The run-to-run noise makes the conclusion sharper. I reran the empty arm with the same skill and settings,
+and about 6 of 84 tasks flipped --- roughly 7 percentage points. The gaps between arms are the same size
+as the noise. A difference that size could be an optimizer effect, or it could be the inference stack
+moving around. The validation set was also tiny at 12 tasks, which is small enough that an optimizer can
+chase noise, and there was one scored run per arm. The clean conclusion is that the experiment is
+under-powered. It does not show that skill optimization fails; it shows that this setup cannot tell. A
+better version needs a larger validation set, more test tasks, several runs per arm, and tighter control
+over inference nondeterminism.
+
+\section{Limitations}
+One model, served one way, on one GPU; no comparison across sizes, serving stacks, or commercial APIs.
+The ReAct loop is standard, implemented from scratch but not invented here, and the agent does not exceed
+Claude or Codex. The benchmark is better after the leak fix but still small: 37 hard tasks, an 84-task
+SkillOpt test split, a 12-task validation set. Those catch large effects, not subtle ones. The main
+conditions were scored once each, which is weak given the temperature-0 nondeterminism; a stronger study
+would repeat each condition and report the variation. The sandbox is narrow: \code{\_safe\_path} protects
+the file tools, but shell execution stays powerful and a real deployment would need process isolation. The
+agent has no browser, no separate planner, and no memory beyond the message history and the files it
+writes.
+
+\section{What Is Mine and What Is Reused}
+Reused: the ReAct pattern~\cite{react}; the benchmark tasks (HumanEval+ and MBPP); the idea of optimizing
+text instead of weights~\cite{textgrad,gepa,opro}; the notion of reusable agent skills, which
+Voyager~\cite{voyager} explores for executable code. The model (Qwen3-14B), the serving engine (vLLM), and
+the client (OpenAI SDK, \code{python-dotenv}) are all external.
+
+Mine: the runtime around them --- the \code{run\_agent} loop, the tool wiring and dispatch, the workspace
+sandbox, the benchmark harness with its validation gate and hidden-test scoring, the SkillOpt experiment
+code, and the MBPP fix. The teaching shape is also deliberate: the source is small, the runtime is
+verbose, and the examples form a ladder from a basic chat script to a sandboxed loop, because the project
+had to stay explainable. And the leak discovery is part of the result. I did not plan it, but it changed
+the project, and the evaluation is stronger for throwing the bad number out.
+
+\section{Conclusion}
+I built a from-scratch local coding agent on a standard ReAct loop with a small set of tools, and its
+corrected hidden-test score was 67.3\% over 627 tasks. The most useful technical lesson was not the loop,
+which is straightforward; it was the details around it. Store assistant tool-call messages verbatim, keep
+file paths inside the workspace, give the client real timeouts, and make the model call an explicit
+\code{finish}. The most useful research lesson was the MBPP leak. My first score was 79.9\% and it was
+wrong, because the converter exposed graded asserts in most MBPP prompts. After fixing the tasks and
+rerunning, the score dropped to 67.3\%, and HumanEval+ staying near 79.8\% helped isolate the cause. That
+was a useful failure. It made the evaluation less flattering and more real. The SkillOpt result was
+inconclusive: the optimized document landed near the empty baseline, the paired tests were not
+significant, and the run-to-run noise was about the size of the arm gaps. The contribution here is small
+and I will state it plainly --- a transparent local agent, a hidden-test benchmark, a documented
+evaluation leak, and a set of numbers I can explain without pointing at a framework.
+
+\begin{thebibliography}{9}
+\small
+\bibitem{react} S.\ Yao, J.\ Zhao, D.\ Yu, et al. ReAct: Synergizing Reasoning and Acting in Language Models. ICLR, 2023.
+\bibitem{voyager} G.\ Wang, Y.\ Xie, Y.\ Jiang, et al. Voyager: An Open-Ended Embodied Agent with Large Language Models. 2023.
+\bibitem{textgrad} M.\ Yuksekgonul, F.\ Bianchi, et al. TextGrad: Automatic ``Differentiation'' via Text. 2024.
+\bibitem{gepa} L.\ Agrawal, et al. GEPA: Reflective Prompt Evolution Can Outperform Reinforcement Learning. 2024.
+\bibitem{opro} C.\ Yang, X.\ Wang, Y.\ Lu, et al. Large Language Models as Optimizers (OPRO). 2023.
+\end{thebibliography}
+
+\end{document}
