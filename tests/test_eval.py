@@ -134,42 +134,46 @@ def test_run_pytest_requires_a_real_passing_test(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Crash-safe hidden tests — startup sweep recovers a hard-killed run (audit #2)
+# Crash recovery — git-based heal restores tests AND contaminated code (audit #2/#3,
+# Codex review: tests are unlinked in-place — never left on disk — so git is the backup)
 # ---------------------------------------------------------------------------
 
-def test_restore_orphaned_hidden_tests_recovers_after_hard_kill(tmp_path, monkeypatch):
-    """A test file left in the backup dir (run hard-killed before restore) is moved back
-    to its task on the next startup — prevents the silent self-propagating false-fail."""
-    tasks = tmp_path / "tasks"
-    backup = tmp_path / "backup"
-    (tasks / "bench" / "he_001").mkdir(parents=True)
-    monkeypatch.setattr(R, "TASKS_DIR", tasks)
-    monkeypatch.setattr(R, "HIDDEN_BACKUP_DIR", backup)
-    bak = backup / "bench" / "he_001" / "test_x.py"
-    bak.parent.mkdir(parents=True)
-    bak.write_text("def test_ok(): assert True", encoding="utf-8")
-    orig = tasks / "bench" / "he_001" / "test_x.py"
-    assert not orig.exists()
-    n = R.restore_orphaned_hidden_tests()
-    assert n == 1
-    assert orig.read_text(encoding="utf-8") == "def test_ok(): assert True"
-    assert not backup.exists()                       # backup dir cleaned
+def test_heal_corrupted_tasks_restores_from_git(tmp_path, monkeypatch):
+    """After a hard-kill leaves a deleted test and an agent-modified file, the next startup's
+    `git checkout -- eval/tasks` restores BOTH to HEAD (no on-disk backup = no leak)."""
+    import subprocess as sp
+    repo = tmp_path / "repo"
+    tdir = repo / "eval" / "tasks" / "bench" / "he_001"
+    tdir.mkdir(parents=True)
+    test_f = tdir / "test_x.py"
+    test_f.write_text("def test_ok():\n    assert True\n", encoding="utf-8")
+    sol = tdir / "sol.py"
+    sol.write_text("def f():\n    return 1\n", encoding="utf-8")
+    g = ["git", "-c", "user.email=t@t", "-c", "user.name=t"]
+    sp.run(["git", "init", "-q"], cwd=repo, check=True)
+    sp.run(g + ["add", "-A"], cwd=repo, check=True)
+    sp.run(g + ["commit", "-qm", "init"], cwd=repo, check=True)
+    # simulate hard-kill contamination: hidden test left deleted, sol left agent-modified
+    test_f.unlink()
+    sol.write_text("def f():\n    return 999  # agent edit left by hard-kill\n", encoding="utf-8")
+    monkeypatch.setattr(R, "ROOT", repo)
+    monkeypatch.setattr(R, "TASKS_DIR", repo / "eval" / "tasks")
+    n = R.heal_corrupted_tasks()
+    assert n >= 1
+    assert test_f.read_text(encoding="utf-8") == "def test_ok():\n    assert True\n"   # test restored
+    assert sol.read_text(encoding="utf-8") == "def f():\n    return 1\n"               # contamination reverted
 
 
-def test_sweep_drops_stale_backup_when_original_present(tmp_path, monkeypatch):
-    """If the original test is already present, a leftover backup is dropped (not restored
-    over the real file) and counted as 0 restored."""
-    tasks = tmp_path / "tasks"
-    backup = tmp_path / "backup"
-    (tasks / "bench" / "he_002").mkdir(parents=True)
-    monkeypatch.setattr(R, "TASKS_DIR", tasks)
-    monkeypatch.setattr(R, "HIDDEN_BACKUP_DIR", backup)
-    orig = tasks / "bench" / "he_002" / "test_y.py"
-    orig.write_text("real", encoding="utf-8")
-    bak = backup / "bench" / "he_002" / "test_y.py"
-    bak.parent.mkdir(parents=True)
-    bak.write_text("stale", encoding="utf-8")
-    n = R.restore_orphaned_hidden_tests()
-    assert n == 0
-    assert orig.read_text(encoding="utf-8") == "real"   # original untouched
-    assert not backup.exists()
+def test_heal_corrupted_tasks_noop_when_clean(tmp_path, monkeypatch):
+    """No uncommitted changes under eval/tasks → heal is a no-op (returns 0)."""
+    import subprocess as sp
+    repo = tmp_path / "repo"
+    (repo / "eval" / "tasks" / "bench" / "he_001").mkdir(parents=True)
+    (repo / "eval" / "tasks" / "bench" / "he_001" / "test_x.py").write_text("def test_ok():\n    assert True\n", encoding="utf-8")
+    g = ["git", "-c", "user.email=t@t", "-c", "user.name=t"]
+    sp.run(["git", "init", "-q"], cwd=repo, check=True)
+    sp.run(g + ["add", "-A"], cwd=repo, check=True)
+    sp.run(g + ["commit", "-qm", "init"], cwd=repo, check=True)
+    monkeypatch.setattr(R, "ROOT", repo)
+    monkeypatch.setattr(R, "TASKS_DIR", repo / "eval" / "tasks")
+    assert R.heal_corrupted_tasks() == 0

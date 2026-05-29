@@ -166,11 +166,7 @@ from src.agent import run_agent  # noqa: E402
 # `/` toán tử nối Path: ROOT / "eval" / "tasks" = đường dẫn tuyệt đối tới eval/tasks/.
 TASKS_DIR = ROOT / "eval" / "tasks"       # thư mục chứa tất cả task
 RESULTS_DIR = ROOT / "eval" / "results"  # thư mục lưu kết quả chạy
-# Nơi cất tạm file test bị giấu — NGOÀI task_dir (agent không thấy) và TRONG eval/results
-# (đã gitignore). Giấu test bằng cách DI CHUYỂN file ra đây thay vì xoá: nội dung sống trên
-# disk nên nếu run bị HARD-KILL (SIGKILL/OOM/reboot bỏ qua finally), startup sweep khôi phục
-# được — chống bug "test bị xoá vĩnh viễn rồi --resume chấm trên cây hỏng" (audit HIGH).
-HIDDEN_BACKUP_DIR = RESULTS_DIR / ".hidden_tests"
+EVAL_LOCK = RESULTS_DIR / ".eval.lock"   # lock 1-eval-1-lúc (xem _acquire_eval_lock)
 
 
 # ---------------------------------------------------------------------------
@@ -340,33 +336,59 @@ def rel_id(task_dir: Path) -> str:
     return task_dir.relative_to(TASKS_DIR).as_posix()
 
 
-def _hide_backup_path(f: Path) -> Path:
-    """Vị trí cất file test bị giấu: HIDDEN_BACKUP_DIR mirror cấu trúc dưới TASKS_DIR.
-    Vd eval/tasks/bench/he_001/test_x.py -> eval/results/.hidden_tests/bench/he_001/test_x.py.
-    Mirror để startup sweep tái lập đúng đường dẫn gốc (TASKS_DIR / <rel>)."""
-    return HIDDEN_BACKUP_DIR / f.relative_to(TASKS_DIR)
+def heal_corrupted_tasks() -> int:
+    """Chữa lành fixtures bị một run trước HARD-KILL (SIGKILL/OOM/reboot) làm bẩn: test bị xoá
+    chưa kịp trả lại, hoặc file bị agent sửa còn sót. Fixtures được git track nên
+    `git checkout -- eval/tasks/` trả MỌI file tracked về HEAD — phục cả test ẩn LẪN code agent
+    đã sửa (mạnh hơn chỉ phục test). Trả số file đã chữa. Best-effort: không phải git repo →
+    bỏ qua. Gọi 1 lần ở đầu main(), SAU khi đã lấy lock (xem _eval_lock) để không giẫm lên một
+    eval khác đang chạy dở. Chỉ chạy khi có thay đổi chưa-commit dưới eval/tasks (bình thường
+    sạch → no-op; chỉ hard-kill mới để lại bẩn).
+    """
+    try:
+        st = subprocess.run(["git", "-C", str(ROOT), "status", "--porcelain", "--", str(TASKS_DIR)],
+                            capture_output=True, text=True, timeout=30)
+        if st.returncode != 0:
+            return 0                            # không phải git repo / git lỗi → bỏ qua
+        dirty = [ln for ln in st.stdout.splitlines() if ln.strip()]
+        if not dirty:
+            return 0
+        subprocess.run(["git", "-C", str(ROOT), "checkout", "--", str(TASKS_DIR)],
+                       capture_output=True, text=True, timeout=120, check=False)
+        for ln in dirty[:10]:                   # in ra để người dùng thấy đã chữa gì
+            print(f"  healed: {ln.strip()}")
+        return len(dirty)
+    except Exception:
+        return 0                                # heal KHÔNG được làm hỏng eval
 
 
-def restore_orphaned_hidden_tests() -> int:
-    """Khôi phục mọi file test còn kẹt trong HIDDEN_BACKUP_DIR (do một run trước bị HARD-KILL
-    nên không kịp trả test về). Trả số file đã phục hồi. Gọi 1 lần ở đầu main() để 'chữa lành'
-    cây fixtures TRƯỚC khi chấm — chặn bug self-propagating: --resume chấm trên task thiếu test
-    → pytest exit 5 → false-fail lan ra mọi run sau."""
-    if not HIDDEN_BACKUP_DIR.exists():
-        return 0
-    restored = 0
-    for bak in HIDDEN_BACKUP_DIR.rglob("*"):
-        if not bak.is_file():
-            continue
-        orig = TASKS_DIR / bak.relative_to(HIDDEN_BACKUP_DIR)
-        if orig.exists():
-            bak.unlink()                       # bản gốc còn nguyên → backup thừa, dọn
-        else:
-            orig.parent.mkdir(parents=True, exist_ok=True)
-            bak.replace(orig)                  # trả test về đúng chỗ
-            restored += 1
-    shutil.rmtree(HIDDEN_BACKUP_DIR, ignore_errors=True)   # dọn thư mục backup rỗng
-    return restored
+def _pid_alive(pid: int) -> bool:
+    """True nếu tiến trình pid còn sống (signal 0 = chỉ kiểm tra, không gửi gì)."""
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def _acquire_eval_lock() -> bool:
+    """Khoá độc quyền 1-eval-1-lúc trên repo này (hide/restore tại chỗ không an toàn khi 2 eval
+    chạy song song — Codex review #4). True nếu lấy được. Lock cũ mà pid đã chết = stale → ghi
+    đè. Tự gỡ khi tiến trình thoát (atexit)."""
+    if EVAL_LOCK.exists():
+        try:
+            old = int((EVAL_LOCK.read_text(encoding="utf-8").strip() or "0"))
+        except Exception:
+            old = 0
+        if old and old != os.getpid() and _pid_alive(old):
+            print(f"ERROR: một eval khác (pid {old}) đang chạy trên repo này (lock {EVAL_LOCK}). "
+                  "Chờ nó xong, hoặc xoá lock nếu chắc chắn nó đã chết.")
+            return False
+    EVAL_LOCK.parent.mkdir(parents=True, exist_ok=True)
+    EVAL_LOCK.write_text(str(os.getpid()), encoding="utf-8")
+    import atexit
+    atexit.register(lambda: EVAL_LOCK.unlink(missing_ok=True))
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -524,7 +546,9 @@ def run_pytest(task_dir: Path) -> tuple[bool, str]:
     # bị skip (vd file test biến mất, hoặc toàn @skip) → sẽ là PASS GIẢ, làm điểm phồng và
     # che lỗi hide-tests. Yêu cầu CÓ ÍT NHẤT 1 test thực sự passed VÀ không có failed/error.
     passed_ct = sum(int(n) for n in re.findall(r"(\d+) passed", out))
-    has_fail = bool(re.search(r"\d+ (?:failed|error)", out))
+    # Chỉ coi là FAIL khi có SỐ DƯƠNG failed/error (tránh "0 failed"/"0 errors" trong text
+    # warning/plugin gây false-fail — Codex review #5). [1-9]\d* = số ≥ 1.
+    has_fail = bool(re.search(r"[1-9]\d* (?:failed|error)", out))
     passed = (result.returncode == 0) and passed_ct >= 1 and not has_fail
     return passed, out
 
@@ -626,14 +650,14 @@ def evaluate_task(payload: tuple) -> dict:
             # Xóa file test khỏi thư mục làm việc (giấu khỏi agent).
             # `for f in hidden_tests:` — lặp qua các KEY của dict (các Path object).
             for f in hidden_tests:
-                # `f.exists()` — kiểm tra file còn tồn tại không.
+                # GIẤU test = XOÁ khỏi disk. test_*.py biến mất HẲN trong lúc agent chạy nên
+                # agent KHÔNG đọc được — kể cả qua run_bash/run_python (vốn không bị _safe_path
+                # chặn). [Codex review bắt: phương án "move ra backup" để lại file trên disk ở
+                # đường dẫn đoán được = LEAK mới — đã bỏ.] Nội dung gốc vẫn nằm trong snap (RAM)
+                # để trả lại bên dưới; nếu hard-kill bỏ qua finally → heal_corrupted_tasks() (git)
+                # khôi phục ở đầu run kế (phục cả test LẪN file agent đã sửa).
                 if f.exists():
-                    # DI CHUYỂN test ra backup ngoài task_dir (KHÔNG xoá) → nội dung sống
-                    # trên disk để hard-kill vẫn khôi phục được; và vì backup nằm NGOÀI
-                    # workspace của agent nên agent không thể đọc test để gian lận.
-                    bak = _hide_backup_path(f)
-                    bak.parent.mkdir(parents=True, exist_ok=True)
-                    f.replace(bak)             # move atomic (cùng filesystem dưới ROOT)
+                    f.unlink()
 
             try:
                 # Chạy agent với task hiện tại.
@@ -656,15 +680,10 @@ def evaluate_task(payload: tuple) -> dict:
                 # `{e!r}` trong f-string: !r gọi repr() trên e, in dạng debugging đầy đủ.
                 print(f"AGENT CRASHED: {e!r}")
 
-            # Trả lại file test sau khi agent đã xong (di chuyển backup về chỗ cũ).
-            # `for f, content in hidden_tests.items():` — lặp qua (Path, nội dung gốc).
+            # Trả lại file test sau khi agent đã xong — ghi nội dung GỐC từ snap (RAM) để chấm.
             for f, content in hidden_tests.items():  # trả test lại để chấm
-                bak = _hide_backup_path(f)
                 f.parent.mkdir(parents=True, exist_ok=True)
-                if bak.exists():
-                    bak.replace(f)             # move backup về (trường hợp thường)
-                else:
-                    f.write_text(content, encoding="utf-8")  # backup mất → ghi từ snap (RAM)
+                f.write_text(content, encoding="utf-8")
 
         # Trước khi chấm: dọn mọi path lạ (file/dir agent tạo, vd lời giải phụ hay
         # venv/ rò rỉ) → pytest chỉ collect đúng test gốc + edit của agent lên file gốc.
@@ -962,11 +981,18 @@ def main() -> int:
               "Dùng --jobs 1 cho repeats, hoặc chạy mỗi repeat ra --out riêng.")
         return 2
 
-    # Chữa lành fixtures TRƯỚC khi chấm: trả lại mọi test còn kẹt trong backup do một run
-    # trước bị hard-kill. Nếu bỏ qua, --resume sẽ chấm task thiếu test → false-fail lan ra.
-    _healed = restore_orphaned_hidden_tests()
+    # LOCK 1-eval-1-lúc: hide/snapshot/restore thao tác TẠI CHỖ trên eval/tasks dùng chung →
+    # hai lần `python eval/run.py` chạy song song sẽ giẫm trạng thái giấu test của nhau (Codex
+    # review #4). Lấy lock độc quyền; nếu một eval khác đang giữ (pid còn sống) → từ chối.
+    if not _acquire_eval_lock():
+        return 2
+
+    # Chữa lành fixtures TRƯỚC khi chấm (sau khi có lock nên không giẫm eval khác): nếu một run
+    # trước bị HARD-KILL để lại test bị xoá / code bị agent sửa, `git checkout -- eval/tasks`
+    # trả về HEAD. Bỏ qua bước này thì --resume chấm trên cây bẩn → điểm sai lan ra (audit/Codex).
+    _healed = heal_corrupted_tasks()
     if _healed:
-        print(f"⚠ restored {_healed} hidden-test file(s) orphaned by a prior interrupted run")
+        print(f"⚠ healed {_healed} corrupted fixture path(s) from a prior interrupted run (git checkout)")
 
     # Kiểm tra thư mục tasks tồn tại.
     if not TASKS_DIR.exists():

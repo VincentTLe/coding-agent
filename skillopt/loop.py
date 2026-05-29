@@ -244,11 +244,12 @@ def optimize(seed_path: Path, splits_dir: Path, run_dir: Path, *, epochs: int, s
                 try:
                     slow = _slow_update(epoch_start_skill, current, train_f, jobs=jobs,
                                         scratch=scratch, cache=cache)
+                    slow_calls = olm.drain_trace()   # drain NGAY (không để step epoch sau dính trace cũ — Codex #8)
                     cand = replace_slow_update_field(current, slow)
                     cand_score, _ = _rollout(cand, "val", val_f, jobs=jobs, scratch=scratch, cache=cache)
                     if cand_score is None:       # rollout hỏng → bỏ slow-update, giữ current
                         log({"event": "slow_update", "epoch": epoch, "cand_score": None,
-                             "accepted": False, "reason": "rollout_failed"})
+                             "accepted": False, "reason": "rollout_failed", "optimizer_calls": slow_calls})
                     else:
                         accepted = cand_score >= current_score   # slow-update: không tệ đi thì giữ
                         if accepted:
@@ -257,7 +258,7 @@ def optimize(seed_path: Path, splits_dir: Path, run_dir: Path, *, epochs: int, s
                                 best, best_score = cand, cand_score
                                 (run_dir / "best_skill.md").write_text(best, encoding="utf-8")
                         log({"event": "slow_update", "epoch": epoch, "cand_score": cand_score,
-                             "accepted": accepted, "slow_field": slow[:300]})
+                             "accepted": accepted, "slow_field": slow[:300], "optimizer_calls": slow_calls})
                 except Exception as e:  # noqa: BLE001 — slow-update KHÔNG được giết run dài
                     log({"event": "slow_update_error", "epoch": epoch, "error": repr(e)[:300]})
 

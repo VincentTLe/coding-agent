@@ -337,6 +337,7 @@ class _DynamicStderrHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         try:
             sys.stderr.write(self.format(record) + "\n")
+            sys.stderr.flush()      # flush ngay (như StreamHandler) → hard-kill không mất trace
         except Exception:           # logging KHÔNG được phép giết caller
             self.handleError(record)
 
