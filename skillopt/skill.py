@@ -150,9 +150,14 @@ def ensure_slow_update_region(skill: str) -> str:
 
 
 def replace_slow_update_field(skill: str, content: str) -> str:
-    """Ghi đè nội dung vùng slow-update (CHỈ gọi ở ranh giới epoch / slow update)."""
+    """Ghi đè nội dung vùng slow-update (CHỈ gọi ở ranh giới epoch / slow update).
+
+    STRIP marker khỏi `content` (Codex design review HIGH): nếu prose của optimizer lỡ chứa
+    SLOW_UPDATE_BEGIN/END, ghi thẳng vào vùng sẽ tạo marker THỪA → _region_span bám nhầm END
+    → phá vùng bảo vệ. Step-edit đã strip qua apply_edits; slow-update giờ cũng strip cho khớp.
+    """
     skill = ensure_slow_update_region(skill)
     span = _region_span(skill)
     assert span is not None  # ensure_… vừa tạo nên chắc chắn có
-    new_region = SLOW_UPDATE_BEGIN + "\n" + content.strip() + "\n" + SLOW_UPDATE_END
+    new_region = SLOW_UPDATE_BEGIN + "\n" + _strip_markers(content).strip() + "\n" + SLOW_UPDATE_END
     return skill[:span[0]] + new_region + skill[span[1]:]

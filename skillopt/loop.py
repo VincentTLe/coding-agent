@@ -254,13 +254,17 @@ def optimize(seed_path: Path, splits_dir: Path, run_dir: Path, *, epochs: int, s
                         accepted = cand_score >= current_score   # slow-update: không tệ đi thì giữ
                         if accepted:
                             current, current_score = cand, cand_score
+                            (run_dir / "current_skill.md").write_text(current, encoding="utf-8")  # chốt state ở epoch boundary
                             if cand_score > best_score:
                                 best, best_score = cand, cand_score
                                 (run_dir / "best_skill.md").write_text(best, encoding="utf-8")
                         log({"event": "slow_update", "epoch": epoch, "cand_score": cand_score,
                              "accepted": accepted, "slow_field": slow[:300], "optimizer_calls": slow_calls})
                 except Exception as e:  # noqa: BLE001 — slow-update KHÔNG được giết run dài
-                    log({"event": "slow_update_error", "epoch": epoch, "error": repr(e)[:300]})
+                    # drain để optimizer call của _slow_update (nếu đã gọi trước khi raise) KHÔNG
+                    # rò sang step epoch sau (Codex re-review #6).
+                    log({"event": "slow_update_error", "epoch": epoch, "error": repr(e)[:300],
+                         "optimizer_calls": olm.drain_trace()})
 
     summary = {"epochs": epochs, "steps_per_epoch": steps, "L": L, "jobs": jobs,
                "seed_val_score": seed_score, "best_val_score": best_score,

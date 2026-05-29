@@ -159,9 +159,11 @@ def test_heal_corrupted_tasks_restores_from_git(tmp_path, monkeypatch):
     monkeypatch.setattr(R, "ROOT", repo)
     monkeypatch.setattr(R, "TASKS_DIR", repo / "eval" / "tasks")
     n = R.heal_corrupted_tasks()
-    assert n >= 1
-    assert test_f.read_text(encoding="utf-8") == "def test_ok():\n    assert True\n"   # test restored
-    assert sol.read_text(encoding="utf-8") == "def f():\n    return 1\n"               # contamination reverted
+    # SAFE policy (Codex re-review #1): restore ONLY the DELETED test (can't lose legit content);
+    # a MODIFIED file is only warned about, NOT auto-reverted (don't clobber legitimate edits).
+    assert n == 1
+    assert test_f.read_text(encoding="utf-8") == "def test_ok():\n    assert True\n"   # deleted test restored
+    assert "999" in sol.read_text(encoding="utf-8")                                    # modified file left intact
 
 
 def test_heal_corrupted_tasks_noop_when_clean(tmp_path, monkeypatch):

@@ -110,6 +110,15 @@ def test_ensure_slow_update_region_normalizes_orphans():
     assert fixed2.find(SLOW_UPDATE_BEGIN) < fixed2.find(SLOW_UPDATE_END)
 
 
+def test_replace_slow_update_field_strips_injected_markers():
+    """Regression (Codex design review HIGH): if the optimizer's slow-update prose contains a
+    stray SLOW-UPDATE marker, replace_slow_update_field must STRIP it so exactly ONE canonical
+    region remains (else _region_span binds to the wrong END and corrupts the protected area)."""
+    out = replace_slow_update_field("tactical.", f"strat {SLOW_UPDATE_END} hi {SLOW_UPDATE_BEGIN} x")
+    assert out.count(SLOW_UPDATE_BEGIN) == 1 and out.count(SLOW_UPDATE_END) == 1
+    assert "strat  hi  x" in out or "strat" in out   # content kept (markers stripped)
+
+
 def test_replace_slow_update_field_overwrites_region_only():
     skill = replace_slow_update_field("tactical part.", "v1 strategy")
     skill2 = replace_slow_update_field(skill, "v2 strategy")

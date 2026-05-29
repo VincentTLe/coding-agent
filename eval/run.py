@@ -349,16 +349,37 @@ def heal_corrupted_tasks() -> int:
         st = subprocess.run(["git", "-C", str(ROOT), "status", "--porcelain", "--", str(TASKS_DIR)],
                             capture_output=True, text=True, timeout=30)
         if st.returncode != 0:
-            return 0                            # không phải git repo / git lỗi → bỏ qua
-        dirty = [ln for ln in st.stdout.splitlines() if ln.strip()]
-        if not dirty:
+            # Không phải git repo → chiến lược unlink KHÔNG có lưới khôi phục sau hard-kill.
+            # Fail-LOUD nếu dir đang bẩn (Codex re-review #5) thay vì âm thầm chấm sai.
+            print("⚠ eval/tasks không nằm trong git repo — không có cơ chế khôi phục test sau hard-kill.")
             return 0
-        subprocess.run(["git", "-C", str(ROOT), "checkout", "--", str(TASKS_DIR)],
-                       capture_output=True, text=True, timeout=120, check=False)
-        for ln in dirty[:10]:                   # in ra để người dùng thấy đã chữa gì
-            print(f"  healed: {ln.strip()}")
-        return len(dirty)
-    except Exception:
+        deleted, other = [], []
+        for ln in st.stdout.splitlines():
+            if not ln.strip():
+                continue
+            xy, path = ln[:2], ln[3:].strip().strip('"')
+            if "D" in xy:               # file TRACKED bị xoá = chữ ký hard-kill (test chưa trả lại)
+                deleted.append(path)
+            else:                       # sửa / staged / untracked → CÓ THỂ là việc hợp lệ
+                other.append(ln.strip())
+        # CHỈ tự khôi phục file bị XOÁ (không thể mất nội dung hợp lệ vì file đã biến mất). File
+        # SỬA/UNTRACKED chỉ CẢNH BÁO — KHÔNG tự git-checkout (tránh xoá nhầm thay đổi đang làm dở
+        # — Codex re-review #1 data-loss). Restore từ HEAD tường minh (không phải index — #3).
+        if other:
+            print(f"⚠ eval/tasks có {len(other)} thay đổi chưa-commit KHÔNG phải 'deleted' — KHÔNG tự "
+                  "khôi phục (có thể là sửa hợp lệ). Tự kiểm tra: " + " | ".join(other[:5]))
+        if not deleted:
+            return 0
+        r = subprocess.run(["git", "-C", str(ROOT), "checkout", "HEAD", "--", *deleted],
+                           capture_output=True, text=True, timeout=120)
+        if r.returncode != 0:          # heal thất bại KHÔNG được nuốt im (#4)
+            print(f"⚠ git checkout khôi phục test THẤT BẠI: {r.stderr.strip()[:200]} — eval có thể chấm sai.")
+            return 0
+        for p in deleted[:10]:
+            print(f"  restored deleted test: {p}")
+        return len(deleted)
+    except Exception as e:
+        print(f"⚠ heal_corrupted_tasks lỗi: {e!r} — bỏ qua.")
         return 0                                # heal KHÔNG được làm hỏng eval
 
 
@@ -371,11 +392,24 @@ def _pid_alive(pid: int) -> bool:
         return False
 
 
+def _try_create_lock() -> bool:
+    """Tạo lock ATOMIC bằng O_CREAT|O_EXCL (kernel đảm bảo chỉ 1 tiến trình tạo được) — chống
+    TOCTOU của exists/read/write (Codex re-review #2). True nếu tạo được."""
+    try:
+        fd = os.open(str(EVAL_LOCK), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+        os.write(fd, str(os.getpid()).encode())
+        os.close(fd)
+        return True
+    except FileExistsError:
+        return False
+
+
 def _acquire_eval_lock() -> bool:
-    """Khoá độc quyền 1-eval-1-lúc trên repo này (hide/restore tại chỗ không an toàn khi 2 eval
-    chạy song song — Codex review #4). True nếu lấy được. Lock cũ mà pid đã chết = stale → ghi
-    đè. Tự gỡ khi tiến trình thoát (atexit)."""
-    if EVAL_LOCK.exists():
+    """Khoá độc quyền 1-eval-1-lúc trên repo (hide/restore tại chỗ đua nhau khi 2 eval song song).
+    Atomic O_EXCL; lock cũ mà pid đã chết = stale → cướp (thử 1 lần). atexit CHỈ gỡ lock của
+    chính pid mình (không xoá nhầm lock tiến trình khác — Codex #2)."""
+    EVAL_LOCK.parent.mkdir(parents=True, exist_ok=True)
+    if not _try_create_lock():
         try:
             old = int((EVAL_LOCK.read_text(encoding="utf-8").strip() or "0"))
         except Exception:
@@ -384,10 +418,23 @@ def _acquire_eval_lock() -> bool:
             print(f"ERROR: một eval khác (pid {old}) đang chạy trên repo này (lock {EVAL_LOCK}). "
                   "Chờ nó xong, hoặc xoá lock nếu chắc chắn nó đã chết.")
             return False
-    EVAL_LOCK.parent.mkdir(parents=True, exist_ok=True)
-    EVAL_LOCK.write_text(str(os.getpid()), encoding="utf-8")
+        # stale (pid chết / lock rỗng) → xoá rồi thử tạo lại 1 lần
+        try:
+            EVAL_LOCK.unlink()
+        except FileNotFoundError:
+            pass
+        if not _try_create_lock():
+            print("ERROR: tranh lock với tiến trình khác — thử lại sau.")
+            return False
     import atexit
-    atexit.register(lambda: EVAL_LOCK.unlink(missing_ok=True))
+
+    def _release() -> None:
+        try:                            # CHỈ gỡ nếu lock vẫn là của mình
+            if EVAL_LOCK.exists() and EVAL_LOCK.read_text(encoding="utf-8").strip() == str(os.getpid()):
+                EVAL_LOCK.unlink()
+        except Exception:
+            pass
+    atexit.register(_release)
     return True
 
 

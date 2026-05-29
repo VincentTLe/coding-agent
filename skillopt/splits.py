@@ -58,6 +58,11 @@ def make_splits(ratio: tuple[int, int, int] = (2, 1, 7), seed: int = 42,
     Lưới an toàn cuối: nếu đã chọn >= 3 task mà split nào rỗng, mượn 1 từ split lớn nhất
     — đảm bảo loop không bao giờ nhận train/val rỗng kể cả ở total rất nhỏ.
     """
+    # Tiền điều kiện: ratio phải là 3 số NGUYÊN DƯƠNG (Codex design review #4). ratio 0/âm làm
+    # apportionment vô nghĩa (0:0:0 bỏ hết task; âm ra count vô lý) — fail rõ thay vì âm thầm sai.
+    if len(ratio) != 3 or any((not isinstance(w, int)) or w <= 0 for w in ratio):
+        raise ValueError(f"ratio phải là 3 số nguyên dương (train,val,test); nhận {ratio!r}")
+
     root = tasks_root or TASKS_DIR
     tasks = discover_tasks(root)
 
