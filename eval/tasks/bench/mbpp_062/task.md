@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find smallest number in a list.
 
-Implement `smallest_num` in `smallest_num.py` so the tests pass. Example checks:
-assert smallest_num([10, 20, 1, 45, 99]) == 1
-assert smallest_num([1, 2, 3]) == 1
+Implement `smallest_num` in `smallest_num.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

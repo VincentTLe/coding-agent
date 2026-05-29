@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to count the number of pairs whose sum is equal to ‘sum’. The funtion gets as input a list of numbers and the sum,
 
-Implement `get_pairs_count` in `get_pairs_count.py` so the tests pass. Example checks:
-assert get_pairs_count([1,1,1,1],2) == 6
-assert get_pairs_count([1,5,7,-1,5],6) == 3
+Implement `get_pairs_count` in `get_pairs_count.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 arrays

@@ -3,9 +3,7 @@
 ## Goal
 Write a function to check if the given array represents min heap or not. https://www.geeksforgeeks.org/how-to-check-if-a-given-array-represents-a-binary-heap/
 
-Implement `check_min_heap` in `check_min_heap.py` so the tests pass. Example checks:
-assert check_min_heap([1, 2, 3, 4, 5, 6]) == True
-assert check_min_heap([2, 3, 4, 5, 10, 15]) == True
+Implement `check_min_heap` in `check_min_heap.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 recursion

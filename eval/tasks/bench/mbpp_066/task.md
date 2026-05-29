@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to count the number of positive numbers in a list.
 
-Implement `pos_count` in `pos_count.py` so the tests pass. Example checks:
-assert pos_count([1,-2,3,-4]) == 2
-assert pos_count([3,4,5,-1]) == 3
+Implement `pos_count` in `pos_count.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

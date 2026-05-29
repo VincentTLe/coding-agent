@@ -3,9 +3,7 @@
 ## Goal
 Write a function to remove uppercase substrings from a given string.
 
-Implement `remove_uppercase` in `remove_uppercase.py` so the tests pass. Example checks:
-assert remove_uppercase('cAstyoUrFavoRitETVshoWs') == 'cstyoravoitshos'
-assert remove_uppercase('wAtchTheinTernEtrAdIo') == 'wtchheinerntrdo'
+Implement `remove_uppercase` in `remove_uppercase.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 regex

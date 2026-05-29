@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the size of the largest subset of a list of numbers so that every pair is divisible.
 
-Implement `largest_subset` in `largest_subset.py` so the tests pass. Example checks:
-assert largest_subset([ 1, 3, 6, 13, 17, 18 ]) == 4
-assert largest_subset([10, 5, 3, 15, 20]) == 3
+Implement `largest_subset` in `largest_subset.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 math

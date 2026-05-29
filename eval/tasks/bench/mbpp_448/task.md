@@ -3,9 +3,7 @@
 ## Goal
 Write a function to calculate the sum of perrin numbers.
 
-Implement `cal_sum` in `cal_sum.py` so the tests pass. Example checks:
-assert cal_sum(9) == 49
-assert cal_sum(10) == 66
+Implement `cal_sum` in `cal_sum.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

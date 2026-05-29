@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the median of three numbers.
 
-Implement `median_numbers` in `median_numbers.py` so the tests pass. Example checks:
-assert median_numbers(25,55,65)==55.0
-assert median_numbers(20,10,30)==20.0
+Implement `median_numbers` in `median_numbers.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

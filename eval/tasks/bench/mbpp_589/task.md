@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find perfect squares between two given numbers.
 
-Implement `perfect_squares` in `perfect_squares.py` so the tests pass. Example checks:
-assert perfect_squares(1,30)==[1, 4, 9, 16, 25]
-assert perfect_squares(50,100)==[64, 81, 100]
+Implement `perfect_squares` in `perfect_squares.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

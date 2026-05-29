@@ -3,9 +3,7 @@
 ## Goal
 Write a function that gives loss amount on a sale if the given amount has loss else return 0.
 
-Implement `loss_amount` in `loss_amount.py` so the tests pass. Example checks:
-assert loss_amount(1500,1200)==0
-assert loss_amount(100,200)==100
+Implement `loss_amount` in `loss_amount.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

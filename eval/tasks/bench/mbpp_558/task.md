@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find the sum of the per-digit difference between two integers.
 
-Implement `digit_distance_nums` in `digit_distance_nums.py` so the tests pass. Example checks:
-assert digit_distance_nums(1,2) == 1
-assert digit_distance_nums(23,56) == 6
+Implement `digit_distance_nums` in `digit_distance_nums.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

@@ -3,9 +3,7 @@
 ## Goal
 Write a function that takes in a list and an element and inserts the element before each element in the list, and returns the resulting list.
 
-Implement `insert_element` in `insert_element.py` so the tests pass. Example checks:
-assert insert_element(['Red', 'Green', 'Black'] ,'c')==['c', 'Red', 'c', 'Green', 'c', 'Black']
-assert insert_element(['python', 'java'] ,'program')==['program', 'python', 'program', 'java']
+Implement `insert_element` in `insert_element.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

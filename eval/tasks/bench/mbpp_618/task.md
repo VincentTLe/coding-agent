@@ -3,9 +3,7 @@
 ## Goal
 Write a function to divide two lists element wise.
 
-Implement `div_list` in `div_list.py` so the tests pass. Example checks:
-assert div_list([4,5,6],[1, 2, 3])==[4.0,2.5,2.0]
-assert div_list([3,2],[1,4])==[3.0, 0.5]
+Implement `div_list` in `div_list.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 arrays

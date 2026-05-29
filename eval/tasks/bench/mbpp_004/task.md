@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the n largest integers from a given list of numbers, returned in descending order.
 
-Implement `heap_queue_largest` in `heap_queue_largest.py` so the tests pass. Example checks:
-assert heap_queue_largest( [25, 35, 22, 85, 14, 65, 75, 22, 58],3)==[85, 75, 65]
-assert heap_queue_largest( [25, 35, 22, 85, 14, 65, 75, 22, 58],2)==[85, 75]
+Implement `heap_queue_largest` in `heap_queue_largest.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

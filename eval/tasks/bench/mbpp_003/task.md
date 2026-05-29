@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to identify non-prime numbers.
 
-Implement `is_not_prime` in `is_not_prime.py` so the tests pass. Example checks:
-assert is_not_prime(2) == False
-assert is_not_prime(10) == True
+Implement `is_not_prime` in `is_not_prime.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 math

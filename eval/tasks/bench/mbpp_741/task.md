@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to check whether all the characters are same or not.
 
-Implement `all_Characters_Same` in `all_Characters_Same.py` so the tests pass. Example checks:
-assert all_Characters_Same("python") == False
-assert all_Characters_Same("aaa") == True
+Implement `all_Characters_Same` in `all_Characters_Same.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

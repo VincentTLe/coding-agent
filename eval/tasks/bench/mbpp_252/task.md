@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to convert complex numbers to polar coordinates.
 
-Implement `convert` in `convert.py` so the tests pass. Example checks:
-assert convert(1) == (1.0, 0.0)
-assert convert(4) == (4.0,0.0)
+Implement `convert` in `convert.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 math

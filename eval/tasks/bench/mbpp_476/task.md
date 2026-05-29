@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find the sum of the largest and smallest value in a given array.
 
-Implement `big_sum` in `big_sum.py` so the tests pass. Example checks:
-assert big_sum([1,2,3]) == 4
-assert big_sum([-1,2,3,4]) == 3
+Implement `big_sum` in `big_sum.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 arrays

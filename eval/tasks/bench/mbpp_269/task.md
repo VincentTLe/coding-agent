@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the ascii value of a character.
 
-Implement `ascii_value` in `ascii_value.py` so the tests pass. Example checks:
-assert ascii_value('A')==65
-assert ascii_value('R')==82
+Implement `ascii_value` in `ascii_value.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

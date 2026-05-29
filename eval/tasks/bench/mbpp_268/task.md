@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the n'th star number.
 
-Implement `find_star_num` in `find_star_num.py` so the tests pass. Example checks:
-assert find_star_num(3) == 37
-assert find_star_num(4) == 73
+Implement `find_star_num` in `find_star_num.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

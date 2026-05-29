@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to convert the given string to lower case.
 
-Implement `is_lower` in `is_lower.py` so the tests pass. Example checks:
-assert is_lower("InValid") == "invalid"
-assert is_lower("TruE") == "true"
+Implement `is_lower` in `is_lower.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

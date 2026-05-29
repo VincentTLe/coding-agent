@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the third side of a right angled triangle.
 
-Implement `otherside_rightangle` in `otherside_rightangle.py` so the tests pass. Example checks:
-assert otherside_rightangle(7,8)==10.63014581273465
-assert otherside_rightangle(3,4)==5
+Implement `otherside_rightangle` in `otherside_rightangle.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 math

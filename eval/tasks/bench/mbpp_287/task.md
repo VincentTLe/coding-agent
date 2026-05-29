@@ -3,9 +3,7 @@
 ## Goal
 Write a python function takes in an integer n and returns the sum of squares of first n even natural numbers.
 
-Implement `square_Sum` in `square_Sum.py` so the tests pass. Example checks:
-assert square_Sum(2) == 20
-assert square_Sum(3) == 56
+Implement `square_Sum` in `square_Sum.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

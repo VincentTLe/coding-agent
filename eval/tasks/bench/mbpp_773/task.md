@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the occurrence and position of the substrings within a string. Return None if there is no match.
 
-Implement `occurance_substring` in `occurance_substring.py` so the tests pass. Example checks:
-assert occurance_substring('python programming, python language','python')==('python', 0, 6)
-assert occurance_substring('python programming,programming language','programming')==('programming', 7, 18)
+Implement `occurance_substring` in `occurance_substring.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 regex

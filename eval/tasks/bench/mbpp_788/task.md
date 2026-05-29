@@ -3,9 +3,7 @@
 ## Goal
 Write a function to create a new tuple from the given string and list.
 
-Implement `new_tuple` in `new_tuple.py` so the tests pass. Example checks:
-assert new_tuple(["WEB", "is"], "best") == ('WEB', 'is', 'best')
-assert new_tuple(["We", "are"], "Developers") == ('We', 'are', 'Developers')
+Implement `new_tuple` in `new_tuple.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

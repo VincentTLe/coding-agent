@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the length of the longest palindromic subsequence in the given string.
 
-Implement `lps` in `lps.py` so the tests pass. Example checks:
-assert lps("TENS FOR TENS") == 5
-assert lps("CARDIO FOR CARDS") == 7
+Implement `lps` in `lps.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

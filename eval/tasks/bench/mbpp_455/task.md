@@ -3,9 +3,7 @@
 ## Goal
 Write a function to check whether the given month number contains 31 days or not.
 
-Implement `check_monthnumb_number` in `check_monthnumb_number.py` so the tests pass. Example checks:
-assert check_monthnumb_number(5)==True
-assert check_monthnumb_number(2)==False
+Implement `check_monthnumb_number` in `check_monthnumb_number.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

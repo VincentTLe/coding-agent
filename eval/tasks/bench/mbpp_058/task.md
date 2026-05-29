@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to check whether the given two integers have opposite sign or not.
 
-Implement `opposite_Signs` in `opposite_Signs.py` so the tests pass. Example checks:
-assert opposite_Signs(1,-2) == True
-assert opposite_Signs(3,2) == False
+Implement `opposite_Signs` in `opposite_Signs.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the nth nonagonal number.
 
-Implement `is_nonagonal` in `is_nonagonal.py` so the tests pass. Example checks:
-assert is_nonagonal(10) == 325
-assert is_nonagonal(15) == 750
+Implement `is_nonagonal` in `is_nonagonal.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

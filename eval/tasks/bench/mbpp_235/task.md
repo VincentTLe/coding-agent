@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to set all even bits of a given number.
 
-Implement `even_bit_set_number` in `even_bit_set_number.py` so the tests pass. Example checks:
-assert even_bit_set_number(10) == 10
-assert even_bit_set_number(20) == 30
+Implement `even_bit_set_number` in `even_bit_set_number.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 math

@@ -3,9 +3,7 @@
 ## Goal
 Write a function to extract specified size of strings from a given list of string values.
 
-Implement `extract_string` in `extract_string.py` so the tests pass. Example checks:
-assert extract_string(['Python', 'list', 'exercises', 'practice', 'solution'] ,8)==['practice', 'solution']
-assert extract_string(['Python', 'list', 'exercises', 'practice', 'solution'] ,6)==['Python']
+Implement `extract_string` in `extract_string.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

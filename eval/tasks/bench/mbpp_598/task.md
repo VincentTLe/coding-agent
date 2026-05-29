@@ -3,9 +3,7 @@
 ## Goal
 Write a function to check whether the given number is armstrong or not.
 
-Implement `armstrong_number` in `armstrong_number.py` so the tests pass. Example checks:
-assert armstrong_number(153)==True
-assert armstrong_number(259)==False
+Implement `armstrong_number` in `armstrong_number.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 math

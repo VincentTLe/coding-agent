@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find nth centered hexagonal number.
 
-Implement `centered_hexagonal_number` in `centered_hexagonal_number.py` so the tests pass. Example checks:
-assert centered_hexagonal_number(10) == 271
-assert centered_hexagonal_number(2) == 7
+Implement `centered_hexagonal_number` in `centered_hexagonal_number.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

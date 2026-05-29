@@ -3,9 +3,7 @@
 ## Goal
 Write a function to check whether the product of numbers in a list is even or not.
 
-Implement `is_product_even` in `is_product_even.py` so the tests pass. Example checks:
-assert is_product_even([1,2,3])
-assert is_product_even([1,2,1,4])
+Implement `is_product_even` in `is_product_even.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 arrays

@@ -3,9 +3,7 @@
 ## Goal
 Write a function to calculate a dog's age in dog's years.
 
-Implement `dog_age` in `dog_age.py` so the tests pass. Example checks:
-assert dog_age(12)==61
-assert dog_age(15)==73
+Implement `dog_age` in `dog_age.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

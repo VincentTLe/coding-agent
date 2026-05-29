@@ -3,9 +3,7 @@
 ## Goal
 Write a function to remove lowercase substrings from a given string.
 
-Implement `remove_lowercase` in `remove_lowercase.py` so the tests pass. Example checks:
-assert remove_lowercase("PYTHon")==('PYTH')
-assert remove_lowercase("FInD")==('FID')
+Implement `remove_lowercase` in `remove_lowercase.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 regex

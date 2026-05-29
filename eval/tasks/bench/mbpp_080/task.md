@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the nth tetrahedral number.
 
-Implement `tetrahedral_number` in `tetrahedral_number.py` so the tests pass. Example checks:
-assert tetrahedral_number(5) == 35
-assert tetrahedral_number(6) == 56
+Implement `tetrahedral_number` in `tetrahedral_number.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

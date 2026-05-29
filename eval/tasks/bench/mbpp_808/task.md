@@ -3,9 +3,7 @@
 ## Goal
 Write a function to check if the given tuples contain the k or not.
 
-Implement `check_K` in `check_K.py` so the tests pass. Example checks:
-assert check_K((10, 4, 5, 6, 8), 6) == True
-assert check_K((1, 2, 3, 4, 5, 6), 7) == False
+Implement `check_K` in `check_K.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

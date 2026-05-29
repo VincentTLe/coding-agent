@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find the difference between the sum of cubes of the first n natural numbers and the sum of the first n natural numbers.
 
-Implement `difference` in `difference.py` so the tests pass. Example checks:
-assert difference(3) == 30
-assert difference(5) == 210
+Implement `difference` in `difference.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

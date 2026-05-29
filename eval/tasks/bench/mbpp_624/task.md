@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to convert a given string to uppercase.
 
-Implement `is_upper` in `is_upper.py` so the tests pass. Example checks:
-assert is_upper("person") =="PERSON"
-assert is_upper("final") == "FINAL"
+Implement `is_upper` in `is_upper.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

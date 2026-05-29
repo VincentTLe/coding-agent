@@ -3,9 +3,7 @@
 ## Goal
 Write a function to join a list of multiple integers into a single integer.
 
-Implement `multiple_to_single` in `multiple_to_single.py` so the tests pass. Example checks:
-assert multiple_to_single([11, 33, 50])==113350
-assert multiple_to_single([-1,2,3,4,5,6])==-123456
+Implement `multiple_to_single` in `multiple_to_single.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

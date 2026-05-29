@@ -3,9 +3,7 @@
 ## Goal
 Write a function to calculate the value of 'a' to the power 'b'.
 
-Implement `power` in `power.py` so the tests pass. Example checks:
-assert power(3,4) == 81
-assert power(2,3) == 8
+Implement `power` in `power.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 recursion

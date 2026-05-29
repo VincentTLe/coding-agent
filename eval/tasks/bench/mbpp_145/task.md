@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find the maximum difference between any two elements in a given array.
 
-Implement `max_Abs_Diff` in `max_Abs_Diff.py` so the tests pass. Example checks:
-assert max_Abs_Diff((2,1,5,3)) == 4
-assert max_Abs_Diff((9,3,2,5,1)) == 8
+Implement `max_Abs_Diff` in `max_Abs_Diff.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 arrays

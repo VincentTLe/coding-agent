@@ -3,9 +3,7 @@
 ## Goal
 Write a function to drop empty items from a given dictionary.
 
-Implement `drop_empty` in `drop_empty.py` so the tests pass. Example checks:
-assert drop_empty({'c1': 'Red', 'c2': 'Green', 'c3':None})=={'c1': 'Red', 'c2': 'Green'}
-assert drop_empty({'c1': 'Red', 'c2': None, 'c3':None})=={'c1': 'Red'}
+Implement `drop_empty` in `drop_empty.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

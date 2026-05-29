@@ -3,9 +3,7 @@
 ## Goal
 Write a function that matches a string that has an 'a' followed by anything, ending in 'b'.
 
-Implement `text_starta_endb` in `text_starta_endb.py` so the tests pass. Example checks:
-assert text_starta_endb("aabbbb")
-assert not text_starta_endb("aabAbbbc")
+Implement `text_starta_endb` in `text_starta_endb.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 regex

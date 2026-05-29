@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to count the number of substrings with the sum of digits equal to their length.
 
-Implement `count_Substrings` in `count_Substrings.py` so the tests pass. Example checks:
-assert count_Substrings('112112') == 6
-assert count_Substrings('111') == 6
+Implement `count_Substrings` in `count_Substrings.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 data_structures

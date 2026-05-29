@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find the average of cubes of first n natural numbers.
 
-Implement `find_Average_Of_Cube` in `find_Average_Of_Cube.py` so the tests pass. Example checks:
-assert find_Average_Of_Cube(2) == 4.5
-assert find_Average_Of_Cube(3) == 12
+Implement `find_Average_Of_Cube` in `find_Average_Of_Cube.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

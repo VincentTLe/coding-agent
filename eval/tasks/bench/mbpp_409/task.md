@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the minimum product from the pairs of tuples within a given list.
 
-Implement `min_product_tuple` in `min_product_tuple.py` so the tests pass. Example checks:
-assert min_product_tuple([(2, 7), (2, 6), (1, 8), (4, 9)] )==8
-assert min_product_tuple([(10,20), (15,2), (5,10)] )==30
+Implement `min_product_tuple` in `min_product_tuple.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

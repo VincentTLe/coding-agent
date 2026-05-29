@@ -3,9 +3,7 @@
 ## Goal
 Write a function that returns the perimeter of a square given its side length as input.
 
-Implement `square_perimeter` in `square_perimeter.py` so the tests pass. Example checks:
-assert square_perimeter(10)==40
-assert square_perimeter(5)==20
+Implement `square_perimeter` in `square_perimeter.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

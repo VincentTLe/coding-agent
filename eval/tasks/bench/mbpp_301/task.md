@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the depth of a dictionary.
 
-Implement `dict_depth` in `dict_depth.py` so the tests pass. Example checks:
-assert dict_depth({'a':1, 'b': {'c': {'d': {}}}})==4
-assert dict_depth({'a':1, 'b': {'c':'python'}})==2
+Implement `dict_depth` in `dict_depth.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

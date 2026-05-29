@@ -3,9 +3,7 @@
 ## Goal
 Given a list of tuples, write a function that returns the first value of the tuple with the smallest second value.
 
-Implement `index_minimum` in `index_minimum.py` so the tests pass. Example checks:
-assert index_minimum([('Rash', 143), ('Manjeet', 200), ('Varsha', 100)]) == 'Varsha'
-assert index_minimum([('Yash', 185), ('Dawood', 125), ('Sanya', 175)]) == 'Dawood'
+Implement `index_minimum` in `index_minimum.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 arrays

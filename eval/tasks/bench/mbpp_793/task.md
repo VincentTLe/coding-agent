@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find the last position of an element in a sorted array.
 
-Implement `last` in `last.py` so the tests pass. Example checks:
-assert last([1,2,3],1) == 0
-assert last([1,1,1,2,3,4],1) == 2
+Implement `last` in `last.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 arrays

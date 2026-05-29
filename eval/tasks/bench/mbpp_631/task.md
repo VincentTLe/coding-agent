@@ -3,9 +3,7 @@
 ## Goal
 Write a function to replace whitespaces with an underscore and vice versa in a given string.
 
-Implement `replace_spaces` in `replace_spaces.py` so the tests pass. Example checks:
-assert replace_spaces('Jumanji The Jungle') == 'Jumanji_The_Jungle'
-assert replace_spaces('The_Avengers') == 'The Avengers'
+Implement `replace_spaces` in `replace_spaces.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

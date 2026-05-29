@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to check whether the given number can be represented as the difference of two squares or not.
 
-Implement `dif_Square` in `dif_Square.py` so the tests pass. Example checks:
-assert dif_Square(5) == True
-assert dif_Square(10) == False
+Implement `dif_Square` in `dif_Square.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 math

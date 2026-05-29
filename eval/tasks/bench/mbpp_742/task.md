@@ -3,9 +3,7 @@
 ## Goal
 Write a function to caluclate the area of a tetrahedron.
 
-Implement `area_tetrahedron` in `area_tetrahedron.py` so the tests pass. Example checks:
-assert area_tetrahedron(3)==15.588457268119894
-assert area_tetrahedron(20)==692.8203230275509
+Implement `area_tetrahedron` in `area_tetrahedron.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 math

@@ -3,9 +3,7 @@
 ## Goal
 Write a function to put spaces between words starting with capital letters in a given string.
 
-Implement `capital_words_spaces` in `capital_words_spaces.py` so the tests pass. Example checks:
-assert capital_words_spaces("Python") == 'Python'
-assert capital_words_spaces("PythonProgrammingExamples") == 'Python Programming Examples'
+Implement `capital_words_spaces` in `capital_words_spaces.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 regex

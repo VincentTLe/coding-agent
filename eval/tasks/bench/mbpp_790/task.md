@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to check whether every even index contains even numbers of a given list.
 
-Implement `even_position` in `even_position.py` so the tests pass. Example checks:
-assert even_position([3,2,1]) == False
-assert even_position([1,2,3]) == False
+Implement `even_position` in `even_position.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 math

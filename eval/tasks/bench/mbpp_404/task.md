@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find the minimum of two numbers.
 
-Implement `minimum` in `minimum.py` so the tests pass. Example checks:
-assert minimum(1,2) == 1
-assert minimum(-5,-4) == -5
+Implement `minimum` in `minimum.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

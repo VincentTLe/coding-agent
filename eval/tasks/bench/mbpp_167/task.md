@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find the smallest power of 2 greater than or equal to n.
 
-Implement `next_power_of_2` in `next_power_of_2.py` so the tests pass. Example checks:
-assert next_power_of_2(0) == 1
-assert next_power_of_2(5) == 8
+Implement `next_power_of_2` in `next_power_of_2.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

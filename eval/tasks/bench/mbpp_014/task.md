@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find the volume of a triangular prism.
 
-Implement `find_Volume` in `find_Volume.py` so the tests pass. Example checks:
-assert find_Volume(10,8,6) == 240
-assert find_Volume(3,2,2) == 6
+Implement `find_Volume` in `find_Volume.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

@@ -3,9 +3,7 @@
 ## Goal
 Write a function to check if the given number is woodball or not.
 
-Implement `is_woodall` in `is_woodall.py` so the tests pass. Example checks:
-assert is_woodall(383) == True
-assert is_woodall(254) == False
+Implement `is_woodall` in `is_woodall.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 math

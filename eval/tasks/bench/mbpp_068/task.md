@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to check whether the given array is monotonic or not.
 
-Implement `is_Monotonic` in `is_Monotonic.py` so the tests pass. Example checks:
-assert is_Monotonic([6, 5, 4, 4]) == True
-assert is_Monotonic([1, 2, 2, 3]) == True
+Implement `is_Monotonic` in `is_Monotonic.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 arrays

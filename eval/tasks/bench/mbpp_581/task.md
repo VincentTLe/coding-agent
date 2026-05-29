@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find the surface area of a square pyramid with a given base edge and height.
 
-Implement `surface_Area` in `surface_Area.py` so the tests pass. Example checks:
-assert surface_Area(3,4) == 33
-assert surface_Area(4,5) == 56
+Implement `surface_Area` in `surface_Area.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

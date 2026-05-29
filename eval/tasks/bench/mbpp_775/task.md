@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to check whether every odd index contains odd numbers of a given list.
 
-Implement `odd_position` in `odd_position.py` so the tests pass. Example checks:
-assert odd_position([2,1,4,3,6,7,6,3]) == True
-assert odd_position([4,1,2]) == True
+Implement `odd_position` in `odd_position.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 math

@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find the sum of all odd length subarrays. https://www.geeksforgeeks.org/sum-of-all-odd-length-subarrays/
 
-Implement `odd_length_sum` in `odd_length_sum.py` so the tests pass. Example checks:
-assert odd_length_sum([1,2,4]) == 14
-assert odd_length_sum([1,2,1,2]) == 15
+Implement `odd_length_sum` in `odd_length_sum.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 arrays

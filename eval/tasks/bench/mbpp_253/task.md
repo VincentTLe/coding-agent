@@ -3,9 +3,7 @@
 ## Goal
 Write a python function that returns the number of integer elements in a given list.
 
-Implement `count_integer` in `count_integer.py` so the tests pass. Example checks:
-assert count_integer([1,2,'abc',1.2]) == 2
-assert count_integer([1,2,3]) == 3
+Implement `count_integer` in `count_integer.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the closest smaller number than n.
 
-Implement `closest_num` in `closest_num.py` so the tests pass. Example checks:
-assert closest_num(11) == 10
-assert closest_num(7) == 6
+Implement `closest_num` in `closest_num.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

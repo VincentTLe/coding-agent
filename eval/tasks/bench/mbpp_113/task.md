@@ -3,9 +3,7 @@
 ## Goal
 Write a function to check if a string represents an integer or not.
 
-Implement `check_integer` in `check_integer.py` so the tests pass. Example checks:
-assert check_integer("python")==False
-assert check_integer("1")==True
+Implement `check_integer` in `check_integer.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

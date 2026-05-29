@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to count the number of lists in a given number of lists.
 
-Implement `count_list` in `count_list.py` so the tests pass. Example checks:
-assert count_list([[1, 3], [5, 7], [9, 11], [13, 15, 17]]) == 4
-assert count_list([[1,2],[2,3],[4,5]]) == 3
+Implement `count_list` in `count_list.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 arrays

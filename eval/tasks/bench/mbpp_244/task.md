@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find the next perfect square greater than a given number.
 
-Implement `next_Perfect_Square` in `next_Perfect_Square.py` so the tests pass. Example checks:
-assert next_Perfect_Square(35) == 36
-assert next_Perfect_Square(6) == 9
+Implement `next_Perfect_Square` in `next_Perfect_Square.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 math

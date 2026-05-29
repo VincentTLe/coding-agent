@@ -3,9 +3,7 @@
 ## Goal
 Write a function to count the total number of characters in a string.
 
-Implement `count_charac` in `count_charac.py` so the tests pass. Example checks:
-assert count_charac("python programming")==18
-assert count_charac("language")==8
+Implement `count_charac` in `count_charac.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

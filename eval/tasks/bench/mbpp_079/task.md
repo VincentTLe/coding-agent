@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to check whether the length of the word is odd or not.
 
-Implement `word_len` in `word_len.py` so the tests pass. Example checks:
-assert word_len("Hadoop") == False
-assert word_len("great") == True
+Implement `word_len` in `word_len.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

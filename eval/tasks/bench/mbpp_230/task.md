@@ -3,9 +3,7 @@
 ## Goal
 Write a function that takes in a string and character, replaces blank spaces in the string with the character, and returns the string.
 
-Implement `replace_blank` in `replace_blank.py` so the tests pass. Example checks:
-assert replace_blank("hello people",'@')==("hello@people")
-assert replace_blank("python program language",'$')==("python$program$language")
+Implement `replace_blank` in `replace_blank.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

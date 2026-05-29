@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the nth newman–shanks–williams prime number.
 
-Implement `newman_prime` in `newman_prime.py` so the tests pass. Example checks:
-assert newman_prime(3) == 7
-assert newman_prime(4) == 17
+Implement `newman_prime` in `newman_prime.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 recursion

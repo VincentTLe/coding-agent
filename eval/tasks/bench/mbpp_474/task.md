@@ -3,9 +3,7 @@
 ## Goal
 Write a function to replace characters in a string.
 
-Implement `replace_char` in `replace_char.py` so the tests pass. Example checks:
-assert replace_char("polygon",'y','l')==("pollgon")
-assert replace_char("character",'c','a')==("aharaater")
+Implement `replace_char` in `replace_char.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

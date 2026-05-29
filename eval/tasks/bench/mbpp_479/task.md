@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find the first digit of a given number.
 
-Implement `first_Digit` in `first_Digit.py` so the tests pass. Example checks:
-assert first_Digit(123) == 1
-assert first_Digit(456) == 4
+Implement `first_Digit` in `first_Digit.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to reverse only the vowels of a given string (where y is not a vowel).
 
-Implement `reverse_vowels` in `reverse_vowels.py` so the tests pass. Example checks:
-assert reverse_vowels("Python") == "Python"
-assert reverse_vowels("USA") == "ASU"
+Implement `reverse_vowels` in `reverse_vowels.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

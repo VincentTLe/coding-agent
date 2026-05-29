@@ -3,9 +3,7 @@
 ## Goal
 Write a function that takes in a list and length n, and generates all combinations (with repetition) of the elements of the list and returns a list with a tuple for each combination.
 
-Implement `combinations_colors` in `combinations_colors.py` so the tests pass. Example checks:
-assert combinations_colors( ["Red","Green","Blue"],1)==[('Red',), ('Green',), ('Blue',)]
-assert combinations_colors( ["Red","Green","Blue"],2)==[('Red', 'Red'), ('Red', 'Green'), ('Red', 'Blue'), ('Green', 'Green'), ('Green', 'Blue'), ('Blue', 'Blue')]
+Implement `combinations_colors` in `combinations_colors.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 arrays

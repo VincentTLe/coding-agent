@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the median length of a trapezium.
 
-Implement `median_trapezium` in `median_trapezium.py` so the tests pass. Example checks:
-assert median_trapezium(15,25,35)==20
-assert median_trapezium(10,20,30)==15
+Implement `median_trapezium` in `median_trapezium.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

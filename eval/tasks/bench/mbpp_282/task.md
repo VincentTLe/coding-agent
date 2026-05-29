@@ -3,9 +3,7 @@
 ## Goal
 Write a function to subtract two lists element-wise.
 
-Implement `sub_list` in `sub_list.py` so the tests pass. Example checks:
-assert sub_list([1, 2, 3],[4,5,6])==[-3,-3,-3]
-assert sub_list([1,2],[3,4])==[-2,-2]
+Implement `sub_list` in `sub_list.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 arrays

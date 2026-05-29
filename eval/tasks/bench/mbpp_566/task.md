@@ -3,9 +3,7 @@
 ## Goal
 Write a function to get the sum of the digits of a non-negative integer.
 
-Implement `sum_digits` in `sum_digits.py` so the tests pass. Example checks:
-assert sum_digits(345)==12
-assert sum_digits(12)==3
+Implement `sum_digits` in `sum_digits.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 recursion

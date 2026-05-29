@@ -3,9 +3,7 @@
 ## Goal
 Write a function to sort a list of elements.
 
-Implement `pancake_sort` in `pancake_sort.py` so the tests pass. Example checks:
-assert pancake_sort([15, 79, 25, 38, 69]) == [15, 25, 38, 69, 79]
-assert pancake_sort([98, 12, 54, 36, 85]) == [12, 36, 54, 85, 98]
+Implement `pancake_sort` in `pancake_sort.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 arrays

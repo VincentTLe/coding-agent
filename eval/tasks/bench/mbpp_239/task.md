@@ -3,9 +3,7 @@
 ## Goal
 Write a function that takes in positive integers m and n and finds the number of possible sequences of length n, such that each element is a positive integer and is greater than or equal to twice the previous element but less than or equal to m.
 
-Implement `get_total_number_of_sequences` in `get_total_number_of_sequences.py` so the tests pass. Example checks:
-assert get_total_number_of_sequences(10, 4) == 4
-assert get_total_number_of_sequences(5, 2) == 6
+Implement `get_total_number_of_sequences` in `get_total_number_of_sequences.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 arrays

@@ -3,9 +3,7 @@
 ## Goal
 Write a function to check if given tuple contains no duplicates.
 
-Implement `check_distinct` in `check_distinct.py` so the tests pass. Example checks:
-assert check_distinct((1, 4, 5, 6, 1, 4)) == False
-assert check_distinct((1, 4, 5, 6)) == True
+Implement `check_distinct` in `check_distinct.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 data_structures

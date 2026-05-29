@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find the first repeated character in a given string.
 
-Implement `first_repeated_char` in `first_repeated_char.py` so the tests pass. Example checks:
-assert first_repeated_char("abcabc") == "a"
-assert first_repeated_char("abc") == None
+Implement `first_repeated_char` in `first_repeated_char.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

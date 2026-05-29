@@ -3,9 +3,7 @@
 ## Goal
 Write a function to check whether the entered number is greater than the elements of the given array.
 
-Implement `check_greater` in `check_greater.py` so the tests pass. Example checks:
-assert check_greater([1, 2, 3, 4, 5], 4) == False
-assert check_greater([2, 3, 4, 5, 6], 8) == True
+Implement `check_greater` in `check_greater.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 arrays

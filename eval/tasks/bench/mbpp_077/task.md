@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find whether a number is divisible by 11.
 
-Implement `is_Diff` in `is_Diff.py` so the tests pass. Example checks:
-assert is_Diff (12345) == False
-assert is_Diff(1212112) == True
+Implement `is_Diff` in `is_Diff.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 math

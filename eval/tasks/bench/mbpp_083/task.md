@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find the character made by adding the ASCII value of all the characters of the given string modulo 26.
 
-Implement `get_Char` in `get_Char.py` so the tests pass. Example checks:
-assert get_Char("abc") == "f"
-assert get_Char("gfg") == "t"
+Implement `get_Char` in `get_Char.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

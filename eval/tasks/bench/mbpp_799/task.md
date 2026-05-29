@@ -3,9 +3,7 @@
 ## Goal
 Write a function to that rotate left bits by d bits a given number. We assume that the number is 32 bit.
 
-Implement `left_rotate` in `left_rotate.py` so the tests pass. Example checks:
-assert left_rotate(16,2) == 64
-assert left_rotate(10,2) == 40
+Implement `left_rotate` in `left_rotate.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

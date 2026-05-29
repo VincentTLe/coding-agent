@@ -3,9 +3,7 @@
 ## Goal
 Write a function that checks if a strings contains 'z', except at the start and end of the word.
 
-Implement `text_match_wordz_middle` in `text_match_wordz_middle.py` so the tests pass. Example checks:
-assert text_match_wordz_middle("pythonzabc.")==True
-assert text_match_wordz_middle("zxyabc.")==False
+Implement `text_match_wordz_middle` in `text_match_wordz_middle.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 regex

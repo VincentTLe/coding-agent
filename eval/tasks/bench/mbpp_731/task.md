@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the lateral surface area of a cone given radius r and the height h.
 
-Implement `lateralsurface_cone` in `lateralsurface_cone.py` so the tests pass. Example checks:
-assert lateralsurface_cone(5,12)==204.20352248333654
-assert lateralsurface_cone(10,15)==566.3586699569488
+Implement `lateralsurface_cone` in `lateralsurface_cone.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 math

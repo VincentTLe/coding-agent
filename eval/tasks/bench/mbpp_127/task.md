@@ -3,9 +3,7 @@
 ## Goal
 Write a function to multiply two integers.
 
-Implement `multiply_int` in `multiply_int.py` so the tests pass. Example checks:
-assert multiply_int(10,20)==200
-assert multiply_int(5,10)==50
+Implement `multiply_int` in `multiply_int.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 recursion

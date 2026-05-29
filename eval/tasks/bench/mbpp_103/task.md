@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the Eulerian number a(n, m).
 
-Implement `eulerian_num` in `eulerian_num.py` so the tests pass. Example checks:
-assert eulerian_num(3, 1) == 4
-assert eulerian_num(4, 1) == 11
+Implement `eulerian_num` in `eulerian_num.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 recursion

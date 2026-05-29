@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the next smallest palindrome of a specified integer, returned as an integer.
 
-Implement `next_smallest_palindrome` in `next_smallest_palindrome.py` so the tests pass. Example checks:
-assert next_smallest_palindrome(99)==101
-assert next_smallest_palindrome(1221)==1331
+Implement `next_smallest_palindrome` in `next_smallest_palindrome.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

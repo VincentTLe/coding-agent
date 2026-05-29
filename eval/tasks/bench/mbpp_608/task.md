@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find nth bell number.
 
-Implement `bell_Number` in `bell_Number.py` so the tests pass. Example checks:
-assert bell_Number(2) == 2
-assert bell_Number(3) == 5
+Implement `bell_Number` in `bell_Number.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 arrays

@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the area of a rectangle.
 
-Implement `rectangle_area` in `rectangle_area.py` so the tests pass. Example checks:
-assert rectangle_area(10,20)==200
-assert rectangle_area(10,5)==50
+Implement `rectangle_area` in `rectangle_area.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

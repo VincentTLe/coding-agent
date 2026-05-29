@@ -3,9 +3,7 @@
 ## Goal
 Write a function to convert the given snake case string to camel case string.
 
-Implement `snake_to_camel` in `snake_to_camel.py` so the tests pass. Example checks:
-assert snake_to_camel('android_tv') == 'AndroidTv'
-assert snake_to_camel('google_pixel') == 'GooglePixel'
+Implement `snake_to_camel` in `snake_to_camel.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 regex

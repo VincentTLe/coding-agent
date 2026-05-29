@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the number of ways to partition a set of Bell numbers.
 
-Implement `bell_number` in `bell_number.py` so the tests pass. Example checks:
-assert bell_number(2)==2
-assert bell_number(10)==115975
+Implement `bell_number` in `bell_number.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 arrays

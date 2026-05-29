@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to count true booleans in the given list.
 
-Implement `count` in `count.py` so the tests pass. Example checks:
-assert count([True,False,True]) == 2
-assert count([False,False]) == 0
+Implement `count` in `count.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

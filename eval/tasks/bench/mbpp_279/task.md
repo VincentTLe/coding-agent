@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the nth decagonal number.
 
-Implement `is_num_decagonal` in `is_num_decagonal.py` so the tests pass. Example checks:
-assert is_num_decagonal(3) == 27
-assert is_num_decagonal(7) == 175
+Implement `is_num_decagonal` in `is_num_decagonal.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

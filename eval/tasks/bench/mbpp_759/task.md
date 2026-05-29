@@ -3,9 +3,7 @@
 ## Goal
 Write a function to check whether a given string is a decimal number with a precision of 2.
 
-Implement `is_decimal` in `is_decimal.py` so the tests pass. Example checks:
-assert is_decimal('123.11')==True
-assert is_decimal('e666.86')==False
+Implement `is_decimal` in `is_decimal.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 regex

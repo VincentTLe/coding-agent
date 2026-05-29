@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find the length of the longest word.
 
-Implement `len_log` in `len_log.py` so the tests pass. Example checks:
-assert len_log(["python","PHP","bigdata"]) == 7
-assert len_log(["a","ab","abc"]) == 3
+Implement `len_log` in `len_log.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

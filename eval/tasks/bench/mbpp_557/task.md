@@ -3,9 +3,7 @@
 ## Goal
 Write a function to toggle the case of all characters in a string.
 
-Implement `toggle_string` in `toggle_string.py` so the tests pass. Example checks:
-assert toggle_string("Python")==("pYTHON")
-assert toggle_string("Pangram")==("pANGRAM")
+Implement `toggle_string` in `toggle_string.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

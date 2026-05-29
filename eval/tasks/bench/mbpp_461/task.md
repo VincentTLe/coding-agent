@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to count the upper case characters in a given string.
 
-Implement `upper_ctr` in `upper_ctr.py` so the tests pass. Example checks:
-assert upper_ctr('PYthon') == 1
-assert upper_ctr('BigData') == 1
+Implement `upper_ctr` in `upper_ctr.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

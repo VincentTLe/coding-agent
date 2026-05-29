@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the shared elements from the given two lists.
 
-Implement `similar_elements` in `similar_elements.py` so the tests pass. Example checks:
-assert set(similar_elements((3, 4, 5, 6),(5, 7, 4, 10))) == set((4, 5))
-assert set(similar_elements((1, 2, 3, 4),(5, 4, 3, 7))) == set((3, 4))
+Implement `similar_elements` in `similar_elements.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 data_structures

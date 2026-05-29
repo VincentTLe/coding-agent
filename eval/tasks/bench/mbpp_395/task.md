@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find the first non-repeated character in a given string.
 
-Implement `first_non_repeating_character` in `first_non_repeating_character.py` so the tests pass. Example checks:
-assert first_non_repeating_character("abcabc") == None
-assert first_non_repeating_character("abc") == "a"
+Implement `first_non_repeating_character` in `first_non_repeating_character.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 data_structures

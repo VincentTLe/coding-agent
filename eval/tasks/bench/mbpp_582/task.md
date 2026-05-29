@@ -3,9 +3,7 @@
 ## Goal
 Write a function to check if a dictionary is empty
 
-Implement `my_dict` in `my_dict.py` so the tests pass. Example checks:
-assert my_dict({10})==False
-assert my_dict({11})==False
+Implement `my_dict` in `my_dict.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 data_structures

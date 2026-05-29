@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the nth octagonal number.
 
-Implement `is_octagonal` in `is_octagonal.py` so the tests pass. Example checks:
-assert is_octagonal(5) == 65
-assert is_octagonal(10) == 280
+Implement `is_octagonal` in `is_octagonal.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

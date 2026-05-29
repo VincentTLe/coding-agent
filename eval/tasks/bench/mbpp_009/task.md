@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find the minimum number of rotations (greater than 0) required to get the same string.
 
-Implement `find_Rotations` in `find_Rotations.py` so the tests pass. Example checks:
-assert find_Rotations("aaaa") == 1
-assert find_Rotations("ab") == 2
+Implement `find_Rotations` in `find_Rotations.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

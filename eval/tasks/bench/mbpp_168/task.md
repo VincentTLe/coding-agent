@@ -3,9 +3,7 @@
 ## Goal
 Write a function to count the number of occurrences of a number in a given list.
 
-Implement `frequency` in `frequency.py` so the tests pass. Example checks:
-assert frequency([1,2,3], 4) == 0
-assert frequency([1,2,2,3,3,3,4], 3) == 3
+Implement `frequency` in `frequency.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

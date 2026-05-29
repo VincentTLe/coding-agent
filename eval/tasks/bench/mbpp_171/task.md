@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the perimeter of a regular pentagon from the length of its sides.
 
-Implement `perimeter_pentagon` in `perimeter_pentagon.py` so the tests pass. Example checks:
-assert perimeter_pentagon(5) == 25
-assert perimeter_pentagon(10) == 50
+Implement `perimeter_pentagon` in `perimeter_pentagon.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

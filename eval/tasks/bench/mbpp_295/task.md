@@ -3,9 +3,7 @@
 ## Goal
 Write a function to return the sum of all divisors of a number.
 
-Implement `sum_div` in `sum_div.py` so the tests pass. Example checks:
-assert sum_div(8)==7
-assert sum_div(12)==16
+Implement `sum_div` in `sum_div.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 math

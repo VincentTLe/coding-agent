@@ -3,9 +3,7 @@
 ## Goal
 Write a function to convert a tuple to a string.
 
-Implement `tup_string` in `tup_string.py` so the tests pass. Example checks:
-assert tup_string(('e', 'x', 'e', 'r', 'c', 'i', 's', 'e', 's'))==("exercises")
-assert tup_string(('p','y','t','h','o','n'))==("python")
+Implement `tup_string` in `tup_string.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

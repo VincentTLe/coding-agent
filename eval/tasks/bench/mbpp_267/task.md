@@ -3,9 +3,7 @@
 ## Goal
 Write a python function that takes in an integer n and returns the sum of the squares of the first n odd natural numbers.
 
-Implement `square_Sum` in `square_Sum.py` so the tests pass. Example checks:
-assert square_Sum(2) == 10
-assert square_Sum(3) == 35
+Implement `square_Sum` in `square_Sum.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

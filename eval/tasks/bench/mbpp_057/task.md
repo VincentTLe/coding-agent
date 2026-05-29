@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find the largest number that can be formed with the given list of digits.
 
-Implement `find_Max_Num` in `find_Max_Num.py` so the tests pass. Example checks:
-assert find_Max_Num([1,2,3]) == 321
-assert find_Max_Num([4,5,6,1]) == 6541
+Implement `find_Max_Num` in `find_Max_Num.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 arrays

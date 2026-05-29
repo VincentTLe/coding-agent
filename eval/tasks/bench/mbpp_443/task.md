@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find the largest negative number from the given list.
 
-Implement `largest_neg` in `largest_neg.py` so the tests pass. Example checks:
-assert largest_neg([1,2,3,-4,-6]) == -6
-assert largest_neg([1,2,3,-8,-9]) == -9
+Implement `largest_neg` in `largest_neg.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

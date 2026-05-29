@@ -3,9 +3,7 @@
 ## Goal
 Write a function to calculate the sum of the negative numbers of a given list of numbers.
 
-Implement `sum_negativenum` in `sum_negativenum.py` so the tests pass. Example checks:
-assert sum_negativenum([2, 4, -6, -9, 11, -12, 14, -5, 17])==-32
-assert sum_negativenum([10,15,-14,13,-18,12,-20])==-52
+Implement `sum_negativenum` in `sum_negativenum.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 arrays

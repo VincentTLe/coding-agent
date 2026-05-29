@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the volume of a cube given its side length.
 
-Implement `volume_cube` in `volume_cube.py` so the tests pass. Example checks:
-assert volume_cube(3)==27
-assert volume_cube(2)==8
+Implement `volume_cube` in `volume_cube.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

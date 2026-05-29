@@ -3,9 +3,7 @@
 ## Goal
 Write a function to that returns true if the input string contains sequences of lowercase letters joined with an underscore and false otherwise.
 
-Implement `text_lowercase_underscore` in `text_lowercase_underscore.py` so the tests pass. Example checks:
-assert text_lowercase_underscore("aab_cbbbc")==(True)
-assert text_lowercase_underscore("aab_Abbbc")==(False)
+Implement `text_lowercase_underscore` in `text_lowercase_underscore.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 regex

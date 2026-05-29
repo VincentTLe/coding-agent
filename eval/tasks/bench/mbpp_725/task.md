@@ -3,9 +3,7 @@
 ## Goal
 Write a function to extract values between quotation marks " " of the given string.
 
-Implement `extract_quotation` in `extract_quotation.py` so the tests pass. Example checks:
-assert extract_quotation('Cortex "A53" Based "multi" tasking "Processor"') == ['A53', 'multi', 'Processor']
-assert extract_quotation('Cast your "favorite" entertainment "apps"') == ['favorite', 'apps']
+Implement `extract_quotation` in `extract_quotation.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 regex

@@ -3,9 +3,7 @@
 ## Goal
 Write a function to count the number of sublists containing a particular element.
 
-Implement `count_element_in_list` in `count_element_in_list.py` so the tests pass. Example checks:
-assert count_element_in_list([[1, 3], [5, 7], [1, 11], [1, 15, 7]],1)==3
-assert count_element_in_list([['A', 'B'], ['A', 'C'], ['A', 'D', 'E'], ['B', 'C', 'D']],'A')==3
+Implement `count_element_in_list` in `count_element_in_list.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 arrays

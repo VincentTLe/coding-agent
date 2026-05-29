@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find all words which are at least 4 characters long in a string.
 
-Implement `find_char_long` in `find_char_long.py` so the tests pass. Example checks:
-assert set(find_char_long('Please move back to stream')) == set(['Please', 'move', 'back', 'stream'])
-assert set(find_char_long('Jing Eco and Tech')) == set(['Jing', 'Tech'])
+Implement `find_char_long` in `find_char_long.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 regex

@@ -3,9 +3,7 @@
 ## Goal
 Write a function to count the number of occurence of the string 'std' in a given string.
 
-Implement `count_occurance` in `count_occurance.py` so the tests pass. Example checks:
-assert count_occurance("letstdlenstdporstd") == 3
-assert count_occurance("truststdsolensporsd") == 1
+Implement `count_occurance` in `count_occurance.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

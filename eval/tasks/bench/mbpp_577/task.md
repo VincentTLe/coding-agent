@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find the last digit in factorial of a given number.
 
-Implement `last_Digit_Factorial` in `last_Digit_Factorial.py` so the tests pass. Example checks:
-assert last_Digit_Factorial(4) == 4
-assert last_Digit_Factorial(21) == 0
+Implement `last_Digit_Factorial` in `last_Digit_Factorial.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 math

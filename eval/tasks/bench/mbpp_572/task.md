@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to remove duplicate numbers from a given number of lists.
 
-Implement `two_unique_nums` in `two_unique_nums.py` so the tests pass. Example checks:
-assert two_unique_nums([1,2,3,2,3,4,5]) == [1, 4, 5]
-assert two_unique_nums([1,2,3,2,4,5]) == [1, 3, 4, 5]
+Implement `two_unique_nums` in `two_unique_nums.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

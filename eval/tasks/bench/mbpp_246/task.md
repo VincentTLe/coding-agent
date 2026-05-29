@@ -3,9 +3,7 @@
 ## Goal
 Write a function for computing square roots using the babylonian method.
 
-Implement `babylonian_squareroot` in `babylonian_squareroot.py` so the tests pass. Example checks:
-assert math.isclose(babylonian_squareroot(10), 3.162277660168379, rel_tol=0.001)
-assert math.isclose(babylonian_squareroot(2), 1.414213562373095, rel_tol=0.001)
+Implement `babylonian_squareroot` in `babylonian_squareroot.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

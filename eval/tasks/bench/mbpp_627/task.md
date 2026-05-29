@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find the smallest missing number from a sorted list of natural numbers.
 
-Implement `find_First_Missing` in `find_First_Missing.py` so the tests pass. Example checks:
-assert find_First_Missing([0,1,2,3]) == 4
-assert find_First_Missing([0,1,2,6,9]) == 3
+Implement `find_First_Missing` in `find_First_Missing.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 recursion

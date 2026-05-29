@@ -3,9 +3,7 @@
 ## Goal
 Write a function to compute the sum of digits of each number of a given list.
 
-Implement `sum_of_digits` in `sum_of_digits.py` so the tests pass. Example checks:
-assert sum_of_digits([10,2,56])==14
-assert sum_of_digits([[10,20,4,5,'b',70,'a']])==19
+Implement `sum_of_digits` in `sum_of_digits.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

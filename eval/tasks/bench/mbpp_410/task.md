@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the minimum value in a given heterogeneous list.
 
-Implement `min_val` in `min_val.py` so the tests pass. Example checks:
-assert min_val(['Python', 3, 2, 4, 5, 'version'])==2
-assert min_val(['Python', 15, 20, 25])==15
+Implement `min_val` in `min_val.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

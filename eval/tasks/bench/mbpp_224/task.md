@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to count the number of set bits (binary digits with value 1) in a given number.
 
-Implement `count_Set_Bits` in `count_Set_Bits.py` so the tests pass. Example checks:
-assert count_Set_Bits(2) == 1
-assert count_Set_Bits(4) == 1
+Implement `count_Set_Bits` in `count_Set_Bits.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

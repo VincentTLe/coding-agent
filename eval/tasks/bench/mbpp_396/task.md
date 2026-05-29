@@ -3,9 +3,7 @@
 ## Goal
 Write a function to check whether the given string starts and ends with the same character or not.
 
-Implement `check_char` in `check_char.py` so the tests pass. Example checks:
-assert check_char("abba") == "Valid"
-assert check_char("a") == "Valid"
+Implement `check_char` in `check_char.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 regex

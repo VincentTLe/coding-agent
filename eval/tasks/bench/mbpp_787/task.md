@@ -3,9 +3,7 @@
 ## Goal
 Write a function that matches a string that has an a followed by three 'b'.
 
-Implement `text_match_three` in `text_match_three.py` so the tests pass. Example checks:
-assert not text_match_three("ac")
-assert not text_match_three("dc")
+Implement `text_match_three` in `text_match_three.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 regex

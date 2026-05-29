@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the lateral surface area of a cylinder.
 
-Implement `lateralsuface_cylinder` in `lateralsuface_cylinder.py` so the tests pass. Example checks:
-assert math.isclose(lateralsuface_cylinder(10,5), 314.15000000000003, rel_tol=0.001)
-assert math.isclose(lateralsuface_cylinder(4,5), 125.66000000000001, rel_tol=0.001)
+Implement `lateralsuface_cylinder` in `lateralsuface_cylinder.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

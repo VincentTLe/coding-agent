@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to remove odd numbers from a given list.
 
-Implement `remove_odd` in `remove_odd.py` so the tests pass. Example checks:
-assert remove_odd([1,2,3]) == [2]
-assert remove_odd([2,4,6]) == [2,4,6]
+Implement `remove_odd` in `remove_odd.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 math

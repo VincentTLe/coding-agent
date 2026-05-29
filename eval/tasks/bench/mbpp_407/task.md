@@ -3,9 +3,7 @@
 ## Goal
 Write a function to create the next bigger number by rearranging the digits of a given number.
 
-Implement `rearrange_bigger` in `rearrange_bigger.py` so the tests pass. Example checks:
-assert rearrange_bigger(12)==21
-assert rearrange_bigger(10)==False
+Implement `rearrange_bigger` in `rearrange_bigger.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

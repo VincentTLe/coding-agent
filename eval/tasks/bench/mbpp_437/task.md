@@ -3,9 +3,7 @@
 ## Goal
 Write a function to remove odd characters in a string.
 
-Implement `remove_odd` in `remove_odd.py` so the tests pass. Example checks:
-assert remove_odd("python")==("yhn")
-assert remove_odd("program")==("rga")
+Implement `remove_odd` in `remove_odd.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

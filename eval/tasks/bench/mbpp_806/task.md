@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find maximum run of uppercase characters in the given string.
 
-Implement `max_run_uppercase` in `max_run_uppercase.py` so the tests pass. Example checks:
-assert max_run_uppercase('GeMKSForGERksISBESt') == 5
-assert max_run_uppercase('PrECIOusMOVemENTSYT') == 6
+Implement `max_run_uppercase` in `max_run_uppercase.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

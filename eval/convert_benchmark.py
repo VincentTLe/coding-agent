@@ -254,9 +254,12 @@ def emit_mbpp(rec: dict) -> bool:
     test_src = (f"from {entry} import *\n"
                 f"{imports}\n\n"
                 f"def test_mbpp():\n{asserts}\n")
-    examples = "\n".join(test_list[:2])
-    goal = (f"{text.strip()}\n\nImplement `{entry}` in `{entry}.py` so the tests pass. "
-            f"Example checks:\n{examples}")
+    # KHÔNG nhúng assert được chấm vào Goal. test_list CHÍNH LÀ bộ test chấm điểm; để lộ
+    # 2 assert đầu (cả input LẪN output kỳ vọng) là RÒ RỈ đáp án cho agent dù task khai
+    # '## Tests: hidden' (~93% MBPP có đúng 3 assert → lộ 2/3 cặp I/O được chấm). Chỉ đưa
+    # spec + chữ ký, khớp HumanEval (spec-only) để 2 nửa benchmark đo cùng một thứ.
+    goal = (f"{text.strip()}\n\nImplement `{entry}` in `{entry}.py` so the hidden tests pass. "
+            f"Match the exact function name and signature.")
     cat = classify_category(text, reference)
     dif = classify_difficulty(reference)
     write_task(tid, entry, stub, test_src, reference, goal, cat, dif,

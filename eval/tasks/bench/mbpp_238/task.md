@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to count the number of non-empty substrings of a given string.
 
-Implement `number_of_substrings` in `number_of_substrings.py` so the tests pass. Example checks:
-assert number_of_substrings("abc") == 6
-assert number_of_substrings("abcd") == 10
+Implement `number_of_substrings` in `number_of_substrings.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

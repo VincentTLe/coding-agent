@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to count inversions in an array.
 
-Implement `get_Inv_Count` in `get_Inv_Count.py` so the tests pass. Example checks:
-assert get_Inv_Count([1,20,6,4,5]) == 5
-assert get_Inv_Count([1,2,1]) == 1
+Implement `get_Inv_Count` in `get_Inv_Count.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 arrays

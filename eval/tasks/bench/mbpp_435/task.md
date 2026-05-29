@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find the last digit of a given number.
 
-Implement `last_Digit` in `last_Digit.py` so the tests pass. Example checks:
-assert last_Digit(123) == 3
-assert last_Digit(25) == 5
+Implement `last_Digit` in `last_Digit.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 math

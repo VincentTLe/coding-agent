@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to count number of digits in a given string.
 
-Implement `number_ctr` in `number_ctr.py` so the tests pass. Example checks:
-assert number_ctr('program2bedone') == 1
-assert number_ctr('3wonders') == 1
+Implement `number_ctr` in `number_ctr.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

@@ -3,9 +3,7 @@
 ## Goal
 Write a function to extract only the rear index element of each string in the given tuple.
 
-Implement `extract_rear` in `extract_rear.py` so the tests pass. Example checks:
-assert extract_rear(('Mers', 'for', 'Vers') ) == ['s', 'r', 's']
-assert extract_rear(('Avenge', 'for', 'People') ) == ['e', 'r', 'e']
+Implement `extract_rear` in `extract_rear.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

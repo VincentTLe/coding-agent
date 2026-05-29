@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find minimum of three numbers.
 
-Implement `min_of_three` in `min_of_three.py` so the tests pass. Example checks:
-assert min_of_three(10,20,0)==0
-assert min_of_three(19,15,18)==15
+Implement `min_of_three` in `min_of_three.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

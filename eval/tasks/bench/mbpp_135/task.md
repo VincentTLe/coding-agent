@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the nth hexagonal number.
 
-Implement `hexagonal_num` in `hexagonal_num.py` so the tests pass. Example checks:
-assert hexagonal_num(10) == 190
-assert hexagonal_num(5) == 45
+Implement `hexagonal_num` in `hexagonal_num.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

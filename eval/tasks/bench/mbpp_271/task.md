@@ -3,9 +3,7 @@
 ## Goal
 Write a python function that takes in an integer n and finds the sum of the first n even natural numbers that are raised to the fifth power.
 
-Implement `even_Power_Sum` in `even_Power_Sum.py` so the tests pass. Example checks:
-assert even_Power_Sum(2) == 1056
-assert even_Power_Sum(3) == 8832
+Implement `even_Power_Sum` in `even_Power_Sum.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

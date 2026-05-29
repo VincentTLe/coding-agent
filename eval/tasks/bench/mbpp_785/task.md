@@ -3,9 +3,7 @@
 ## Goal
 Write a function to convert tuple string to integer tuple.
 
-Implement `tuple_str_int` in `tuple_str_int.py` so the tests pass. Example checks:
-assert tuple_str_int("(7, 8, 9)") == (7, 8, 9)
-assert tuple_str_int("(1, 2, 3)") == (1, 2, 3)
+Implement `tuple_str_int` in `tuple_str_int.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

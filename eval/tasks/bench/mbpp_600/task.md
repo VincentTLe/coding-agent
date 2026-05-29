@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to check whether the given number is even or not.
 
-Implement `is_Even` in `is_Even.py` so the tests pass. Example checks:
-assert is_Even(1) == False
-assert is_Even(2) == True
+Implement `is_Even` in `is_Even.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

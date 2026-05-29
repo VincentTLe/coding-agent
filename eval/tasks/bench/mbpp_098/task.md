@@ -3,9 +3,7 @@
 ## Goal
 Write a function to multiply all the numbers in a list and divide with the length of the list.
 
-Implement `multiply_num` in `multiply_num.py` so the tests pass. Example checks:
-assert math.isclose(multiply_num((8, 2, 3, -1, 7)), -67.2, rel_tol=0.001)
-assert math.isclose(multiply_num((-10,-20,-30)), -2000.0, rel_tol=0.001)
+Implement `multiply_num` in `multiply_num.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

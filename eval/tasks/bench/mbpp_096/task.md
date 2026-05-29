@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find the number of divisors of a given integer.
 
-Implement `divisor` in `divisor.py` so the tests pass. Example checks:
-assert divisor(15) == 4
-assert divisor(12) == 6
+Implement `divisor` in `divisor.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 math

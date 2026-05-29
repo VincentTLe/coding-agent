@@ -3,9 +3,7 @@
 ## Goal
 Write a python function which takes a list of integers and only returns the odd ones.
 
-Implement `Split` in `Split.py` so the tests pass. Example checks:
-assert Split([1,2,3,4,5,6]) == [1,3,5]
-assert Split([10,11,12,13]) == [11,13]
+Implement `Split` in `Split.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 math

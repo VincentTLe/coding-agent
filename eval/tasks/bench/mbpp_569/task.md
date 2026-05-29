@@ -3,9 +3,7 @@
 ## Goal
 Write a function to sort each sublist of strings in a given list of lists.
 
-Implement `sort_sublists` in `sort_sublists.py` so the tests pass. Example checks:
-assert sort_sublists([['green', 'orange'], ['black', 'white'], ['white', 'black', 'orange']])==[['green', 'orange'], ['black', 'white'], ['black', 'orange', 'white']]
-assert sort_sublists([['green', 'orange'], ['black'], ['green', 'orange'], ['white']])==[['green', 'orange'], ['black'], ['green', 'orange'], ['white']]
+Implement `sort_sublists` in `sort_sublists.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

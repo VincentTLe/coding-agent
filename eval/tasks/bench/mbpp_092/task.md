@@ -3,9 +3,7 @@
 ## Goal
 Write a function to check whether the given number is undulating or not.
 
-Implement `is_undulating` in `is_undulating.py` so the tests pass. Example checks:
-assert is_undulating(1212121) == True
-assert is_undulating(1991) == False
+Implement `is_undulating` in `is_undulating.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 arrays

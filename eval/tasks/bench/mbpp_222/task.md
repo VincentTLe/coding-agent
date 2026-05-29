@@ -3,9 +3,7 @@
 ## Goal
 Write a function to check if all the elements in tuple have same data type or not.
 
-Implement `check_type` in `check_type.py` so the tests pass. Example checks:
-assert check_type((5, 6, 7, 3, 5, 6) ) == True
-assert check_type((1, 2, "4") ) == False
+Implement `check_type` in `check_type.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

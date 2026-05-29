@@ -3,9 +3,7 @@
 ## Goal
 Write a function to check whether the given string is starting with a vowel or not using regex.
 
-Implement `check_str` in `check_str.py` so the tests pass. Example checks:
-assert check_str("annie")
-assert not check_str("dawood")
+Implement `check_str` in `check_str.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 regex

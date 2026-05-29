@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find the sum of all odd natural numbers within the range l and r.
 
-Implement `sum_in_range` in `sum_in_range.py` so the tests pass. Example checks:
-assert sum_in_range(2,5) == 8
-assert sum_in_range(5,7) == 12
+Implement `sum_in_range` in `sum_in_range.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 recursion

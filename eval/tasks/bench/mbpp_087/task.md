@@ -3,9 +3,7 @@
 ## Goal
 Write a function to merge three dictionaries into a single dictionary.
 
-Implement `merge_dictionaries_three` in `merge_dictionaries_three.py` so the tests pass. Example checks:
-assert merge_dictionaries_three({ "R": "Red", "B": "Black", "P": "Pink" }, { "G": "Green", "W": "White" },{ "O": "Orange", "W": "White", "B": "Black" })=={'B': 'Black', 'R': 'Red', 'P': 'Pink', 'G': 'Green', 'W': 'White', 'O': 'Orange'}
-assert merge_dictionaries_three({ "R": "Red", "B": "Black", "P": "Pink" }, { "G": "Green", "W": "White" },{"L":"lavender","B":"Blue"})=={'W': 'White', 'P': 'Pink', 'B': 'Black', 'R': 'Red', 'G': 'Green', 'L': 'lavender'}
+Implement `merge_dictionaries_three` in `merge_dictionaries_three.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 data_structures

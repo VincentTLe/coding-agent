@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to check if a given number is one less than twice its reverse.
 
-Implement `check` in `check.py` so the tests pass. Example checks:
-assert check(70) == False
-assert check(23) == False
+Implement `check` in `check.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 recursion

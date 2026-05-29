@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find the cube sum of first n even natural numbers.
 
-Implement `cube_Sum` in `cube_Sum.py` so the tests pass. Example checks:
-assert cube_Sum(2) == 72
-assert cube_Sum(3) == 288
+Implement `cube_Sum` in `cube_Sum.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

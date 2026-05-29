@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find the first odd number in a given list of numbers.
 
-Implement `first_odd` in `first_odd.py` so the tests pass. Example checks:
-assert first_odd([1,3,5]) == 1
-assert first_odd([2,4,1,3]) == 1
+Implement `first_odd` in `first_odd.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 math

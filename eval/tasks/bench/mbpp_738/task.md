@@ -3,9 +3,7 @@
 ## Goal
 Write a function to calculate the geometric sum of n-1. https://www.w3resource.com/python-exercises/data-structures-and-algorithms/python-recursion-exercise-9.php
 
-Implement `geometric_sum` in `geometric_sum.py` so the tests pass. Example checks:
-assert geometric_sum(7) == 1.9921875
-assert geometric_sum(4) == 1.9375
+Implement `geometric_sum` in `geometric_sum.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 recursion

@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the lateral surface area of a cube given its side length.
 
-Implement `lateralsurface_cube` in `lateralsurface_cube.py` so the tests pass. Example checks:
-assert lateralsurface_cube(5)==100
-assert lateralsurface_cube(9)==324
+Implement `lateralsurface_cube` in `lateralsurface_cube.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

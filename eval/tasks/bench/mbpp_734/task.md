@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find sum of products of all possible sublists of a given list. https://www.geeksforgeeks.org/sum-of-products-of-all-possible-subarrays/
 
-Implement `sum_Of_Subarray_Prod` in `sum_Of_Subarray_Prod.py` so the tests pass. Example checks:
-assert sum_Of_Subarray_Prod([1,2,3]) == 20
-assert sum_Of_Subarray_Prod([1,2]) == 5
+Implement `sum_Of_Subarray_Prod` in `sum_Of_Subarray_Prod.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 arrays

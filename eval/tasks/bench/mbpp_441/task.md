@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the surface area of a cube of a given size.
 
-Implement `surfacearea_cube` in `surfacearea_cube.py` so the tests pass. Example checks:
-assert surfacearea_cube(5)==150
-assert surfacearea_cube(3)==54
+Implement `surfacearea_cube` in `surfacearea_cube.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

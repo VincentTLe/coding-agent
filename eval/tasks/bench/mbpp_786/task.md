@@ -3,9 +3,7 @@
 ## Goal
 Write a function to locate the right insertion point for a specified value in sorted order.
 
-Implement `right_insertion` in `right_insertion.py` so the tests pass. Example checks:
-assert right_insertion([1,2,4,5],6)==4
-assert right_insertion([1,2,4,5],3)==2
+Implement `right_insertion` in `right_insertion.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 arrays

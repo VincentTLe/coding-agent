@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to split a string into characters.
 
-Implement `split` in `split.py` so the tests pass. Example checks:
-assert split('python') == ['p','y','t','h','o','n']
-assert split('Name') == ['N','a','m','e']
+Implement `split` in `split.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

@@ -3,9 +3,7 @@
 ## Goal
 Write a function which returns nth catalan number.
 
-Implement `catalan_number` in `catalan_number.py` so the tests pass. Example checks:
-assert catalan_number(10)==16796
-assert catalan_number(9)==4862
+Implement `catalan_number` in `catalan_number.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 recursion

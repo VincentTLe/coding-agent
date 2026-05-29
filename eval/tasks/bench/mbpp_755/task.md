@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the second smallest number in a list.
 
-Implement `second_smallest` in `second_smallest.py` so the tests pass. Example checks:
-assert second_smallest([1, 2, -8, -2, 0, -2])==-2
-assert second_smallest([1, 1, -0.5, 0, 2, -2, -2])==-0.5
+Implement `second_smallest` in `second_smallest.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 arrays

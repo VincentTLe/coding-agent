@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find the highest power of 2 that is less than or equal to n.
 
-Implement `highest_Power_of_2` in `highest_Power_of_2.py` so the tests pass. Example checks:
-assert highest_Power_of_2(10) == 8
-assert highest_Power_of_2(19) == 16
+Implement `highest_Power_of_2` in `highest_Power_of_2.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

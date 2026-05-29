@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find the area of the largest triangle that can be inscribed in a semicircle with a given radius.
 
-Implement `triangle_area` in `triangle_area.py` so the tests pass. Example checks:
-assert triangle_area(-1) == None
-assert triangle_area(0) == 0
+Implement `triangle_area` in `triangle_area.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

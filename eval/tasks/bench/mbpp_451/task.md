@@ -3,9 +3,7 @@
 ## Goal
 Write a function to remove all whitespaces from the given string.
 
-Implement `remove_whitespaces` in `remove_whitespaces.py` so the tests pass. Example checks:
-assert remove_whitespaces(' Google    Flutter ') == 'GoogleFlutter'
-assert remove_whitespaces(' Google    Dart ') == 'GoogleDart'
+Implement `remove_whitespaces` in `remove_whitespaces.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 regex

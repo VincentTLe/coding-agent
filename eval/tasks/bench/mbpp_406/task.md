@@ -3,9 +3,7 @@
 ## Goal
 Write a python function to find whether the parity of a given number is odd.
 
-Implement `find_Parity` in `find_Parity.py` so the tests pass. Example checks:
-assert find_Parity(12) == False
-assert find_Parity(7) == True
+Implement `find_Parity` in `find_Parity.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms

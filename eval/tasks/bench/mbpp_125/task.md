@@ -3,9 +3,7 @@
 ## Goal
 Write a function to find the maximum difference between the number of 0s and number of 1s in any sub-string of the given binary string.
 
-Implement `find_length` in `find_length.py` so the tests pass. Example checks:
-assert find_length("11000010001") == 6
-assert find_length("10111") == 1
+Implement `find_length` in `find_length.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 strings

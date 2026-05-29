@@ -3,9 +3,7 @@
 ## Goal
 Write a function to remove all elements from a given list present in another list.
 
-Implement `remove_elements` in `remove_elements.py` so the tests pass. Example checks:
-assert remove_elements([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [2, 4, 6, 8]) == [1, 3, 5, 7, 9, 10]
-assert remove_elements([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], [1, 3, 5, 7]) == [2, 4, 6, 8, 9, 10]
+Implement `remove_elements` in `remove_elements.py` so the hidden tests pass. Match the exact function name and signature.
 
 ## Category
 algorithms
