@@ -1,0 +1,24 @@
+{
+  "timestamp": "20260528-233845",
+  "model": "Qwen/Qwen3-14B",
+  "temperature": 0.0,
+  "max_iters": 20,
+  "agent_timeout": 420.0,
+  "jobs": 8,
+  "repeats": 1,
+  "skill_path": null,
+  "tasks_file": null,
+  "git_sha": "338bafc",
+  "argv": [
+    "--jobs",
+    "8",
+    "--temperature",
+    "0",
+    "--max-iters",
+    "20",
+    "--agent-timeout",
+    "420",
+    "--out",
+    "skillopt/runs/clean/headline_empty_full.jsonl"
+  ]
+}

@@ -250,26 +250,30 @@ done — stopped on its own
 
 <section>
   <h2>Results: does it actually work?</h2>
-  <p style="text-align:center; font-size:1.25em; margin:0.3em 0;">
-    <strong>HumanEval+</strong> (leak-free): <strong>~80%</strong> &nbsp;·&nbsp;
-    full de-leaked re-run <em>in&nbsp;progress</em>
+  <p style="text-align:center; font-size:1.35em; margin:0.3em 0;">
+    Full <strong>627-task</strong> suite (clean re-run): <strong>67.3%</strong>
+    <span style="font-size:0.7em; opacity:.7;">(422/627, 95% CI 64–71%)</span>
   </p>
-  <p style="text-align:center; font-size:0.82em; opacity:.8; margin:0.2em auto; max-width:80%;">
-    <strong>Honesty note (caught in review):</strong> an earlier 79.9% aggregate was inflated —
-    ~93% of the 424 MBPP tasks leaked 2 of 3 graded asserts into the prompt. We <em>fixed</em> the
-    harness (spec-only goals) and are re-running clean. HumanEval was never affected (~80%); MBPP
-    drops to ~66% once de-leaked. The real headline is the <em>fix</em>, not the old number.
+  <table style="width:62%; margin:0.35em auto;">
+    <thead><tr><th>Slice</th><th>Pass-rate</th></tr></thead>
+    <tbody>
+      <tr><td>HumanEval+ (163)</td><td><strong>79.8%</strong></td></tr>
+      <tr><td>MBPP — de-leaked (424)</td><td><strong>66.7%</strong></td></tr>
+      <tr><td>curated hard, hand-written (37)</td><td><strong>21.6%</strong></td></tr>
+    </tbody>
+  </table>
+  <p style="text-align:center; font-size:0.8em; opacity:.85; margin:0.2em auto; max-width:86%;">
+    <strong>The honest headline is the FIX, not the number.</strong> An earlier 79.9% was inflated:
+    ~93% of the 424 MBPP tasks leaked 2 of 3 graded asserts into the agent's prompt. We caught it in
+    review, fixed the harness (spec-only goals), and re-ran clean → <strong>67.3%</strong>. HumanEval
+    (never leaked) is unchanged at ~80%. Catching &amp; fixing our own benchmark leak <em>is</em> the result.
   </p>
-  <p class="fragment" style="margin-top:0.5em;">
-    <strong>The key insight (from the eval traces):</strong> the dominant failure wasn't
-    <em>bad code</em> — the model often <strong>replied in prose instead of calling a tool</strong>
-    (a tool-use failure, not a reasoning failure). This held on the clean re-run too.
+  <p class="fragment" style="margin-top:0.4em;">
+    <strong>Key insight (from the eval traces):</strong> the dominant failure wasn't <em>bad code</em> —
+    the model often <strong>replied in prose instead of calling a tool</strong> (no_action: 66/627).
+    A <em>guardrail</em> that nudges it to act recovered most — a tool-use fix, not a smarter model.
   </p>
-  <p class="fragment" style="margin-top:0.2em;">
-    A <em>guardrail</em> (nudge it to <strong>act</strong>) recovered most of those.
-    The gains came from fixing a <strong>tool-use</strong> failure — not raw model ability.
-  </p>
-  <aside class="notes">WHAT TO SAY (≈90s): Here's the payoff. On the full 627-task suite the agent passes about 80 percent — 501 of 627 — and remember, the tests are hidden while it works, so it can't cheat. But the single number isn't the interesting part; the shape is. Easy beats medium beats hard, a clean gradient. That graceful degradation is exactly what a real benchmark looks like — if it were luck or memorization, the curve would be flat or noisy. Now the research story. Early runs were worse, and I went into the eval traces to find out why. I expected buggy code. Instead, the dominant failure was the model just talking — replying in prose, explaining what it would do, never actually calling a tool. When I filtered to runs where it genuinely engaged a tool, it was about 92 percent correct. So the model was capable; it was just sometimes failing to act. I added one guardrail: if it answers without a tool call, nudge it to act — otherwise mark it no-action. That recovered most of the lost tasks. The headline: the gains came from diagnosing a tool-use failure in the traces, not from a better model.</aside>
+  <aside class="notes">WHAT TO SAY (≈90s): Here's the payoff — and a lesson in honesty. On the full 627-task suite the agent passes 67.3 percent — 422 of 627 — with the tests hidden the whole time so it can't cheat. Now the honest part: an earlier version of this slide said 79.9 percent. While hardening the project I found a bug in my OWN benchmark — for about 93 percent of the 424 MBPP tasks, two of the three graded assert statements were leaking into the prompt the agent could read. So it could pattern-match the answers. I fixed the harness to show only the spec, re-ran clean, and the honest number is 67.3. HumanEval, which never had the leak, is unchanged at about 80 percent; MBPP dropped from inflated to 67. I'm showing you the lower, true number on purpose — catching and fixing my own leak is the result I'm most proud of. The other finding, from the eval traces: the dominant failure wasn't bad code, it was the model replying in prose without calling a tool — 66 times out of 627. One guardrail that nudges it to act recovered most of those. So the gains came from diagnosing a tool-use failure, not a smarter model.</aside>
 </section>
 
 <section>
