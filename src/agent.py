@@ -127,6 +127,7 @@ class Color:
     # (thuộc tính lớp) — dùng bằng cách viết Color.HEADER, Color.TOOL, v.v.
 
     HEADER = "\033[1;34m"   # bold blue — cho dòng "=== Turn N ==="
+    THINKING = "\033[97m"   # bright white — thinking stream của model (cli/chat.py dùng)
     TOOL = "\033[1;32m"     # bold green — cho dòng "[tool] tool_name(...)"
     RESULT = "\033[33m"     # yellow — cho dòng "[tool result]"
     ASSISTANT = "\033[1;35m"  # bold magenta — cho "[assistant] ..."

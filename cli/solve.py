@@ -8,7 +8,7 @@ WHAT THIS FILE DOES
 
 WHY SPLIT IT FROM src/agent.py
   Putting the CLI here lets `src/agent.py` be importable from elsewhere
-  (e.g. `tests/test_agent_loop.py` mocking the LLM) without invoking
+  (e.g. `tests/test_agent.py` mocking the LLM) without invoking
   argparse / sys.exit. Same separation-of-concerns as Click apps that
   put their CLI in __main__ and the logic in a library module.
 
@@ -21,18 +21,8 @@ OPTIONAL FLAGS
   --workspace PATH   directory the tools may read/write (default demo_repo)
 """
 
-# ---------------------------------------------------------------------------
-# `from __future__ import annotations`
-# ---------------------------------------------------------------------------
-# `from __future__ import annotations` là câu lệnh ĐẶC BIỆT của Python.
-# Từ khóa `from` nghĩa là "lấy từ module nào đó".
-# `__future__` (đọc: "dunder future") là module đặc biệt chứa các tính năng
-# Python MỚI HƠN mà bạn muốn bật ngay trong phiên bản Python hiện tại.
-# `import annotations` bật lazy evaluation cho type hints:
-#   - Bình thường: `list[dict]` được Python tính toán ngay → lỗi trên Python 3.8.
-#   - Sau dòng này: `list[dict]` chỉ là chuỗi ký tự, không tính ngay → tương thích 3.8+.
-# QUY TẮC BẮT BUỘC: dòng này phải là dòng code ĐẦU TIÊN trong file,
-# trước mọi import khác (chỉ sau docstring và comments).
+# `from __future__ import annotations` — bật lazy type hints (`list[dict]` chỉ
+# là chuỗi, không bị tính ngay). Xem giải thích chi tiết trong eval/run.py.
 from __future__ import annotations
 
 # ---------------------------------------------------------------------------
@@ -55,21 +45,6 @@ from __future__ import annotations
 #   5. Báo lỗi nếu argument sai kiểu hoặc thiếu argument bắt buộc.
 import argparse
 
-# `logging` — thư viện chuẩn để ghi nhật ký (log).
-# Logging quan trọng hơn print() vì:
-#   - Có CẤP ĐỘ: DEBUG < INFO < WARNING < ERROR < CRITICAL.
-#   - Có thể BẬT/TẮT theo cấp độ mà không cần xóa code.
-#   - Tự động thêm timestamp, tên module, cấp độ vào mỗi dòng log.
-# Cách dùng: `log = logging.getLogger("tên_module")`, sau đó `log.info("...")`.
-import logging
-
-# `os` — thư viện chuẩn tương tác với hệ điều hành (Operating System).
-# Ở đây dùng `os.environ` để đọc biến môi trường (environment variables).
-# Biến môi trường là cặp KEY=VALUE mà shell/OS cung cấp cho chương trình.
-# Ví dụ: trong terminal bạn chạy `export VLLM_MODEL_NAME=Qwen3-14B`,
-# sau đó `os.environ.get("VLLM_MODEL_NAME")` trả về "Qwen3-14B".
-import os
-
 # `sys` — thư viện chuẩn tương tác với Python runtime.
 # Các dùng thường gặp:
 #   `sys.path`   → list thư mục Python tìm module khi import.
@@ -86,83 +61,18 @@ import sys
 #   - Toán tử `/` nối path: Path("/home") / "user" / "file.txt" → Path("/home/user/file.txt")
 from pathlib import Path
 
-# ---------------------------------------------------------------------------
-# SỬA sys.path ĐỂ IMPORT ĐƯỢC src/
-# ---------------------------------------------------------------------------
-# VẤNỀ: Khi bạn gõ `python cli/solve.py`, Python khởi động với sys.path chứa:
-#   1. Thư mục chứa file đang chạy: `/home/tle/code/coding-agent/cli`
-#   2. Các thư mục cài đặt Python (site-packages, stdlib...)
-#
-# Python TÌM KIẾM module theo thứ tự trong sys.path. Vì vậy nếu bạn viết
-# `from src.agent import run_agent`, Python tìm:
-#   - `/home/tle/code/coding-agent/cli/src/agent.py` → KHÔNG CÓ (sai!)
-#   - Các thư mục site-packages → KHÔNG CÓ
-#   → ImportError: No module named 'src'
-#
-# GIẢI PHÁP: Thêm PROJECT ROOT vào đầu sys.path TRƯỚC khi import src/.
-#
-# GIẢI THÍCH TỪNG BƯỚC của `Path(__file__).resolve().parent.parent`:
-# ┌────────────────────────────────────────────────────────────────────┐
-# │ BƯỚC 1: __file__                                                   │
-# │   `__file__` là biến đặc biệt Python tự đặt khi load file.        │
-# │   "dunder file" (đọc: double-underscore file).                     │
-# │   Giá trị: đường dẫn đến file đang chạy.                          │
-# │   Ví dụ: "/home/tle/code/coding-agent/cli/solve.py"               │
-# │   Có thể là đường dẫn tương đối nếu gọi bằng relative path.       │
-# │                                                                    │
-# │ BƯỚC 2: Path(__file__)                                             │
-# │   Bọc chuỗi __file__ thành Path object để có thể dùng .resolve(). │
-# │   Path("/home/tle/code/coding-agent/cli/solve.py")                 │
-# │                                                                    │
-# │ BƯỚC 3: .resolve()                                                 │
-# │   Chuyển đường dẫn tương đối → tuyệt đối.                         │
-# │   Giải quyết symlinks (symbolic links = shortcut).                 │
-# │   Kết quả: đường dẫn đầy đủ, canonical.                           │
-# │   Path("/home/tle/code/coding-agent/cli/solve.py") (already abs)   │
-# │                                                                    │
-# │ BƯỚC 4: .parent (lần 1)                                            │
-# │   Thuộc tính `.parent` trả về thư mục chứa file/thư mục này.      │
-# │   Path("/home/tle/code/coding-agent/cli/solve.py").parent          │
-# │      → Path("/home/tle/code/coding-agent/cli")                     │
-# │   (Thư mục cli/ chứa file solve.py)                                │
-# │                                                                    │
-# │ BƯỚC 5: .parent (lần 2)                                            │
-# │   Một lần nữa lấy thư mục cha.                                     │
-# │   Path("/home/tle/code/coding-agent/cli").parent                   │
-# │      → Path("/home/tle/code/coding-agent")   ← PROJECT ROOT!      │
-# │   (Thư mục coding-agent/ chứa cli/)                                │
-# └────────────────────────────────────────────────────────────────────┘
-#
-# SAU KHI có project root:
-# `str(...)` — chuyển Path object thành chuỗi vì sys.path là list[str].
-# `sys.path.insert(0, chuỗi)` — CHÈN vào VỊ TRÍ 0 (đầu tiên) của sys.path.
-#
-# TẠI SAO INSERT Ở ĐẦU chứ không APPEND ở cuối?
-#   Python tìm module theo thứ tự TỪ ĐẦU ĐẾN CUỐI sys.path.
-#   Nếu append → project root ở cuối → Python tìm qua tất cả site-packages
-#   trước, rủi ro gặp package cùng tên (ví dụ: nếu có pip install src).
-#   Insert ở đầu → project root được ưu tiên tìm TRƯỚC → an toàn và nhanh.
-#
-# KẾT QUẢ: Sau dòng này, `from src.agent import run_agent` sẽ tìm thấy
-# `/home/tle/code/coding-agent/src/agent.py` → import thành công.
+# Thêm project root vào sys.path TRƯỚC khi import src/ — khi chạy
+# `python cli/solve.py`, Python chỉ thấy thư mục cli/, không thấy src/.
+# Xem giải thích chi tiết từng bước trong eval/run.py.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-# `from dotenv import load_dotenv` — import hàm từ thư viện bên thứ ba (third-party).
-# `dotenv` (tên đầy đủ: python-dotenv) đọc file `.env` trong thư mục hiện tại.
-# File `.env` chứa các cặp KEY=VALUE, ví dụ:
-#   VLLM_BASE_URL=http://localhost:8000/v1
-#   VLLM_MODEL_NAME=Qwen3-14B-Instruct
-# `load_dotenv()` nạp các cặp này vào `os.environ` để code đọc được.
-# Giúp không phải hardcode URL/key trong code hoặc export thủ công mỗi lần.
-from dotenv import load_dotenv
-
-# Import the agent module. We re-use ITS client, logger, run_agent — no
-# duplication of API/env setup here.
-# `from src.agent import run_agent` — import CHỈ hàm run_agent từ module src.agent.
-# `src.agent` = file `src/agent.py` tương đối với project root.
-# `run_agent` = hàm chính chạy toàn bộ vòng lặp ReAct agent.
-# Nhờ sys.path.insert ở trên, Python tìm thấy src/agent.py.
-from src.agent import run_agent
+# Tái dùng toàn bộ hạ tầng của src/agent.py — không duplicate API/env setup:
+#   - run_agent           : hàm chính chạy vòng lặp ReAct agent.
+#   - load_model_config() : ModelConfig active (models.json, fallback .env) —
+#     banner in model/endpoint từ ĐÚNG nguồn mà get_client() sẽ dùng, thay vì
+#     đọc lại VLLM_* env vars có thể lệch với models.json (misreport khi demo).
+#     Hàm này tự gọi load_dotenv() nên ở đây không cần import dotenv nữa.
+from src.agent import load_model_config, run_agent
 
 
 # ---------------------------------------------------------------------------
@@ -173,9 +83,8 @@ from src.agent import run_agent
 # `->` là ký hiệu type hint cho kiểu trả về.
 # `int` = số nguyên. Hàm trả về exit code: 0 = thành công, khác 0 = lỗi.
 def main() -> int:
-    # `load_dotenv()` — đọc file .env và nạp vào os.environ.
-    # Gọi ở đây (không phải top-level) để test dễ mock hơn.
-    load_dotenv()
+    # Không gọi load_dotenv() ở đây nữa — load_model_config() (gọi bên dưới)
+    # và get_client() (bên trong run_agent) đều tự load .env khi cần.
 
     # ---------------------------------------------------------------------------
     # ARGPARSE — PHÂN TÍCH THAM SỐ DÒNG LỆNH
@@ -273,21 +182,24 @@ def main() -> int:
     workspace = Path(args.workspace).resolve()
 
     # ---------------------------------------------------------------------------
-    # LOG THÔNG TIN TRƯỚC KHI CHẠY
+    # BANNER TRƯỚC KHI CHẠY
     # ---------------------------------------------------------------------------
-    # `logging.getLogger("agent")` — lấy logger tên "agent".
-    # Logging có hierarchy: "agent.tools", "agent.stream" đều là con của "agent".
-    # Dùng logger thay vì print() để có thể bật/tắt theo level.
-    log = logging.getLogger("agent")
-    log.info("=" * 60)
-    # `os.environ.get("KEY", "?")` — lấy biến môi trường, mặc định "?" nếu chưa set.
-    # An toàn hơn os.environ["KEY"] vì không crash khi key không tồn tại.
-    log.info(f"  model    : {os.environ.get('VLLM_MODEL_NAME', '?')}")
-    log.info(f"  endpoint : {os.environ.get('VLLM_BASE_URL', '?')}")
-    log.info(f"  workspace: {args.workspace}")
-    log.info(f"  max_iters: {args.max_iters}")
-    log.info(f"  goal     : {task_text}")
-    log.info("=" * 60)
+    # Dùng print() chứ KHÔNG dùng log.info(): logging chỉ được cấu hình BÊN
+    # TRONG run_agent (_setup_logging) — tại điểm này chưa có handler nào,
+    # log.info() bị nuốt im lặng nên banner cũ chưa bao giờ in ra.
+    #
+    # model/endpoint đọc từ load_model_config() — cùng nguồn (models.json,
+    # fallback .env) mà get_client() dùng để gửi request thật. Bản cũ đọc
+    # VLLM_* env vars trực tiếp, có thể lệch với models.json → banner báo
+    # sai model đang chạy ngay giữa demo.
+    cfg = load_model_config()
+    print("=" * 60)
+    print(f"  model    : {cfg.model}")
+    print(f"  endpoint : {cfg.base_url}")
+    print(f"  workspace: {args.workspace}")
+    print(f"  max_iters: {args.max_iters}")
+    print(f"  goal     : {task_text}")
+    print("=" * 60)
 
     # ---------------------------------------------------------------------------
     # CHẠY AGENT
@@ -308,7 +220,9 @@ def main() -> int:
         # `EOFError` — stdin đóng (ví dụ: piped input hết dữ liệu, Ctrl+D).
         # Bắt cả hai vì cả hai đều nghĩa là "user muốn dừng".
         # `(Err1, Err2)` — bắt nhiều loại exception trong 1 except block.
-        log.info("\nInterrupted.")
+        # print() thay vì log.info() — nhất quán với banner, và vẫn hiện
+        # được cả khi Ctrl+C đến trước lúc run_agent kịp cấu hình logging.
+        print("\nInterrupted.")
         # `return 130` — trả về exit code 130.
         # Quy ước Unix: exit code 128+N = bị tín hiệu N. Ctrl+C gửi SIGINT (signal 2).
         # 128 + 2 = 130 → báo shell biết "chương trình bị interrupt".
@@ -317,36 +231,9 @@ def main() -> int:
     return 0
 
 
-# ---------------------------------------------------------------------------
-# ENTRY POINT — ĐIỂM KHỞI CHẠY
-# ---------------------------------------------------------------------------
-# `if __name__ == "__main__":` — PATTERN CHUẨN Python, cực kỳ quan trọng.
-#
-# `__name__` (đọc: "dunder name") là biến Python tự đặt:
-# ┌──────────────────────────────────────────────────────────────────┐
-# │ TRƯỜNG HỢP 1: CHẠY TRỰC TIẾP                                    │
-# │   Lệnh: `python cli/solve.py "Fix bug"`                          │
-# │   Python đặt: __name__ = "__main__"                              │
-# │   Điều kiện: "__main__" == "__main__" → True                     │
-# │   Kết quả: sys.exit(main()) ĐƯỢC CHẠY                            │
-# │                                                                  │
-# │ TRƯỜNG HỢP 2: ĐƯỢC IMPORT TỪ FILE KHÁC                          │
-# │   Lệnh: `import solve` (trong file khác, ví dụ test_solve.py)   │
-# │   Python đặt: __name__ = "solve" (tên module)                   │
-# │   Điều kiện: "solve" == "__main__" → False                       │
-# │   Kết quả: sys.exit(main()) KHÔNG CHẠY                           │
-# │   → Chỉ import hàm main, không chạy ngay                         │
-# └──────────────────────────────────────────────────────────────────┘
-#
-# TẠI SAO CẦN PATTERN NÀY?
-#   Nếu không có block này, `sys.exit(main())` chạy ở TOP LEVEL — nghĩa là
-#   chạy MỖI KHI file được load, kể cả khi pytest import để test.
-#   Block này ngăn side effects khi import, cho phép test riêng từng hàm.
-#
-# `sys.exit(main())`:
-#   1. Gọi main() trước, nhận exit code (int).
-#   2. Truyền vào sys.exit(): thoát chương trình với exit code đó.
-#   3. Shell nhận exit code: 0 = OK, 1+ = lỗi, 130 = interrupted.
-#   Ví dụ: `python solve.py "task" && echo "success"` → chỉ in "success" nếu exit 0.
+# `if __name__ == "__main__":` — chỉ chạy main() khi file được gọi trực tiếp
+# (`python cli/solve.py "task"`), không chạy khi bị import. Xem giải thích
+# chi tiết về pattern này trong eval/run.py.
+# Exit code từ main() (0 = OK, 130 = Ctrl+C) được truyền cho shell qua sys.exit.
 if __name__ == "__main__":
     sys.exit(main())
