@@ -170,8 +170,8 @@ coding-agent/
 ```
 
 **Further reading:**
-- [`SYSTEM_DEEP_DIVE.md`](SYSTEM_DEEP_DIVE.md) — a thorough walkthrough of the chat-completions protocol, streaming, tool calling, and every tool's rationale.
-- [`PRESENTATION.html`](PRESENTATION.html) — slide deck for the research checkpoint.
+- [`SYSTEM_DEEP_DIVE.md`](docs/SYSTEM_DEEP_DIVE.md) — a thorough walkthrough of the chat-completions protocol, streaming, tool calling, and every tool's rationale.
+- [`PRESENTATION.html`](docs/decks/PRESENTATION.html) — slide deck for the research checkpoint.
 - [`eval/README.md`](eval/README.md) — the benchmark, how to run it, and its caveats.
 
 ---

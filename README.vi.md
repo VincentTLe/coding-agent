@@ -361,7 +361,7 @@ you> /exit
 
 ## 6. CODE GUIDE — đọc từng file theo thứ tự
 
-> 📊 **Muốn nắm toàn bộ hệ thống bằng hình ảnh trước khi vào code?** Mở [`SYSTEM_DEEP_DIVE.html`](SYSTEM_DEEP_DIVE.html) — trang giải thích trực quan từ nguyên lý gốc (LLM dự đoán token → ReAct + tool calling → vLLM → hệ thống của mình → eval → cái gì là của riêng mình). Tiếng Việt, có sidebar mục lục + diagram tự dựng. Đọc cái này trước rồi vào code sẽ dễ hơn nhiều.
+> 📊 **Muốn nắm toàn bộ hệ thống bằng hình ảnh trước khi vào code?** Mở [`SYSTEM_DEEP_DIVE.html`](docs/explainers/SYSTEM_DEEP_DIVE.html) — trang giải thích trực quan từ nguyên lý gốc (LLM dự đoán token → ReAct + tool calling → vLLM → hệ thống của mình → eval → cái gì là của riêng mình). Tiếng Việt, có sidebar mục lục + diagram tự dựng. Đọc cái này trước rồi vào code sẽ dễ hơn nhiều.
 
 Anh muốn hiểu sâu thì đọc theo order này:
 
