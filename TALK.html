@@ -1,13 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Coding Agent — 15-min Talk</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/theme/black.css" id="theme">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/highlight/monokai.css">
+  <title>Coding Agent from Scratch</title>
+
+  <!-- Vendored locally (libs/) so the deck runs with NO internet during the demo -->
+  <link rel="stylesheet" href="libs/reveal.min.css">
+  <link rel="stylesheet" href="libs/black.min.css" id="theme">
+  <link rel="stylesheet" href="libs/monokai.min.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -18,330 +19,492 @@
       --fg: #e7ecef; --fg-dim: #9aa5b1;
       --accent: #7bdcb5; --cyan: #7bf0ff; --magenta: #ff8aff;
       --tool: #7bff7b; --result: #ffd966; --red: #ff7b7b;
-      --thinking: #ffffff; --border: #2a2f3d;
+      --border: #2a2f3d;
     }
     html, body { background: var(--bg); }
     .reveal { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-weight: 400; color: var(--fg); font-size: 30px; }
     .reveal .slides { text-align: left; }
-    .reveal h1, .reveal h2, .reveal h3, .reveal h4, .reveal h5, .reveal h6 { font-family: 'Inter', sans-serif; color: var(--fg); letter-spacing: -0.02em; text-transform: none; margin: 0 0 0.4em 0; line-height: 1.15; font-weight: 700; }
+    .reveal h1, .reveal h2, .reveal h3 { font-family: 'Inter', sans-serif; color: var(--fg); letter-spacing: -0.02em; text-transform: none; margin: 0 0 0.4em 0; line-height: 1.15; font-weight: 700; }
     .reveal h1 { font-size: 2.4em; }
-    .reveal h2 { font-size: 1.6em; color: var(--accent); }
-    .reveal h3 { font-size: 1.2em; color: var(--cyan); font-weight: 600; }
+    .reveal h2 { font-size: 1.5em; color: var(--accent); }
+    .reveal h3 { font-size: 1.1em; color: var(--cyan); font-weight: 600; }
     .reveal p { margin: 0 0 0.5em 0; }
-    .reveal ul, .reveal ol { display: block; margin: 0 0 0.6em 1.4em; }
-    .reveal li { margin-bottom: 0.2em; }
+    .reveal ul { display: block; margin: 0.2em 0 0.4em 1.2em; }
+    .reveal li { margin-bottom: 0.32em; line-height: 1.4; }
     .reveal strong { color: var(--fg); font-weight: 700; }
     .reveal em { color: var(--cyan); font-style: normal; }
-    .reveal a { color: var(--accent); text-decoration: none; border-bottom: 1px dotted var(--accent); }
-    .reveal a:hover { color: var(--cyan); border-color: var(--cyan); }
-    .reveal code { font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace; background: var(--bg3); color: var(--cyan); padding: 0.08em 0.35em; border-radius: 4px; font-size: 0.85em; }
-    .reveal pre { width: 100%; box-shadow: none; margin: 0.5em 0; font-size: 0.5em; line-height: 1.4; }
-    .reveal pre code { background: var(--bg3); color: var(--fg); padding: 1em 1.2em; border-radius: 8px; border: 1px solid var(--border); max-height: 560px; font-size: inherit; display: block; }
-    .reveal pre code .token.comment { color: var(--fg-dim); font-style: italic; }
-    .reveal pre code .token.punctuation { color: var(--fg); }
-    .reveal pre code .token.property, .reveal pre code .token.tag, .reveal pre code .token.boolean, .reveal pre code .token.number, .reveal pre code .token.constant, .reveal pre code .token.symbol { color: var(--magenta); }
-    .reveal pre code .token.selector, .reveal pre code .token.attr-name, .reveal pre code .token.string, .reveal pre code .token.char, .reveal pre code .token.builtin { color: var(--result); }
-    .reveal pre code .token.operator, .reveal pre code .token.entity, .reveal pre code .token.url, .reveal pre code .token.variable { color: var(--cyan); }
-    .reveal pre code .token.atrule, .reveal pre code .token.attr-value, .reveal pre code .token.function, .reveal pre code .token.class-name { color: var(--accent); }
-    .reveal pre code .token.keyword { color: var(--magenta); font-weight: 600; }
-    .reveal pre code .token.regex, .reveal pre code .token.important { color: var(--red); }
-    .reveal table { margin: 0.5em 0; width: 100%; border-collapse: collapse; font-size: 0.72em; }
+    .reveal code { font-family: 'JetBrains Mono', Consolas, monospace; background: var(--bg3); color: var(--cyan); padding: 0.08em 0.35em; border-radius: 4px; font-size: 0.85em; }
+    .reveal pre { width: 100%; box-shadow: none; margin: 0.4em 0; font-size: 0.5em; line-height: 1.42; }
+    .reveal pre code { background: var(--bg3); color: var(--fg); padding: 1em 1.2em; border-radius: 8px; border: 1px solid var(--border); font-size: inherit; display: block; }
+    .reveal table { margin: 0.4em 0; width: 100%; border-collapse: collapse; font-size: 0.72em; }
     .reveal table th { background: var(--bg2); color: var(--accent); font-weight: 600; text-align: left; padding: 0.45em 0.7em; border-bottom: 2px solid var(--border); }
     .reveal table td { padding: 0.4em 0.7em; border-bottom: 1px solid var(--border); color: var(--fg); }
-    .reveal table tr.highlight td { background: rgba(123, 240, 255, 0.06); }
-    .reveal .fragment { transition: opacity 0.4s ease-out, transform 0.4s ease-out; }
 
-    .title-slide { text-align: center; display: flex !important; flex-direction: column; justify-content: center; align-items: center; gap: 0.4em; }
-    .title-slide h1 { font-size: 3em; font-weight: 800; letter-spacing: -0.03em; background: linear-gradient(90deg, var(--accent) 0%, var(--cyan) 35%, var(--magenta) 70%, var(--accent) 100%); background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; animation: gradientFlow 8s ease-in-out infinite; margin: 0; }
-    .title-slide .subtitle, .title-slide h3 { font-size: 1.1em; color: var(--fg-dim); font-weight: 400; margin-top: -0.1em; }
+    .center { text-align: center; } .dim { color: var(--fg-dim); } .accent { color: var(--accent); }
+    .cyan { color: var(--cyan); } .magenta { color: var(--magenta); } .red { color: var(--red); }
+    .small { font-size: 0.8em; }
+
+    /* ---- title ---- */
+    .title-slide { text-align: center; display: flex !important; flex-direction: column; justify-content: center; align-items: center; gap: 0.35em; }
+    .title-slide h1 { font-size: 2.9em; font-weight: 800; letter-spacing: -0.03em; background: linear-gradient(90deg, var(--accent) 0%, var(--cyan) 35%, var(--magenta) 70%, var(--accent) 100%); background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; animation: gradientFlow 8s ease-in-out infinite; margin: 0; }
+    .title-slide .subline { font-size: 0.82em; color: var(--fg-dim); font-weight: 400; margin: 0; }
+    .title-slide .byline { font-size: 0.6em; opacity: 0.75; margin-top: 1em; }
     @keyframes gradientFlow { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
 
-    .section-title { background: radial-gradient(circle at 20% 30%, rgba(123, 220, 181, 0.08), transparent 50%), radial-gradient(circle at 80% 70%, rgba(255, 138, 255, 0.05), transparent 50%); }
-    .section-title h1 { font-size: 2.6em; color: var(--accent); animation: numberPulse 3.2s ease-in-out infinite; }
-    .section-title .subtitle, .section-title h3 { color: var(--fg-dim); font-size: 1em; font-weight: 400; margin-top: 0.2em; }
-    @keyframes numberPulse { 0%, 100% { opacity: 0.92; } 50% { opacity: 1; } }
+    /* ---- pillars (slide 2) ---- */
+    .pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8em; margin: 0.7em 0 0.4em; }
+    .pillar { background: var(--bg2); border: 1px solid var(--border); border-top: 3px solid var(--accent); border-radius: 10px; padding: 0.7em 0.6em; text-align: center; }
+    .pillar.p2 { border-top-color: var(--cyan); } .pillar.p3 { border-top-color: var(--magenta); }
+    .pillar .pname { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: var(--accent); font-size: 0.8em; letter-spacing: 0.04em; }
+    .pillar.p2 .pname { color: var(--cyan); } .pillar.p3 .pname { color: var(--magenta); }
+    .pillar .pdesc { color: var(--fg-dim); font-size: 0.6em; margin-top: 0.35em; line-height: 1.35; }
 
-    .card { background: var(--bg2); border-radius: 10px; padding: 0.7em 1em; margin: 0.5em 0; border-left: 4px solid var(--border); font-size: 0.78em; line-height: 1.45; }
-    .card.key { border-left-color: var(--cyan); background: linear-gradient(90deg, rgba(123,240,255,0.08), var(--bg2) 30%); }
-    .card.warn { border-left-color: var(--result); background: linear-gradient(90deg, rgba(255,217,102,0.08), var(--bg2) 30%); }
-    .card.code-loc { border-left-color: var(--accent); background: linear-gradient(90deg, rgba(123,220,181,0.08), var(--bg2) 30%); font-family: 'JetBrains Mono', monospace; font-size: 0.72em; }
+    /* ---- trace block (slide 3) ---- */
+    .trace { background: #000; font-family: 'JetBrains Mono', monospace; font-size: 0.62em; line-height: 1.8; padding: 0.9em 1.1em; border-radius: 10px; border: 1px solid var(--border); box-shadow: 0 8px 24px rgba(0,0,0,0.4); margin: 0.4em 0; }
+    .trace .tl { display: block; color: var(--fg); white-space: pre; }
+    .trace .you { color: var(--cyan); } .trace .arr { color: var(--tool); } .trace .ok { color: var(--tool); font-weight: 700; }
+    .trace .bad { color: var(--red); } .trace .cmt { color: var(--fg-dim); } .trace .fin { color: var(--accent); font-weight: 700; }
 
-    .terminal { background: #000; color: var(--fg); font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.55em; line-height: 1.55; padding: 0.9em 1.1em; border-radius: 8px; border: 1px solid var(--border); box-shadow: 0 8px 24px rgba(0,0,0,0.4); white-space: pre-wrap; overflow-x: auto; margin: 0.5em 0; max-height: 580px; }
-    .terminal::before { content: "● ● ●"; display: block; color: #555; letter-spacing: 0.3em; margin-bottom: 0.5em; font-size: 0.7em; }
-    .terminal .you { color: var(--cyan); }
-    .terminal .thinking { color: var(--thinking); opacity: 0.75; font-style: italic; }
-    .terminal .assistant { color: var(--magenta); }
-    .terminal .tool { color: var(--tool); }
-    .terminal .result { color: var(--result); }
-    .terminal .red { color: var(--red); }
-    .terminal .cyan { color: var(--cyan); }
-    .terminal .label { color: var(--cyan); font-weight: 700; }
-    .terminal .dim { color: var(--fg-dim); }
+    /* ---- architecture (slide 4) ---- */
+    .archrow { display: flex; align-items: center; justify-content: center; gap: 0.8em; margin: 0.9em 0 1em; font-size: 0.78em; }
+    .archbox { background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; padding: 0.55em 0.9em; text-align: center; }
+    .archbox.hot { border: 1.5px solid var(--accent); }
+    .archbox small { color: var(--fg-dim); font-size: 0.72em; }
+    .archsep { color: var(--accent); font-size: 1.4em; }
 
-    .ascii { background: #000; color: var(--accent); font-family: 'JetBrains Mono', monospace; font-size: 0.5em; line-height: 1.25; padding: 1em 1.2em; border-radius: 8px; border: 1px solid var(--border); white-space: pre; overflow-x: auto; margin: 0.5em 0; text-align: left; }
+    /* ---- ReAct cycle (slide 5) ---- */
+    .loopgrid { display: grid; grid-template-columns: 300px 1fr; gap: 1em; align-items: center; }
+    .cycle { position: relative; width: 280px; height: 280px; margin: 0 auto; }
+    .cycle svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+    .cnode { position: absolute; width: 92px; height: 92px; border-radius: 50%; background: var(--bg3); border: 2px solid var(--accent); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+    .cnode .cn-t { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: var(--accent); font-size: 0.52em; letter-spacing: 0.03em; }
+    .cnode .cn-s { color: var(--fg-dim); font-size: 0.42em; margin-top: 0.15em; }
+    .cnode.top { top: 0; left: 50%; transform: translateX(-50%); }
+    .cnode.right { right: 0; top: 50%; transform: translateY(-50%); }
+    .cnode.bot { bottom: 0; left: 50%; transform: translateX(-50%); }
+    .cnode.left { left: 0; top: 50%; transform: translateY(-50%); }
 
-    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.9em; margin: 0.7em 0; }
-    .stat { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 0.9em 0.8em; text-align: center; transition: transform 0.2s, border-color 0.2s; }
-    .stat:hover { transform: translateY(-2px); border-color: var(--accent); }
-    .stat-value { font-family: 'JetBrains Mono', monospace; font-size: 1.9em; font-weight: 700; color: var(--accent); line-height: 1; letter-spacing: -0.02em; }
-    .stat-label { font-size: 0.55em; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.12em; margin-top: 0.5em; font-weight: 500; }
+    /* ---- tools + sandbox (slide 6) ---- */
+    .toolgroups { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55em; margin: 0.4em 0; }
+    .tgroup { background: var(--bg2); border: 1px solid var(--border); border-radius: 9px; padding: 0.5em 0.7em; }
+    .tgroup .glabel { font-size: 0.6em; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.4em; }
+    .chips { display: flex; flex-wrap: wrap; gap: 0.35em; }
+    .chip { font-family: 'JetBrains Mono', monospace; font-size: 0.62em; background: var(--bg3); border: 1px solid var(--border); color: var(--cyan); padding: 0.18em 0.5em; border-radius: 6px; }
+    .sandbox { background: linear-gradient(90deg, rgba(123,220,181,0.08), var(--bg2) 40%); border: 1px solid var(--accent); border-radius: 9px; padding: 0.5em 0.8em; margin-top: 0.55em; }
+    .sandbox .sb-label { font-family: 'JetBrains Mono', monospace; font-size: 0.62em; color: var(--accent); font-weight: 700; }
+    .sandbox .sb-inner { font-size: 0.62em; color: var(--fg-dim); margin-top: 0.2em; }
+    .attack { font-family: 'JetBrains Mono', monospace; font-size: 0.66em; margin-top: 0.5em; text-align: center; }
+    .attack .path { color: var(--red); } .attack .bounce { color: var(--tool); font-weight: 700; }
 
-    .legend { display: flex; flex-wrap: wrap; gap: 0.7em 1.3em; margin: 0.6em 0; font-size: 0.7em; }
-    .legend-item { display: inline-flex; align-items: center; gap: 0.4em; color: var(--fg-dim); }
-    .swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; box-shadow: 0 0 0 1px rgba(255,255,255,0.08) inset; }
+    /* ---- reliability cards (slide 7) ---- */
+    .rcard { background: var(--bg2); border-radius: 10px; padding: 0.55em 0.9em; margin: 0.45em 0; border-left: 4px solid var(--cyan); font-size: 0.8em; line-height: 1.4; }
 
-    .steps { list-style: none; counter-reset: step; margin: 0.5em 0; padding: 0; font-size: 0.75em; }
-    .steps li { counter-increment: step; position: relative; padding: 0.3em 0 0.3em 2.4em; margin-bottom: 0.3em; line-height: 1.5; }
-    .steps li::before { content: counter(step); position: absolute; left: 0; top: 0.3em; width: 1.7em; height: 1.7em; border-radius: 50%; background: var(--accent); color: var(--bg); font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 0.8em; display: flex; align-items: center; justify-content: center; }
+    /* ---- results (slide 9) ---- */
+    .resgrid { display: grid; grid-template-columns: 0.8fr 1.2fr; gap: 1.2em; align-items: center; }
+    .bignum { font-family: 'JetBrains Mono', monospace; font-size: 3.4em; font-weight: 800; color: var(--accent); line-height: 1; text-align: center; }
+    .bignum .sub { display: block; font-size: 0.2em; color: var(--fg-dim); font-weight: 400; margin-top: 0.6em; letter-spacing: 0.02em; }
+    .slicebars { font-size: 0.7em; }
+    .sbar-row { display: grid; grid-template-columns: 150px 1fr 54px; align-items: center; gap: 0.6em; margin: 0.5em 0; }
+    .sbar-track { background: var(--bg3); border-radius: 5px; height: 16px; overflow: hidden; }
+    .sbar-fill { height: 100%; width: 0; background: var(--accent); border-radius: 5px; }
+    .sbar-fill.b2 { background: var(--cyan); } .sbar-fill.b3 { background: var(--magenta); }
+    .sbar-val { font-family: 'JetBrains Mono', monospace; color: var(--fg); text-align: right; }
 
-    .center { text-align: center; } .left { text-align: left; } .right { text-align: right; }
-    .dim { color: var(--fg-dim); } .accent { color: var(--accent); } .cyan { color: var(--cyan); }
-    .magenta { color: var(--magenta); } .red { color: var(--red); }
-    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1em; align-items: start; }
-    .three-col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1em; align-items: start; }
-    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 1em; align-items: start; }
-    .side-notes > * { margin-bottom: 0.5em; }
+    /* ---- integrity before/after (slide 10) ---- */
+    .split2 { display: grid; grid-template-columns: 1fr auto 1fr; gap: 1.1em; align-items: center; margin: 0.7em 0; }
+    .panel { border-radius: 12px; padding: 1.1em 0.8em; text-align: center; border: 1px solid var(--border); }
+    .panel.bad { background: rgba(255,123,123,0.07); border-color: rgba(255,123,123,0.4); }
+    .panel.good { background: rgba(123,255,123,0.07); border-color: rgba(123,255,123,0.4); }
+    .panel .pn { font-family: 'JetBrains Mono', monospace; font-size: 2.6em; font-weight: 800; line-height: 1; }
+    .panel.bad .pn { color: var(--red); } .panel.good .pn { color: var(--tool); }
+    .panel .pl { font-size: 0.7em; text-transform: uppercase; letter-spacing: 0.12em; margin-top: 0.5em; }
+    .panel.bad .pl { color: var(--red); } .panel.good .pl { color: var(--tool); }
+    .arrow-mid { font-size: 1.8em; color: var(--fg-dim); text-align: center; }
 
-    .mermaid { background: transparent !important; text-align: center; margin: 0.3em 0; font-size: 14px; }
-    .mermaid svg { max-width: 100%; height: auto; }
+    /* ---- SkillOpt (slide 11) ---- */
+    .skloop { display: flex; align-items: stretch; justify-content: center; flex-wrap: wrap; gap: 0.4em; margin: 0.3em 0 0.6em; }
+    .sknode { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 0.45em 0.6em; text-align: center; font-size: 0.56em; min-width: 96px; display: flex; flex-direction: column; justify-content: center; }
+    .sknode.gate { border-color: var(--result); } .sknode.frozen { border-color: var(--cyan); }
+    .sknode .skt { font-weight: 700; color: var(--accent); font-family: 'JetBrains Mono', monospace; }
+    .sknode.gate .skt { color: var(--result); } .sknode.frozen .skt { color: var(--cyan); }
+    .sknode .sks { color: var(--fg-dim); margin-top: 0.18em; }
+    .skarr { color: var(--fg-dim); font-size: 1.1em; align-self: center; }
+    .skbars { font-size: 0.7em; max-width: 78%; margin: 0.2em auto; }
+    .skbar-row { display: grid; grid-template-columns: 96px 1fr 56px; align-items: center; gap: 0.6em; margin: 0.55em 0; }
+    .skbar-track { position: relative; height: 18px; }
+    .skbar-fill { position: absolute; top: 3px; height: 12px; width: 0; background: var(--fg-dim); border-radius: 6px; }
+    .skbar-whisk { position: absolute; top: 1px; height: 16px; background: rgba(255,217,102,0.15); border-left: 2px solid var(--result); border-right: 2px solid var(--result); border-radius: 3px; opacity: 0; }
+    .skbar-val { font-family: 'JetBrains Mono', monospace; text-align: right; color: var(--fg); }
+    .sk-verdict { text-align: center; font-size: 0.74em; margin-top: 0.5em; color: var(--fg); }
+    .sk-verdict strong { color: var(--result); }
 
-    .reveal .progress { height: 4px; color: var(--accent); background: rgba(123, 220, 181, 0.12); }
+    /* ---- close + demo cue ---- */
+    .demo-cue { font-family: 'JetBrains Mono', monospace; font-size: 0.7em; color: var(--tool); background: #000; border: 1px solid var(--tool); border-radius: 10px; padding: 0.5em 1em; text-align: center; margin-top: 0.7em; }
+
+    .reveal .progress { height: 4px; color: var(--accent); background: rgba(123,220,181,0.12); }
     .reveal .progress span { background: var(--accent); }
-    .reveal .slide-number { background: rgba(15, 17, 23, 0.7); color: var(--fg-dim); font-family: 'JetBrains Mono', monospace; font-size: 14px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); right: 16px; bottom: 16px; }
+    .reveal .slide-number { background: rgba(15,17,23,0.7); color: var(--fg-dim); font-family: 'JetBrains Mono', monospace; font-size: 14px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border); right: 16px; bottom: 16px; }
     .reveal .slide-number a { color: var(--fg-dim); }
     .reveal .controls { color: var(--accent); }
-    .reveal .controls button { opacity: 0.4; }
-    .reveal .controls button:hover { opacity: 1; }
-
-    .kbd-hint { position: fixed; left: 16px; bottom: 16px; z-index: 50; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--fg-dim); background: rgba(15, 17, 23, 0.7); border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; letter-spacing: 0.04em; pointer-events: none; }
-    .kbd-hint kbd { background: var(--bg3); color: var(--accent); padding: 1px 6px; border-radius: 3px; border: 1px solid var(--border); font-family: inherit; font-size: 10px; margin: 0 2px; }
-
-    .role-table tr td:first-child { font-family: 'JetBrains Mono', monospace; color: var(--cyan); }
-    .role-table .muted { color: var(--fg-dim); }
+    .reveal .controls button { opacity: 0.4; } .reveal .controls button:hover { opacity: 1; }
   </style>
-
 </head>
 <body>
 <div class="reveal">
 <div class="slides">
-<section class="title-slide">
-  <h1>Coding Agent from Scratch</h1>
-  <p>Turning a local LLM into a reliable coding agent — built from first principles, no frameworks.</p>
-  <p style="font-size: 0.6em; opacity: 0.75; margin-top: 1.2em;">Vincent Le · Knox College · Math/Stat 361 Research · Advisor: Prof. Andrew Leahy</p>
-  <aside class="notes">WHAT TO SAY (≈25s): Hi everyone — I'm Vincent. For my Math/Stat 361 research, advised by Professor Leahy, I built a coding agent completely from scratch. The goal in one line: take a local, open-weight language model and turn it into something that can actually <em>do</em> software work — reliably — without leaning on any framework. Let me show you the gap that makes that hard.</aside>
+
+<!-- ===== 1. TITLE ===== -->
+<section data-anim="1" class="title-slide" data-transition="zoom">
+  <h1 class="a1-h">Coding Agent from Scratch</h1>
+  <p class="subline a1-line">A local, open-weight model that I turned into a working coding agent</p>
+  <p class="subline a1-line">I wrote the loop, the tools, the sandbox, and the benchmark myself, with no framework</p>
+  <p class="byline a1-line">Vincent Le · Knox College · Math/Stat 361 · Advisor: Prof. Andrew Leahy</p>
+  <aside class="notes">WHAT TO SAY (≈25s): Hi everyone, I'm Vincent. For my Math/Stat 361 research with Professor Leahy, I built a coding agent from scratch. It takes a local, open-weight model running on my own GPU and makes it do real software work. The ReAct loop isn't my invention; Claude and Codex use the same pattern. What I did was write every part myself so I can explain it, and then measure how well it works without fooling myself. The measuring part is what I care about most today.</aside>
 </section>
 
-<section>
-  <h2>A great writer is not a reliable agent</h2>
+<!-- ===== 2. WRITER != AGENT + 3 PILLARS ===== -->
+<section data-anim="2">
+  <h2>What an agent needs that a text generator lacks</h2>
   <table>
-    <thead>
-      <tr><th>LLM as text generator</th><th>What an agent must do</th></tr>
-    </thead>
+    <thead><tr><th>LLM as a text generator</th><th>What an agent must do</th></tr></thead>
     <tbody>
-      <tr><td>Writes plausible code in one shot</td><td><strong>Use tools</strong> against a real filesystem</td></tr>
-      <tr><td>No memory of what it just did</td><td><strong>Track state</strong> across many steps</td></tr>
-      <tr><td>Declares broken work "done"</td><td><strong>Verify</strong> its own output</td></tr>
-      <tr><td>Stalls or loops on an error</td><td><strong>Recover</strong> from failure</td></tr>
+      <tr class="a2-row"><td>Writes plausible code in one shot</td><td><strong>Use tools</strong> on a real filesystem</td></tr>
+      <tr class="a2-row"><td>Forgets what it just did</td><td><strong>Track state</strong> across many steps</td></tr>
+      <tr class="a2-row"><td>Calls broken work "done"</td><td><strong>Verify</strong> its own output</td></tr>
+      <tr class="a2-row"><td>Stalls or loops on an error</td><td><strong>Recover</strong> from failure</td></tr>
     </tbody>
   </table>
-  <p style="margin-top: 0.8em;"><strong>Research question:</strong> can a <em>local</em> open-weight model become a <em>reliable</em> coding agent — and what does it take to get there?</p>
-  <p class="fragment"><strong>Why from scratch?</strong> No LangChain, no LangGraph — so I control and understand every piece: the <em>loop</em>, the <em>tools</em>, the <em>sandbox</em>, the <em>memory</em>.</p>
-  <aside class="notes">WHAT TO SAY (≈75s): Here's the core tension. A modern LLM is a fantastic <em>writer</em> — ask it for a function and it'll hand you clean, plausible code instantly. But being a good writer is not the same as being a good <em>agent</em>. Left to run on its own against a real codebase, it falls apart in predictable ways. It hallucinates tool calls — invents functions or arguments that don't exist. It loses track of state, forgetting what it already changed. Worst of all, it'll confidently declare broken work "done" — and when it hits an error, it tends to stall or spin instead of fixing it. So the research question is on the right: can a <em>local</em>, open-weight model — not a giant hosted API — actually become a <em>reliable</em> coding agent, and what engineering does that take? And why build it from scratch? Because the interesting part isn't gluing libraries together — it's understanding and controlling every piece myself: the reasoning loop, the tools, the sandbox, and the memory. If a framework hides it, I can't study it.</aside>
+  <div class="pillars">
+    <div class="pillar p1 a2-pillar"><div class="pname">LOCAL</div><div class="pdesc">Runs on my GPU. Code never leaves the machine.</div></div>
+    <div class="pillar p2 a2-pillar"><div class="pname">TRANSPARENT</div><div class="pdesc">Every tool call and reasoning step is visible.</div></div>
+    <div class="pillar p3 a2-pillar"><div class="pname">FROM SCRATCH</div><div class="pdesc">I understand and control every line.</div></div>
+  </div>
+  <aside class="notes">WHAT TO SAY (≈70s): A modern LLM is a strong writer. Ask for a function and you get clean code right away. But working against a real codebase is a different job, and the model fails in predictable ways: it invents tool calls that don't exist, forgets what it already changed, and reports broken work as done. So my research question is whether a local, open-weight model can be made into a reliable agent, and what that actually takes. Why from scratch, when Claude and Codex exist? Three reasons, shown on the bottom row. LOCAL means it runs on my own GPU and the code never leaves the machine. TRANSPARENT means you can watch every tool call and every reasoning step, which matters for a research project. FROM SCRATCH means there's no LangChain hiding the parts, so I can read and explain every line. It isn't as capable as Claude, which was never the goal.</aside>
 </section>
 
-<section>
-  <h2>What It Does</h2>
-  <p>Hand it a repo with <strong>failing tests</strong>. It runs the suite, reads the failures, edits the source, and re-runs — <em>until green</em>, then stops.</p>
-  <pre><code class="language-python">$ agent "fix the failing tests in this repo"
-
-→ run_bash("pytest -q")        # FAILED  3/11  (8 failing)
-→ read_file("src/calc.py")     # inspect the bug
-→ apply_patch("src/calc.py")   # off-by-one + None guard
-→ run_bash("pytest -q")        # 11/11 passing
-done — stopped on its own
-</code></pre>
-  <p class="fragment"><strong>Verified end-to-end</strong> — fixed a buggy demo repo to <em>11/11 passing</em>.</p>
-  <aside class="notes">WHAT TO SAY (≈75s): So what does it actually do? I hand the agent a repository where the tests are broken, and give it one English instruction: "fix the failing tests." Watch the loop. First it reaches for a tool — run_bash — and runs pytest. Three of eleven pass; eight failing. Now it reasons: it reads the source to see what's going on. It finds the bug — an off-by-one and a missing None check — and applies a patch directly to the file. Then, crucially, it doesn't assume it's done — it runs pytest AGAIN to check its own work. Eleven of eleven, green. And it stops on its own, because the goal is met. Nobody told it how many steps to take — it decided, by observing the test output, that the job was finished. I ran exactly this and it took a buggy repo all the way to eleven out of eleven. That run-read-patch-verify cycle is the whole game.</aside>
+<!-- ===== 3. WHAT IT DOES (animated trace) ===== -->
+<section data-anim="3">
+  <h2>What it does</h2>
+  <p class="small">Give it a plain-English spec, with no tests. It writes the code, then writes and runs its own check, and stops when the check passes.</p>
+  <div class="trace">
+    <span class="tl tr-l"><span class="you">$ agent "write int_to_roman and roman_to_int, and prove they round-trip"</span></span>
+    <span class="tl tr-l"><span class="arr">→ write_file</span> roman.py        <span class="cmt"># both functions + a round-trip check</span></span>
+    <span class="tl tr-l"><span class="arr">→ run_bash</span>   python roman.py    <span class="ok">4, 9, 58, 1994, 3999: all PASS</span></span>
+    <span class="tl tr-l"><span class="fin">finish</span>   round-trip holds, stopped on its own</span>
+  </div>
+  <aside class="notes">WHAT TO SAY (≈60s): I give it one plain-English spec and no tests: write int_to_roman and roman_to_int for 1 to 3999, and check that they round-trip. Watch what it does. It writes both functions in one file, and at the bottom it adds its own check: take a number, convert it to a Roman numeral, convert that back, and confirm you get the original number. Then it runs the file, and all five values pass. It calls finish on its own because its check passed. What matters here is that it never saw a test from me. It wrote the code and its own way to check it, then ran it, the same way I would.</aside>
 </section>
 
-<section>
-  <h2>Architecture</h2>
-  <div style="display:flex; align-items:center; justify-content:center; gap:0.9em; margin:0.8em 0 1.1em; font-size:0.82em;">
-    <div style="background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:0.5em 0.85em; text-align:center;">Terminal<br><span style="color:var(--fg-dim); font-size:0.72em;">you</span></div>
-    <div style="color:var(--accent); font-size:1.4em;">&rarr;</div>
-    <div style="background:var(--bg3); border:1.5px solid var(--accent); border-radius:10px; padding:0.5em 0.95em; text-align:center;"><strong>Agent</strong><br><span style="color:var(--fg-dim); font-size:0.72em;">ReAct loop</span></div>
-    <div style="color:var(--cyan); font-size:1.5em;">&#8644;</div>
-    <div style="display:flex; flex-direction:column; gap:0.6em;">
-      <div style="background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:0.45em 0.85em; text-align:center;">vLLM &middot; Qwen3&#8209;14B<br><span style="color:var(--fg-dim); font-size:0.72em;">stateless API · 32K</span></div>
-      <div style="background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:0.45em 0.85em; text-align:center;">Tools<br><span style="color:var(--fg-dim); font-size:0.72em;">sandboxed workspace</span></div>
+<!-- ===== 4. ARCHITECTURE ===== -->
+<section data-anim="4">
+  <h2>The whole system</h2>
+  <div class="archrow">
+    <div class="archbox a4-box">Terminal<br><small>you</small></div>
+    <div class="archsep">→</div>
+    <div class="archbox hot a4-box"><strong>Agent</strong><br><small>the ReAct loop</small></div>
+    <div class="archsep">⇄</div>
+    <div style="display:flex; flex-direction:column; gap:0.5em;">
+      <div class="archbox a4-box">vLLM · Qwen3-14B<br><small>stateless API · 32K</small></div>
+      <div class="archbox a4-box">Tools<br><small>sandboxed workspace</small></div>
     </div>
   </div>
-  <ul>
-    <li>The model is just a <strong>stateless, OpenAI-compatible API</strong> — no memory of its own.</li>
-    <li>The <em>loop</em> drives everything: think → call a tool → feed the result back.</li>
-    <li>Every tool runs inside a <strong>sandboxed workspace</strong> — file ops can't escape it.</li>
+  <ul class="small">
+    <li class="a4-li">The model is a <strong>stateless API</strong>. It remembers nothing between calls.</li>
+    <li class="a4-li">The <em>loop</em> does the deciding: it calls a tool, then reads the result back.</li>
+    <li class="a4-li">The tools do the work, confined to a <strong>sandboxed workspace</strong>.</li>
   </ul>
-  <aside class="notes">WHAT TO SAY (≈60s): Here's the whole system on one slide — under six boxes. On the left, I talk to it from a terminal. That goes to the Agent, which is the ReAct loop — the part I actually wrote. The Agent talks to a vLLM server running Qwen3-14B locally with a 32K context window, over an OpenAI-compatible API. The key thing about that two-way arrow: the server is completely stateless — it remembers nothing between calls. So all the memory lives in the loop, not the model. The Agent also calls the Tools, and those results flow right back in as the next observation. And the tools sit inside a sandboxed workspace — reads and writes are confined there. So: the loop is the brain, the model is a stateless oracle it queries, and the tools are its hands — safely boxed in.</aside>
+  <aside class="notes">WHAT TO SAY (≈50s): The whole system fits in five boxes. I type to it from a terminal. That goes to the Agent, which is the ReAct loop I wrote. The Agent queries a vLLM server running Qwen3-14B locally, with a 32K context, over an OpenAI-compatible API. On that two-way arrow, the server is stateless and remembers nothing between calls, so all the memory lives in the loop, not the model. The Agent also calls the tools, and their results come back in as the next thing the model sees. Those tools run inside a sandboxed workspace. So the loop holds the memory and makes the decisions, the model is just something it queries, and the tools do the actual work.</aside>
 </section>
 
-<section>
-  <h2>The ReAct Loop — the heart</h2>
-  <h3>reason &rarr; act &rarr; observe &rarr; repeat</h3>
-  <pre><code class="language-python">for _ in range(max_iters):           # safety net
-    resp = model.chat(messages, tools=schemas)
-    msg = resp.choices[0].message
-    messages.append(msg)             # remember what it said
-    if not msg.tool_calls:           # no tool? it's done
+<!-- ===== 5. REACT LOOP (cycle + code) ===== -->
+<section data-anim="5">
+  <h2>The ReAct loop</h2>
+  <div class="loopgrid">
+    <div class="cycle">
+      <svg viewBox="0 0 280 280">
+        <defs><marker id="ah" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" fill="#7bdcb5"/></marker></defs>
+        <path class="c-arrow" d="M 188 56 A 100 100 0 0 1 224 140" fill="none" stroke="#7bdcb5" stroke-width="3" marker-end="url(#ah)"/>
+        <path class="c-arrow" d="M 224 140 A 100 100 0 0 1 188 224" fill="none" stroke="#7bdcb5" stroke-width="3" marker-end="url(#ah)"/>
+        <path class="c-arrow" d="M 92 224 A 100 100 0 0 1 56 140" fill="none" stroke="#7bdcb5" stroke-width="3" marker-end="url(#ah)"/>
+        <path class="c-arrow" d="M 56 140 A 100 100 0 0 1 92 56" fill="none" stroke="#7bdcb5" stroke-width="3" marker-end="url(#ah)"/>
+      </svg>
+      <div class="cnode top c-node"><div class="cn-t">REASON</div><div class="cn-s">think</div></div>
+      <div class="cnode right c-node"><div class="cn-t">ACT</div><div class="cn-s">call tool</div></div>
+      <div class="cnode bot c-node"><div class="cn-t">OBSERVE</div><div class="cn-s">read result</div></div>
+      <div class="cnode left c-node"><div class="cn-t">REPEAT</div><div class="cn-s">loop</div></div>
+    </div>
+    <div>
+      <pre class="a5-code"><code class="language-python">for _ in range(max_iters):        # safety net
+    msg = model.chat(messages, tools)
+    messages.append(msg)          # remember!
+    if not msg.tool_calls:        # no tool = done
         return msg.content
-    for call in msg.tool_calls:      # act + observe
-        result = run_tool(call.name, call.args)
+    for call in msg.tool_calls:   # act + observe
+        r = run_tool(call.name, call.args)
         messages.append({"role": "tool",
-                         "tool_call_id": call.id,
-                         "content": result})</code></pre>
-  <ul>
-    <li>The <em>messages</em> list <strong>IS the memory</strong> — the API is stateless, so we re-send the whole conversation every turn.</li>
-  </ul>
-  <aside class="notes">WHAT TO SAY (≈90s): This is the engine of the whole agent — four steps in a loop: reason, act, observe, repeat. We hand the model the conversation so far plus the JSON schemas for our tools. It reasons, and one of two things happens. If it returns plain content with no tool calls, it's finished — we hand that back. Otherwise it returns one or more tool_calls; we execute each, and append the output back into the conversation as a message with role "tool". Then we loop. The most important idea here: the model is <em>stateless</em> — the API remembers nothing between calls. So <em>this messages list is the memory.</em> Every turn we re-send the entire growing conversation; that's how it "remembers" what it read and did. Each result carries a tool_call_id — the pairing that tells the model which call this answer belongs to, since it may fire several at once. And the for-loop has a hard max-iters cap, so a confused agent can never spin forever.</aside>
+            "tool_call_id": call.id, "content": r})</code></pre>
+      <ul class="small">
+        <li class="a5-li">The <code>messages</code> list holds the memory. The API is stateless, so we re-send the whole conversation each turn.</li>
+      </ul>
+    </div>
+  </div>
+  <aside class="notes">WHAT TO SAY (≈65s): The loop has four steps that repeat: reason, act, observe, then go again. I send the model the conversation so far plus the JSON schemas for my tools. It either returns plain text, which means it's done, or it returns tool calls. I run each call and append the result as a message with role tool, then loop. The model is stateless: the server keeps nothing between calls, so this growing messages list is the memory, and every turn I re-send the whole conversation. That's how it remembers what it read and did. The for-loop also has a hard max-iters cap so a stuck agent can't run forever. I wrote this part myself because a framework would hide it, and then I couldn't study how it works.</aside>
 </section>
 
-<section>
-  <h2>The 11 Tools</h2>
-  <table>
-    <thead>
-      <tr><th>Category</th><th>Tools</th></tr>
-    </thead>
-    <tbody>
-      <tr><td><em>File I/O</em></td><td><code>read_file</code> &middot; <code>write_file</code> &middot; <code>apply_patch</code> &middot; <code>multi_edit</code></td></tr>
-      <tr><td><em>Discovery</em></td><td><code>list_dir</code> &middot; <code>glob_files</code> &middot; <code>grep_files</code></td></tr>
-      <tr><td><em>Execution</em></td><td><code>run_bash</code> &middot; <code>run_python</code></td></tr>
-      <tr><td><em>Delegation</em></td><td><code>spawn_subagent</code></td></tr>
-      <tr><td><em>Completion</em></td><td><code>finish</code> — agent calls this to END the session (prose alone does <em>not</em> end it)</td></tr>
-    </tbody>
-  </table>
-  <ul>
-    <li>Tools are an <strong>append-only registry</strong> of functions + JSON schemas — adding a tool <em>never touches the loop</em>.</li>
-  </ul>
-  <aside class="notes">WHAT TO SAY (≈60s): Ten tools, and I won't read them all — the grouping is the point. Four families: <em>File I/O</em> to read and edit code; <em>Discovery</em> to find your way around a repo; <em>Execution</em> to actually run things — bash and Python; and <em>Delegation</em>, where the agent can spawn a sub-agent for a focused subtask. The design idea that makes this clean: each tool is just a function plus a JSON schema, dropped into an append-only registry. The loop you just saw is completely generic — it only knows "call a tool by name." So adding an eleventh tool is a one-line registration; I never reopen the loop.</aside>
+<!-- ===== 6. TOOLS + SANDBOX ===== -->
+<section data-anim="6">
+  <h2>11 tools, and a sandbox</h2>
+  <div class="toolgroups">
+    <div class="tgroup"><div class="glabel">File I/O</div><div class="chips">
+      <span class="chip a6-chip">read_file</span><span class="chip a6-chip">write_file</span>
+      <span class="chip a6-chip">apply_patch</span><span class="chip a6-chip">multi_edit</span></div></div>
+    <div class="tgroup"><div class="glabel">Discovery</div><div class="chips">
+      <span class="chip a6-chip">list_dir</span><span class="chip a6-chip">glob_files</span>
+      <span class="chip a6-chip">grep_files</span></div></div>
+    <div class="tgroup"><div class="glabel">Execution</div><div class="chips">
+      <span class="chip a6-chip">run_bash</span><span class="chip a6-chip">run_python</span></div></div>
+    <div class="tgroup"><div class="glabel">Delegation + Done</div><div class="chips">
+      <span class="chip a6-chip">spawn_subagent</span><span class="chip a6-chip">finish</span></div></div>
+  </div>
+  <div class="sandbox a6-box">
+    <div class="sb-label">_safe_path: one workspace, every file op goes through it</div>
+    <div class="sb-inner">paths are resolved and confined (CWE-22 defense) · tools return <code>"ERROR: …"</code>, never crash the loop</div>
+  </div>
+  <div class="attack a6-attack"><span class="path">../../etc/passwd</span> &nbsp;⟶&nbsp; <span class="bounce">✗ rejected, stays in the workspace</span></div>
+  <aside class="notes">WHAT TO SAY (≈65s): Eleven tools in four families. I won't read them all; the grouping is what matters. File I/O to read and edit code. Discovery to find your way around a repo. Execution, which is bash and Python, to actually run things. And delegation plus finish. Replying in prose does not end a session; only calling finish does. Each tool is a function with a JSON schema in an append-only registry, so I can add a tool without changing the loop. The sandbox is the safety part. Every file path goes through one function, _safe_path, which resolves it and rejects anything that points outside the workspace. So if the model tries to read dot-dot-slash etc-passwd, the read is rejected. And a failing tool returns an ERROR string instead of throwing, so the model reads it as feedback and tries again.</aside>
 </section>
 
-<section>
-  <h2>What Makes It an <em>Agent</em>, Not a Chatbot</h2>
-  <h3>Reliability engineering — the interesting part</h3>
-  <ul>
-    <li class="fragment"><strong>Sandbox</strong> — <code>_safe_path()</code> confines every file op to one workspace (CWE-22 path-traversal defense).</li>
-    <li class="fragment"><strong>Verifies its own work</strong> — runs <em>pytest</em>, reads the failures, patches, re-runs until green (tests as a feedback signal).</li>
-    <li class="fragment"><strong>Survives long tasks</strong> — context <em>compaction</em> summarizes old history past ~24k tokens, keeps the recent 10 (fits the 32K window).</li>
-    <li class="fragment"><strong>Recovers, doesn't crash</strong> — tools return <code>"ERROR: ..."</code> strings, never raise — so a bad call becomes feedback the model can fix.</li>
-  </ul>
-  <aside class="notes">WHAT TO SAY (≈90s): This slide is the heart of the project — the difference between a demo and something you can depend on. First, a sandbox: every file path runs through one function, _safe_path, that resolves it and rejects anything escaping the workspace — a real path-traversal defense, so the model can't write to your home directory by accident. Second, the one I care about most: it verifies its own work. It runs pytest, reads the failures, edits the code, and re-runs — the test suite becomes a feedback signal, the same loop a human uses. Third, long tasks blow past the context window, so past about 24k tokens it summarizes old history and keeps the recent ten messages — that's what lets it survive a long session in a 32K window. And fourth: tools never raise an exception that kills the loop. A bad command comes back as an "ERROR" string, which the model reads as more feedback and tries again. Together, these give you autonomy that keeps going — in the right direction.</aside>
+<!-- ===== 7. RELIABILITY ===== -->
+<section data-anim="7">
+  <h2>What makes it reliable</h2>
+  <div class="rcard a7-card">After each edit it reruns pytest and keeps fixing until the tests pass, so it <strong>checks its own work</strong>.</div>
+  <div class="rcard a7-card">On a long task it stays inside the 32K window by summarizing old history past about 24K tokens and keeping the last 10 messages.</div>
+  <div class="rcard a7-card">A failing tool returns an <code>"ERROR: …"</code> string instead of throwing, so one bad call becomes feedback and the loop <strong>keeps going</strong>.</div>
+  <aside class="notes">WHAT TO SAY (≈65s): These three things are what make it dependable rather than a one-off demo. The first is the one I care about most: it checks its own work. After it edits the code, it reruns pytest and keeps fixing until the tests pass, the same way I would. The second is context. A long task runs past the 32K window, so past about 24 thousand tokens it summarizes the old history and keeps the last ten messages, which lets it finish. The third is error handling. A failing tool returns an ERROR string instead of throwing, so a bad call becomes feedback the model can act on instead of a crash. That is most of where the reliability comes from, together with the sandbox.</aside>
 </section>
 
-<section>
-  <h2>Does It Actually Work?</h2>
-  <h3>You can't claim capability from 3 toy tasks</h3>
+<!-- ===== 8. BENCHMARK + HONEST SCORING ===== -->
+<section data-anim="8">
+  <h2>Does it actually work?</h2>
+  <h3>I built a 627-task benchmark to measure it</h3>
   <ul>
-    <li>So we built a <strong>627-task benchmark</strong>: 163 HumanEval+ &nbsp;+&nbsp; 424 MBPP (downloaded &amp; converted) &nbsp;+&nbsp; 37 hand-authored <strong>HARD</strong> tasks.</li>
-    <li><span style="opacity:0.85">HARD = debugging, refactors, multi-file, DP, graphs, OOP, parsing.</span></li>
-    <li class="fragment"><strong>Honest scoring:</strong> the test files are <em>hidden</em> from the agent while it works — it can't read them to hard-code answers — and restored only for grading.</li>
-    <li class="fragment"><strong>Validation gate:</strong> every task is proven real — the reference solution <em>passes</em>, the empty stub <em>fails</em>.</li>
+    <li class="a8-li">The 627 tasks are 163 from HumanEval+, 424 from MBPP, and 37 <strong>hard</strong> ones I wrote by hand (debugging, refactors, multi-file, DP, graphs, OOP).</li>
+    <li class="a8-li">While the agent works, the <strong>test files are hidden</strong>, so it can't open them and copy the answers. They come back only for grading.</li>
+    <li class="a8-li">Before a task counts, I check it is real: the reference solution must pass and an empty stub must fail.</li>
   </ul>
-  <aside class="notes">WHAT TO SAY (≈90s): Three hand-picked demos prove nothing — so the real question is whether this holds up at scale. We built a 627-task benchmark: 163 from HumanEval+, 424 from MBPP — standard sets we downloaded and converted — plus 37 hard problems I wrote by hand: debugging, refactors, multi-file changes, dynamic programming, graphs, OOP, parsing. But the number only matters if the methodology is honest, so two things. First, the test files are hidden from the agent the entire time it's working — it physically cannot open the tests and hard-code the outputs — and they're only restored at grading time. That's the difference between measuring problem-solving and measuring cheating. Second, a validation gate runs before any task counts: the reference solution must pass and an empty stub must fail. If either is wrong, the task is broken and we throw it out — so every one of those 627 is a real, well-formed problem. That's what makes the next number trustworthy.</aside>
+  <aside class="notes">WHAT TO SAY (≈60s): A few hand-picked demos don't show much, so I built a benchmark of 627 tasks: 163 from HumanEval+, 424 from MBPP, and 37 hard ones I wrote by hand. Two things keep the number honest. First, the test files are hidden from the agent the whole time it works, so it can't open them and copy the expected outputs; they only come back at grading time. Without that, I would be measuring copying instead of problem-solving. Second, before a task counts I check that the reference solution passes and an empty stub fails, so every one of the 627 is a real, working problem. That sets up the number on the next slide.</aside>
 </section>
 
-<section>
-  <h2>Results: does it actually work?</h2>
-  <p style="text-align:center; font-size:1.35em; margin:0.3em 0;">
-    Full <strong>627-task</strong> suite (clean re-run): <strong>67.3%</strong>
-    <span style="font-size:0.7em; opacity:.7;">(422/627, 95% CI 64–71%)</span>
-  </p>
-  <table style="width:62%; margin:0.35em auto;">
-    <thead><tr><th>Slice</th><th>Pass-rate</th></tr></thead>
-    <tbody>
-      <tr><td>HumanEval+ (163)</td><td><strong>79.8%</strong></td></tr>
-      <tr><td>MBPP — de-leaked (424)</td><td><strong>66.7%</strong></td></tr>
-      <tr><td>curated hard, hand-written (37)</td><td><strong>21.6%</strong></td></tr>
-    </tbody>
-  </table>
-  <p style="text-align:center; font-size:0.8em; opacity:.85; margin:0.2em auto; max-width:86%;">
-    <strong>The honest headline is the FIX, not the number.</strong> An earlier 79.9% was inflated:
-    ~93% of the 424 MBPP tasks leaked 2 of 3 graded asserts into the agent's prompt. We caught it in
-    review, fixed the harness (spec-only goals), and re-ran clean → <strong>67.3%</strong>. HumanEval
-    (never leaked) is unchanged at ~80%. Catching &amp; fixing our own benchmark leak <em>is</em> the result.
-  </p>
-  <p class="fragment" style="margin-top:0.4em;">
-    <strong>Key insight (from the eval traces):</strong> the dominant failure wasn't <em>bad code</em> —
-    the model often <strong>replied in prose instead of calling a tool</strong> (no_action: 66/627).
-    A <em>guardrail</em> that nudges it to act recovered most — a tool-use fix, not a smarter model.
-  </p>
-  <aside class="notes">WHAT TO SAY (≈90s): Here's the payoff — and a lesson in honesty. On the full 627-task suite the agent passes 67.3 percent — 422 of 627 — with the tests hidden the whole time so it can't cheat. Now the honest part: an earlier version of this slide said 79.9 percent. While hardening the project I found a bug in my OWN benchmark — for about 93 percent of the 424 MBPP tasks, two of the three graded assert statements were leaking into the prompt the agent could read. So it could pattern-match the answers. I fixed the harness to show only the spec, re-ran clean, and the honest number is 67.3. HumanEval, which never had the leak, is unchanged at about 80 percent; MBPP dropped from inflated to 67. I'm showing you the lower, true number on purpose — catching and fixing my own leak is the result I'm most proud of. The other finding, from the eval traces: the dominant failure wasn't bad code, it was the model replying in prose without calling a tool — 66 times out of 627. One guardrail that nudges it to act recovered most of those. So the gains came from diagnosing a tool-use failure, not a smarter model.</aside>
+<!-- ===== 9. RESULTS ===== -->
+<section data-anim="9">
+  <h2>Results</h2>
+  <div class="resgrid">
+    <div class="bignum"><span class="a9-count" data-to="67.3">0.0%</span>
+      <span class="sub">422 / 627 · 95% CI 64-71%</span></div>
+    <div class="slicebars">
+      <div class="sbar-row a9-bar"><div>HumanEval+ (163)</div><div class="sbar-track"><div class="sbar-fill b1" data-pct="79.8"></div></div><div class="sbar-val">79.8%</div></div>
+      <div class="sbar-row a9-bar"><div>MBPP (424)</div><div class="sbar-track"><div class="sbar-fill b2" data-pct="66.7"></div></div><div class="sbar-val">66.7%</div></div>
+      <div class="sbar-row a9-bar"><div>HARD, hand-written (37)</div><div class="sbar-track"><div class="sbar-fill b3" data-pct="21.6"></div></div><div class="sbar-val">21.6%</div></div>
+    </div>
+  </div>
+  <ul class="small">
+    <li class="a9-li">The 21.6% on the hard set is real; those problems are genuinely difficult.</li>
+    <li class="a9-li">The most common failure was the model <strong>answering in prose instead of calling a tool</strong> (66 of 627). A guardrail that pushes it to act fixed most of them.</li>
+  </ul>
+  <aside class="notes">WHAT TO SAY (≈70s): On the full 627-task suite the agent passes 67.3 percent, 422 of 627, with the tests hidden the whole time. The 95 percent confidence interval is 64 to 71. By slice, HumanEval is about 80, MBPP about 67, and my hard hand-written set is 21.6. That low number is expected; those problems are genuinely hard. The part I find more interesting is at the bottom. When I read the failure traces, the most common failure wasn't bad code. It was the model writing an answer in prose without calling a tool, 66 times out of 627. I added a guardrail that pushes it to act, and that fixed most of them. So the improvement came from spotting a tool-use bug, not from a bigger model. I'm especially careful about what's on the next slide.</aside>
 </section>
 
-<section>
-  <h2>Honest limitations &amp; what I learned</h2>
-  <ul>
-    <li>No true <strong>tool parallelism</strong> — tools run one at a time per loop.</li>
-    <li>A <strong>single workspace</strong> — no isolation across concurrent tasks.</li>
-    <li><strong>Toy-to-moderate</strong> task scale — not SOTA SWE-bench-level difficulty.</li>
-    <li>Open-weight model is <strong>stochastic</strong> — same prompt, different runs.</li>
+<!-- ===== 10. INTEGRITY: leak fix ===== -->
+<section data-anim="10" data-transition="zoom">
+  <h2>A leak in my own benchmark</h2>
+  <div class="split2">
+    <div class="panel bad a10-bad"><div class="pn">79.9%</div><div class="pl">earlier · leaked</div></div>
+    <div class="arrow-mid a10-arrow">⟶</div>
+    <div class="panel good a10-good"><div class="pn"><span class="a10-count" data-to="67.3">0.0%</span></div><div class="pl">now · leak fixed</div></div>
+  </div>
+  <ul class="small">
+    <li class="a10-li">For ~93% of MBPP tasks, <strong>2 of the 3 graded asserts leaked into the prompt</strong>. The agent could pattern-match the answers.</li>
+    <li class="a10-li">Caught it in a multi-agent + cross-model review, fixed the test harness (spec-only goals), re-ran clean. HumanEval (never leaked) stayed at ~80%.</li>
+    <li class="a10-li">I found and fixed this in my own benchmark, which is why I report 67.3 and not 79.9.</li>
   </ul>
-  <h3 style="margin-top:0.6em;">What I learned</h3>
-  <ul>
-    <li>Reliability is mostly <em>engineering around</em> an already-capable model.</li>
-    <li>Building from scratch made the <em>failure modes</em> concrete — I could see them, not guess.</li>
-  </ul>
-  <aside class="notes">WHAT TO SAY (≈60s): I want to be straight about the limits. There's no real tool parallelism — tools execute one at a time. There's a single shared workspace, so I'm not isolating concurrent tasks. The task scale is toy-to-moderate — not SWE-bench-scale repository surgery. And because it's an open-weight model with sampling, it's stochastic: the same task can pass one run and fail the next. Two takeaways. First, reliability turned out to be mostly engineering — the sandbox, the verify-loop, the error contract, the guardrail — built around a model that was already capable. Second, doing this from scratch is what made the failure modes concrete. I could read them in the traces, which is the whole reason I found the tool-use bug.</aside>
+  <aside class="notes">WHAT TO SAY (≈75s): An earlier version of this slide said 79.9 percent, and it was wrong. While hardening the project I found a bug in my own benchmark: for about 93 percent of the 424 MBPP tasks, two of the three graded assert statements were showing up in the goal text the agent could read. So it could match the expected outputs instead of solving the problem. I didn't find it by luck; it came out of a multi-agent audit and a cross-model review of my eval harness. I changed the goals to show only the spec, regenerated all the tasks, and re-ran. The number dropped from 79.9 to 67.3. HumanEval never had the leak and didn't move, staying around 80, which is the consistency check you would want to see. The number I report is the lower one, 67.3. For a research talk, I think it counts more that I caught and fixed this in my own setup.</aside>
 </section>
 
-<section class="title-slide">
-  <h1>From text generator to reliable agent</h1>
-  <p style="font-size:1.1em; margin-top:0.4em;">
-    An LLM that <strong>uses tools</strong>, <strong>manages state</strong>,
-    <strong>verifies its own work</strong>, and <strong>recovers from failure</strong>.
-  </p>
-  <p style="margin-top:0.8em; opacity:.85;">
-    Next: harder multi-file tasks &amp; true parallelism.
-  </p>
-  <p style="margin-top:1em; font-size:1.05em;">
-    <em>github.com/VincentTLe/coding-agent</em>
-  </p>
-  <p style="margin-top:1em; font-size:1.3em;"><strong>Thank you — Questions?</strong></p>
-  <aside class="notes">WHAT TO SAY (≈30s): So that's the thesis, start to finish: taking an LLM and turning it into a reliable agent — one that uses tools, manages its own state, verifies its work, and recovers when things go wrong. The natural next step is harder multi-file tasks and real tool parallelism. The full code is on GitHub at the link here. Thank you — I'd love to take your questions.</aside>
+<!-- ===== 11. SKILLOPT (simple) ===== -->
+<section data-anim="11">
+  <h2>Can it improve its own instructions?</h2>
+  <h3>SkillOpt tunes a text "skill" the agent reads, with the model weights <em>frozen</em></h3>
+  <div class="skloop">
+    <div class="sknode frozen a11-node"><div class="skt">skill.md</div><div class="sks">the text we tune<br>(weights ❄ frozen)</div></div>
+    <div class="skarr a11-node">→</div>
+    <div class="sknode a11-node"><div class="skt">agent runs</div><div class="sks">train tasks</div></div>
+    <div class="skarr a11-node">→</div>
+    <div class="sknode a11-node"><div class="skt">optimizer</div><div class="sks">proposes edits</div></div>
+    <div class="skarr a11-node">→</div>
+    <div class="sknode gate a11-node"><div class="skt">keep only if</div><div class="sks">held-out ↑</div></div>
+  </div>
+  <div class="skbars">
+    <div class="skbar-row a11-bar"><div>empty</div><div class="skbar-track"><div class="skbar-fill" data-pct="78.6"></div><div class="skbar-whisk" data-c="78.6"></div></div><div class="skbar-val">78.6%</div></div>
+    <div class="skbar-row a11-bar"><div>seed (TDD)</div><div class="skbar-track"><div class="skbar-fill" data-pct="73.8"></div><div class="skbar-whisk" data-c="73.8"></div></div><div class="skbar-val">73.8%</div></div>
+    <div class="skbar-row a11-bar"><div>optimized</div><div class="skbar-track"><div class="skbar-fill" data-pct="77.4"></div><div class="skbar-whisk" data-c="77.4"></div></div><div class="skbar-val">77.4%</div></div>
+  </div>
+  <p class="sk-verdict a11-verdict">The gaps between the bars are smaller than the run-to-run noise, shown in yellow, so there is <strong>no statistically significant winner</strong>.</p>
+  <aside class="notes">WHAT TO SAY (≈70s): The last thread: can the agent improve its own instructions? Not by retraining; the model weights stay frozen. Instead I tune a text document, a skill, that the agent reads before it works. The loop is along the top: start from a skill, run the agent on training tasks, have a second model propose edits, and keep an edit only if it raises the score on a held-out split. Then I tested three versions once each: an empty skill, a human-written TDD seed, and the optimized one. They came out at 78.6, 73.8, and 77.4 percent. When I re-ran the exact same config, about 6 of 84 tasks flipped just from the model's randomness. So the gaps between the bars are smaller than that run-to-run noise, the yellow brackets. The result is inconclusive and under-powered, and the McNemar p-values are all well above 0.05; I have them if you want them. I measured carefully enough to see it is a wash, instead of reporting the 77 as a win.</aside>
+</section>
+
+<!-- ===== 12. LIMITS + CLOSE ===== -->
+<section data-anim="12" data-transition="zoom">
+  <h2>Limits, and what's next</h2>
+  <ul class="small">
+    <li class="a12-li"><strong>Toy-to-moderate</strong> scale: 67.3% overall, but only 21.6% on hard tasks. Not SWE-bench-grade repo surgery.</li>
+    <li class="a12-li">No real <strong>tool parallelism</strong>, one shared workspace, and a <strong>stochastic</strong> open-weight model. The same task can flip run to run.</li>
+    <li class="a12-li"><strong>What I learned:</strong> most of the reliability came from engineering rather than from the model itself. Writing it myself is what let me find the failure modes.</li>
+  </ul>
+  <p class="center a12-close" style="margin-top:0.7em; font-size:0.92em;">The agent takes a plain-English spec and gives back code it has already run and checked.</p>
+  <div class="demo-cue a12-cue">github.com/VincentTLe/coding-agent &nbsp;·&nbsp; now: live demo, turning a spec into working code</div>
+  <aside class="notes">WHAT TO SAY (≈45s): A few honest limits. The scale is toy-to-moderate, 67.3 overall but only 21.6 on the hard set, so this is not SWE-bench-scale repository work. There is no real tool parallelism, there is one shared workspace, and because it is an open-weight model with sampling, the same task can pass one run and fail the next. What I took away is that reliability came mostly from engineering: the sandbox, the verify loop, and the error handling, around a model that was already fairly capable. Building it from scratch is what let me see the failure modes well enough to fix them. The code is on GitHub. To finish, I will give it a spec with no tests and we will watch it write the code and check itself, live.</aside>
 </section>
 
 </div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/highlight/highlight.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/notes/notes.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+
+<script src="libs/reveal.min.js"></script>
+<script src="libs/highlight.min.js"></script>
+<script src="libs/notes.min.js"></script>
+<script src="libs/gsap.min.js"></script>
 <script>
   Reveal.initialize({
     hash: true, controls: true, progress: true, slideNumber: 'c/t',
     history: false, keyboard: true, overview: true, center: true, touch: true,
-    transition: 'slide', backgroundTransition: 'fade',
+    transition: 'slide', transitionSpeed: 'default', backgroundTransition: 'fade',
     plugins: [RevealHighlight, RevealNotes],
-    width: 1280, height: 800, margin: 0.04, minScale: 0.2, maxScale: 2.0,
+    width: 1280, height: 800, margin: 0.045, minScale: 0.2, maxScale: 2.0,
   });
 
-  // Count-up animation for any .count headline number (no-op now that the results slide
-  // shows honest static text instead of a single aggregate; kept for when the clean
-  // re-run number is added back). Reduced-motion respected; runs once per element.
-  function countUp(slide) {
+  // ---- GSAP entrance animations, driven per slide ----
+  // Tasteful only: fades/slides in, the ReAct cycle drawing, count-ups, bars growing.
+  // No infinite glows. prefers-reduced-motion -> everything snaps to final state.
+  const $ = (slide, sel) => Array.from(slide.querySelectorAll(sel));
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Every element an entrance tween animates FROM a hidden/offset state.
+  const ANIM_SEL = '.a1-line,.a2-row,.a2-pillar,.tr-l,.a4-box,.a4-li,.c-node,.a5-code,.a5-li,.a6-chip,.a6-box,.a6-attack,.a7-card,.a8-li,.a9-li,.a10-bad,.a10-arrow,.a10-good,.a10-li,.a11-node,.a11-verdict,.a12-li,.a12-close,.a12-cue';
+
+  // Kill in-flight tweens on a slide we're leaving and force its content visible, so
+  // fast back-and-forth navigation can never strand an element at autoAlpha:0.
+  function ensureVisible(slide) {
     if (!slide || !window.gsap) return;
-    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    slide.querySelectorAll('.count').forEach(el => {
-      if (el.dataset.done) return;
-      const to = parseFloat(el.dataset.to);
-      const dec = el.dataset.to.includes('.') ? 1 : 0;
-      if (reduce) { el.textContent = to.toFixed(dec) + '%'; el.dataset.done = '1'; return; }
-      const o = { v: 0 };
-      gsap.to(o, { v: to, duration: 1.1, ease: 'power2.out',
-        onUpdate() { el.textContent = o.v.toFixed(dec) + '%'; },
-        onComplete() { el.textContent = to.toFixed(dec) + '%'; el.dataset.done = '1'; } });
+    const els = slide.querySelectorAll(ANIM_SEL);
+    gsap.killTweensOf(els);
+    gsap.set(els, { autoAlpha: 1, x: 0, y: 0, scale: 1 });
+  }
+
+  function setFinal(slide) {
+    // Snap every animated-from-zero element to its end state (used for reduced-motion).
+    ensureVisible(slide);
+    $(slide, '.sbar-fill, .skbar-fill').forEach(el => { el.style.width = el.dataset.pct + '%'; });
+    $(slide, '.skbar-whisk').forEach(el => { placeWhisk(el); el.style.opacity = 1; });
+    $(slide, '.a9-count, .a10-count').forEach(el => { el.textContent = parseFloat(el.dataset.to).toFixed(1) + '%'; });
+    $(slide, '.c-arrow').forEach(p => { p.style.strokeDasharray = 'none'; p.style.strokeDashoffset = 0; });
+  }
+
+  // Whisker = run-to-run noise band (~6/84 ≈ ±7pts) centered on each bar's value.
+  function placeWhisk(el) {
+    const c = parseFloat(el.dataset.c), noise = 7.1;
+    el.style.left = (c - noise) + '%';
+    el.style.width = (2 * noise) + '%';
+  }
+
+  function countUp(el, to) {
+    if (!el) return;
+    const o = { v: 0 };
+    gsap.to(o, { v: to, duration: 1.1, ease: 'power2.out',
+      onUpdate() { el.textContent = o.v.toFixed(1) + '%'; },
+      onComplete() { el.textContent = to.toFixed(1) + '%'; } });
+  }
+
+  function drawArrows(slide, delay) {
+    $(slide, '.c-arrow').forEach((p, i) => {
+      const len = p.getTotalLength();
+      gsap.set(p, { strokeDasharray: len, strokeDashoffset: len });
+      gsap.to(p, { strokeDashoffset: 0, duration: 0.45, delay: delay + i * 0.28, ease: 'power1.inOut' });
     });
   }
-  Reveal.on('ready', () => { Reveal.layout(); countUp(Reveal.getCurrentSlide()); });
-  Reveal.on('slidechanged', e => countUp(e.currentSlide));
+
+  function animateSlide(slide) {
+    if (!slide || !window.gsap) return;
+    if (reduce) { setFinal(slide); return; }
+    const a = slide.dataset.anim;
+    const fromUp = (els, d, stag) => { if (els.length) gsap.from(els, { autoAlpha: 0, y: 16, duration: 0.5, delay: d || 0, stagger: stag || 0.1, ease: 'power2.out' }); };
+
+    switch (a) {
+      case '1':
+        gsap.from(slide.querySelectorAll('.a1-line'), { autoAlpha: 0, y: 14, duration: 0.6, stagger: 0.14, delay: 0.2, ease: 'power2.out' });
+        break;
+      case '2':
+        fromUp($(slide, '.a2-row'), 0.1, 0.09);
+        gsap.from(slide.querySelectorAll('.a2-pillar'), { autoAlpha: 0, y: 18, scale: 0.9, duration: 0.5, stagger: 0.12, delay: 0.5, ease: 'back.out(1.5)' });
+        break;
+      case '3':
+        gsap.from(slide.querySelectorAll('.tr-l'), { autoAlpha: 0, x: -14, duration: 0.4, stagger: 0.22, delay: 0.15, ease: 'power2.out' });
+        break;
+      case '4':
+        gsap.from(slide.querySelectorAll('.a4-box'), { autoAlpha: 0, scale: 0.85, duration: 0.45, stagger: 0.12, ease: 'back.out(1.6)' });
+        fromUp($(slide, '.a4-li'), 0.7, 0.1);
+        break;
+      case '5':
+        gsap.from(slide.querySelectorAll('.c-node'), { autoAlpha: 0, scale: 0.5, duration: 0.45, stagger: 0.18, delay: 0.2, ease: 'back.out(2)' });
+        drawArrows(slide, 0.5);
+        gsap.from(slide.querySelector('.a5-code'), { autoAlpha: 0, x: 24, duration: 0.6, delay: 0.6, ease: 'power2.out' });
+        fromUp($(slide, '.a5-li'), 1.3, 0.1);
+        break;
+      case '6':
+        gsap.from(slide.querySelectorAll('.a6-chip'), { autoAlpha: 0, y: 10, scale: 0.85, duration: 0.35, stagger: 0.05, ease: 'back.out(1.8)' });
+        gsap.from(slide.querySelector('.a6-box'), { autoAlpha: 0, y: 14, duration: 0.5, delay: 0.85, ease: 'power2.out' });
+        { const atk = slide.querySelector('.a6-attack');
+          if (atk) gsap.from(atk, { autoAlpha: 0, x: -40, duration: 0.6, delay: 1.2, ease: 'back.out(2.2)' }); }
+        break;
+      case '7':
+        fromUp($(slide, '.a7-card'), 0.1, 0.16);
+        break;
+      case '8':
+        fromUp($(slide, '.a8-li'), 0.1, 0.16);
+        break;
+      case '9':
+        countUp(slide.querySelector('.a9-count'), 67.3);
+        $(slide, '.sbar-fill').forEach((el, i) => {
+          gsap.fromTo(el, { width: '0%' }, { width: el.dataset.pct + '%', duration: 0.9, delay: 0.3 + i * 0.18, ease: 'power2.out' });
+        });
+        fromUp($(slide, '.a9-li'), 1.2, 0.14);
+        break;
+      case '10':
+        gsap.from(slide.querySelector('.a10-bad'), { autoAlpha: 0, x: -28, duration: 0.5, ease: 'power2.out' });
+        gsap.from(slide.querySelector('.a10-arrow'), { autoAlpha: 0, scale: 0.4, duration: 0.45, delay: 0.45, ease: 'back.out(2)' });
+        gsap.from(slide.querySelector('.a10-good'), { autoAlpha: 0, x: 28, duration: 0.5, delay: 0.3, ease: 'power2.out' });
+        countUp(slide.querySelector('.a10-count'), 67.3);
+        fromUp($(slide, '.a10-li'), 0.9, 0.13);
+        break;
+      case '11':
+        gsap.from(slide.querySelectorAll('.a11-node'), { autoAlpha: 0, y: 12, duration: 0.4, stagger: 0.1, ease: 'power2.out' });
+        $(slide, '.skbar-fill').forEach((el, i) => {
+          gsap.fromTo(el, { width: '0%' }, { width: el.dataset.pct + '%', duration: 0.8, delay: 0.8 + i * 0.15, ease: 'power2.out' });
+        });
+        $(slide, '.skbar-whisk').forEach((el, i) => {
+          placeWhisk(el);
+          gsap.fromTo(el, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.5, delay: 1.5 + i * 0.12 });
+        });
+        gsap.from(slide.querySelector('.a11-verdict'), { autoAlpha: 0, y: 12, duration: 0.6, delay: 2.0, ease: 'power2.out' });
+        break;
+      case '12':
+        fromUp($(slide, '.a12-li'), 0.1, 0.16);
+        gsap.from(slide.querySelector('.a12-close'), { autoAlpha: 0, duration: 0.6, delay: 0.7 });
+        gsap.from(slide.querySelector('.a12-cue'), { autoAlpha: 0, y: 12, duration: 0.5, delay: 1.0, ease: 'power2.out' });
+        break;
+    }
+  }
+
+  Reveal.on('ready', e => { Reveal.layout(); animateSlide(e.currentSlide); });
+  Reveal.on('slidechanged', e => { if (e.previousSlide) ensureVisible(e.previousSlide); animateSlide(e.currentSlide); });
 </script>
 </body>
 </html>
