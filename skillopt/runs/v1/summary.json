@@ -1,0 +1,10 @@
+{
+  "epochs": 4,
+  "steps_per_epoch": 2,
+  "L": 4,
+  "jobs": 8,
+  "seed_val_score": 0.6666666666666666,
+  "best_val_score": 0.75,
+  "stopped_early": true,
+  "best_skill": "skillopt/runs/v1/best_skill.md"
+}
