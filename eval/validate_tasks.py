@@ -18,7 +18,8 @@ MỤC ĐÍCH CỦA BƯỚC VALIDATE NÀY:
   Chỉ khi stub FAIL VÀ reference PASS → task mới "thật" và xứng đáng vào bộ eval.
 
 Lời giải để ở cây SONG SONG eval/solutions/<rel>/ (mirror task dir theo tên file)
-nên hỗ trợ cả task nhiều file: validate ghi đè từng file lời giải vào task rồi chạy.
+nên hỗ trợ task có NHIỀU FILE TOP-LEVEL (glob *.py không đệ quy — file trong thư mục
+con của solutions/ sẽ KHÔNG được ghi đè): validate ghi đè từng file lời giải vào task rồi chạy.
 
 Chạy (CPU-bound, không đụng GPU → cho --jobs cao):
     python eval/validate_tasks.py --jobs 16                 # tất cả task
@@ -65,13 +66,14 @@ sys.path.insert(0, str(ROOT))
 # Dùng lại hàm của run.py thay vì viết lại → đảm bảo validate dùng ĐÚNG logic chấm,
 # không phải logic viết tay có thể khác với eval thật.
 from eval.run import (  # noqa: E402
-    TASKS_DIR,       # hằng số đường dẫn thư mục tasks
-    discover_tasks,  # hàm tìm tất cả task
-    rel_id,          # hàm lấy ID tương đối của task
-    restore_files,   # hàm khôi phục file về trạng thái ban đầu
-    run_pytest,      # hàm chạy pytest và trả về (passed, output)
-    select_tasks,    # hàm lọc task theo filter
-    snapshot_files,  # hàm chụp ảnh nội dung file vào RAM
+    TASKS_DIR,            # hằng số đường dẫn thư mục tasks
+    _acquire_eval_lock,   # lock 1-eval-1-lúc — validate cũng GHI lên cây tasks dùng chung
+    discover_tasks,       # hàm tìm tất cả task
+    rel_id,               # hàm lấy ID tương đối của task
+    restore_files,        # hàm khôi phục file về trạng thái ban đầu
+    run_pytest,           # hàm chạy pytest và trả về (passed, output)
+    select_tasks,         # hàm lọc task theo filter
+    snapshot_files,       # hàm chụp ảnh nội dung file vào RAM
 )
 
 # Thư mục chứa lời giải tham chiếu (reference solutions) — cây song song với tasks/.
@@ -199,6 +201,14 @@ def main() -> int:
     # `ap.parse_args()` — đọc và phân tích tham số dòng lệnh.
     args = ap.parse_args()
 
+    # validate GHI ĐÈ lời giải vào eval/tasks rồi restore — đúng cái cây dùng chung mà
+    # run.py coi lock là BẮT BUỘC. Không giữ lock mà chạy song song với một eval thật:
+    # validate ghi reference vào đúng lúc eval đang chấm → điểm sai cả hai phía.
+    # _acquire_eval_lock tự in chi tiết lock; exit 2 = usage/precondition error.
+    if not _acquire_eval_lock():
+        print("validate_tasks: một eval/validate khác đang giữ lock — chờ nó xong rồi chạy lại.")
+        return 2
+
     # Tìm và lọc task.
     # discover_tasks(TASKS_DIR): tìm tất cả task trong eval/tasks/ (đệ quy, bỏ qua _ và .).
     # select_tasks(..., args.filter): lọc theo --filter nếu có.
@@ -265,6 +275,12 @@ def main() -> int:
                 # Sau khi move: src không còn tồn tại, dst là thư mục task cũ.
                 # discover_tasks() sẽ bỏ qua _quarantine/ vì tên bắt đầu bằng _.
                 shutil.move(str(src), str(dst))
+            # Kéo theo cả lời giải mirror eval/solutions/<rel>/ vào CẠNH task vừa cách ly
+            # (đuôi __solution) — nếu để lại sẽ thành "lời giải mồ côi" trỏ vào task không
+            # còn tồn tại, và nếu task được phục hồi thì lời giải đi kèm vẫn ở ngay đó.
+            sol_src = SOLUTIONS_DIR / r["task"]
+            if sol_src.exists():
+                shutil.move(str(sol_src), str(dst) + "__solution")
         print(f"Quarantined {len(quarantinable)} tasks → {QUARANTINE} (discovery skips '_' dirs).")
     elif quarantinable:
         # Có task hỏng nhưng không dùng --quarantine → chỉ thông báo, không di chuyển.

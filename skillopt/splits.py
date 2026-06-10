@@ -13,7 +13,7 @@ chỉ chấm vài lần nên để to được.
 
 Phân tầng theo difficulty (easy/medium/hard) để mỗi split đều trải đủ độ khó. Tất định
 theo seed (mặc định 42) → cùng seed cho ra cùng split (tái lập được). Tái dùng
-discover_tasks/read_meta/rel_id của eval harness (không tự đọc lại task.md).
+discover_tasks/read_task_meta/rel_id của eval harness (không tự đọc lại task.md).
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ import argparse
 import random
 from pathlib import Path
 
-from eval.run import TASKS_DIR, discover_tasks, read_meta, rel_id
+from eval.run import TASKS_DIR, discover_tasks, read_task_meta, rel_id
 
 
 def _apportion(total: int, weights: list[int]) -> list[int]:
@@ -69,7 +69,7 @@ def make_splits(ratio: tuple[int, int, int] = (2, 1, 7), seed: int = 42,
     # Gom task-id theo difficulty, sắp xếp ổn định rồi xáo trộn (tất định theo seed).
     by_diff: dict[str, list[str]] = {}
     for t in tasks:
-        _, diff = read_meta(t)
+        diff = read_task_meta(t)["difficulty"]
         by_diff.setdefault((diff or "unknown").lower(), []).append(rel_id(t))
     rng = random.Random(seed)
     diffs = sorted(by_diff)

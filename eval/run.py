@@ -6,8 +6,9 @@ lên 500+ task:
   - chạy SONG SONG qua process pool (--jobs N),
   - lưu kết quả TĂNG DẦN ra JSONL (--resume tiếp tục được sau khi gián đoạn),
   - chấm pass-rate theo từng category/difficulty,
-  - và GIẤU file test khỏi agent trong lúc nó làm việc (chỉ trả lại để chấm)
-    → điểm số trung thực, agent không thể đọc test rồi hard-code đáp án.
+  - GIẤU file test với task đánh dấu hidden (agent không đọc được test để hard-code
+    đáp án), và với MỌI task — hidden lẫn visible — LUÔN ghi lại nội dung test GỐC
+    từ snapshot trước khi chấm → agent không thể sửa test để tự cho mình điểm.
 
 Chạy từ repo root (cần vLLM server đang chạy — scripts/start_vllm.sh):
     cd ~/code/coding-agent && source .venv/bin/activate
@@ -34,6 +35,12 @@ from __future__ import annotations
 # argparse là thư viện chuẩn của Python để đọc tham số dòng lệnh (--jobs 8, --filter ...).
 # Sau lệnh import này ta có thể gọi argparse.ArgumentParser() để tạo parser.
 import argparse
+
+# `import fcntl` — nạp module fcntl (file control, chỉ có trên Unix): thao tác file
+# descriptor ở mức kernel. Ở đây dùng fcntl.flock() — khoá file độc quyền do KERNEL
+# quản lý: tiến trình chết (kể cả SIGKILL/OOM) là kernel TỰ NHẢ khoá, không bao giờ
+# để lại lock "mồ côi" như pidfile tự chế (xem _acquire_eval_lock).
+import fcntl
 
 # `import json` — nạp module json: đọc/ghi dữ liệu theo định dạng JSON.
 # JSON (JavaScript Object Notation) là chuẩn trao đổi dữ liệu dạng text,
@@ -173,29 +180,38 @@ EVAL_LOCK = RESULTS_DIR / ".eval.lock"   # lock 1-eval-1-lúc (xem _acquire_eval
 # ĐỌC METADATA TỪ task.md  (Goal / Category / Difficulty)
 # ---------------------------------------------------------------------------
 
-# `def read_section(task_dir: Path, heading: str, default: str = "") -> str:`
+# `def read_section(task_dir: Path, heading: str, default: str = "", text: str | None = None) -> str:`
 # Định nghĩa hàm (function).
 #   def — từ khóa bắt đầu định nghĩa hàm.
 #   read_section — tên hàm.
-#   (task_dir: Path, heading: str, default: str = "") — danh sách tham số với type hint:
+#   (task_dir: Path, heading: str, default: str = "", text: str | None = None) — tham số:
 #     task_dir: Path — tham số nhận đường dẫn thư mục task (kiểu Path)
 #     heading: str — tiêu đề section cần đọc (kiểu chuỗi)
 #     default: str = "" — tham số tùy chọn, mặc định là chuỗi rỗng
+#     text: str | None = None — nội dung task.md ĐÃ ĐỌC SẴN (None = tự đọc từ disk)
 #   -> str — hàm trả về chuỗi (return type annotation)
-def read_section(task_dir: Path, heading: str, default: str = "") -> str:
+def read_section(task_dir: Path, heading: str, default: str = "", text: str | None = None) -> str:
     """Trả về text dưới '## <heading>' cho tới heading '##' kế tiếp.
 
-    Tổng quát hoá read_goal cũ: dùng chung để đọc Goal / Category / Difficulty.
+    Lõi parse chung cho mọi metadata trong task.md. Tham số `text` cho phép caller
+    đưa nội dung đã đọc sẵn — read_task_meta đọc file ĐÚNG 1 LẦN rồi parse 4 section,
+    thay vì mỗi section mở lại file (bản cũ đọc task.md tới 4 lần cho mỗi task).
     """
-    # Tạo đường dẫn tới file task.md trong thư mục task_dir.
-    # / toán tử nối Path, tương đương os.path.join(task_dir, "task.md").
-    md_path = task_dir / "task.md"
+    # Khi caller không đưa text sẵn → tự đọc task.md từ disk (hành vi cũ).
+    if text is None:
+        # Tạo đường dẫn tới file task.md trong thư mục task_dir.
+        # / toán tử nối Path, tương đương os.path.join(task_dir, "task.md").
+        md_path = task_dir / "task.md"
 
-    # `.exists()` — phương thức của Path, trả về True nếu file/thư mục tồn tại.
-    # `if not md_path.exists():` — nếu file KHÔNG tồn tại thì...
-    # `return default` — thoát hàm ngay, trả về giá trị mặc định.
-    if not md_path.exists():
-        return default
+        # `.exists()` — phương thức của Path, trả về True nếu file/thư mục tồn tại.
+        # Nếu file KHÔNG tồn tại → thoát hàm ngay, trả về giá trị mặc định.
+        if not md_path.exists():
+            return default
+
+        # `.read_text(encoding="utf-8", errors="replace")` — đọc toàn bộ nội dung file dạng text.
+        #   encoding="utf-8" — dùng bảng mã UTF-8 (hỗ trợ tiếng Việt, emoji...).
+        #   errors="replace" — nếu gặp ký tự không đọc được, thay bằng ? thay vì ném lỗi.
+        text = md_path.read_text(encoding="utf-8", errors="replace")
 
     # `lines: list[str] = []` — khai báo biến lines với type hint list[str] (danh sách chuỗi).
     # `[]` là danh sách rỗng. Ta sẽ dần thêm các dòng text vào đây.
@@ -205,12 +221,9 @@ def read_section(task_dir: Path, heading: str, default: str = "") -> str:
     # False = chưa vào section. Sẽ đổi thành True khi gặp heading cần tìm.
     in_section = False
 
-    # `.read_text(encoding="utf-8", errors="replace")` — đọc toàn bộ nội dung file dạng text.
-    #   encoding="utf-8" — dùng bảng mã UTF-8 (hỗ trợ tiếng Việt, emoji...).
-    #   errors="replace" — nếu gặp ký tự không đọc được, thay bằng ? thay vì ném lỗi.
     # `.splitlines()` — tách chuỗi thành danh sách các dòng (tách tại \n, \r\n).
     # `for line in ...:` — vòng lặp, biến line nhận lần lượt từng dòng.
-    for line in md_path.read_text(encoding="utf-8", errors="replace").splitlines():
+    for line in text.splitlines():
 
         # `line.startswith("## ")` — True nếu dòng BẮT ĐẦU bằng "## " (heading Markdown cấp 2).
         # `line[3:]` — cắt chuỗi từ vị trí 3 trở đi (bỏ "## ").
@@ -245,52 +258,40 @@ def read_section(task_dir: Path, heading: str, default: str = "") -> str:
     return text if text else default
 
 
-def read_goal(task_dir: Path) -> str:
-    """Mô tả nhiệm vụ cho agent (toàn bộ phần dưới '## Goal')."""
-    # Gọi hàm read_section để đọc section "Goal" từ task.md.
-    goal = read_section(task_dir, "Goal")
-    # `if goal:` — Python xem chuỗi rỗng "" là False, chuỗi có nội dung là True.
-    # Nếu tìm được goal → trả về nó.
-    if goal:
-        return goal
-    # Nếu task.md không có section Goal → tạo câu mô tả mặc định.
-    # f"..." — f-string (formatted string): {task_dir.name} được thay thế bằng giá trị thực.
-    # task_dir.name — tên thư mục cuối (ví dụ: "01_strings" từ đường dẫn eval/tasks/01_strings).
-    return f"Fix all failing tests in eval/tasks/{task_dir.name}/."
+def read_task_meta(task_dir: Path) -> dict:
+    """Đọc task.md ĐÚNG 1 LẦN → dict {goal, category, difficulty, hidden}.
 
-
-def read_meta(task_dir: Path) -> tuple[str, str]:
-    """(category, difficulty) — để gộp pass-rate theo nhóm. Default nếu task.md thiếu."""
-    # Đọc section "Category" và "Difficulty" từ task.md.
-    # Nếu không có → dùng giá trị mặc định "uncategorized" / "unknown".
-    cat = read_section(task_dir, "Category", "uncategorized")
-    dif = read_section(task_dir, "Difficulty", "unknown")
-
-    # Lấy dòng đầu tiên của section (có thể có nhiều dòng, ta chỉ cần dòng đầu).
-    # `cat.splitlines()` — tách thành danh sách dòng.
-    # `[0]` — lấy phần tử đầu tiên (index 0).
-    # `.strip().lower()` — chuẩn hóa: bỏ khoảng trắng, chuyển thường.
-    # `if cat else "uncategorized"` — nếu cat rỗng thì dùng giá trị mặc định.
-    cat = cat.splitlines()[0].strip().lower() if cat else "uncategorized"
-    dif = dif.splitlines()[0].strip().lower() if dif else "unknown"
-
-    # `cat or "uncategorized"` — nếu cat là chuỗi rỗng (falsy) thì dùng "uncategorized".
-    # Toán tử `or` trong Python: trả về vế trái nếu nó "truthy", ngược lại trả về vế phải.
-    # Trả về tuple (2 giá trị) — caller nhận bằng: cat, dif = read_meta(task_dir)
-    return cat or "uncategorized", dif or "unknown"
-
-
-def read_hide_tests(task_dir: Path) -> bool:
-    """Có GIẤU file test khỏi agent không?
-    '## Tests: hidden' → giấu (đo khả năng implement từ SPEC, chống agent đọc test
-    rồi hard-code đáp án). MẶC ĐỊNH KHÔNG giấu → task kiểu debug/sửa-test-fail giữ
-    nguyên workflow dùng pytest làm feedback (chính là khả năng 'agent tự verify'
-    mà ta muốn chứng minh). Converter set 'hidden' cho mọi benchmark task.
+    Thay 3 wrapper cũ (read_goal / read_meta / read_hide_tests) — mỗi wrapper tự mở
+    task.md nên evaluate_task đọc lại cùng 1 file tới 4 lần. Giờ đọc 1 lần, parse
+    4 section bằng read_section (lõi parse giữ nguyên).
     """
-    # Đọc section "Tests", mặc định "visible" nếu không có.
-    # .strip().lower().startswith("hidden") — True nếu nội dung bắt đầu bằng "hidden".
-    # Trả về kiểu bool (True/False).
-    return read_section(task_dir, "Tests", "visible").strip().lower().startswith("hidden")
+    md_path = task_dir / "task.md"
+    # Đọc nội dung 1 lần; file thiếu → text rỗng, mọi section rơi về default.
+    text = md_path.read_text(encoding="utf-8", errors="replace") if md_path.exists() else ""
+
+    # goal: mô tả nhiệm vụ cho agent (toàn bộ phần dưới '## Goal').
+    # Fallback khi thiếu section Goal: câu TƯƠNG ĐỐI "this directory" — bản cũ chèn
+    # 'eval/tasks/<name>/' vừa SAI với task lồng (bench/he_000 → chỉ còn 'he_000')
+    # vừa KHÔNG resolve được từ bên trong workspace của agent (agent cwd = task_dir,
+    # không thấy đường dẫn eval/tasks/ của repo).
+    goal = read_section(task_dir, "Goal", text=text) or "Fix all failing tests in this directory."
+
+    # category/difficulty — để gộp pass-rate theo nhóm. Section có thể nhiều dòng,
+    # chỉ lấy dòng đầu, chuẩn hóa lowercase; thiếu/rỗng → default.
+    # `or` trong Python: trả về vế trái nếu "truthy", ngược lại trả về vế phải.
+    cat = read_section(task_dir, "Category", "uncategorized", text=text)
+    dif = read_section(task_dir, "Difficulty", "unknown", text=text)
+    cat = (cat.splitlines()[0].strip().lower() if cat else "") or "uncategorized"
+    dif = (dif.splitlines()[0].strip().lower() if dif else "") or "unknown"
+
+    # hidden: '## Tests: hidden' → GIẤU file test trong lúc agent chạy (đo khả năng
+    # implement từ SPEC). MẶC ĐỊNH visible → task kiểu debug/sửa-test-fail giữ
+    # workflow dùng pytest làm feedback (khả năng 'agent tự verify' ta muốn chứng minh).
+    # Converter set 'hidden' cho mọi benchmark task. Lưu ý: visible hay hidden thì
+    # lúc CHẤM vẫn luôn dùng test gốc từ snapshot (xem evaluate_task).
+    hidden = read_section(task_dir, "Tests", "visible", text=text).strip().lower().startswith("hidden")
+
+    return {"goal": goal, "category": cat, "difficulty": dif, "hidden": hidden}
 
 
 # ---------------------------------------------------------------------------
@@ -341,7 +342,7 @@ def heal_corrupted_tasks() -> int:
     chưa kịp trả lại, hoặc file bị agent sửa còn sót. Fixtures được git track nên
     `git checkout -- eval/tasks/` trả MỌI file tracked về HEAD — phục cả test ẩn LẪN code agent
     đã sửa (mạnh hơn chỉ phục test). Trả số file đã chữa. Best-effort: không phải git repo →
-    bỏ qua. Gọi 1 lần ở đầu main(), SAU khi đã lấy lock (xem _eval_lock) để không giẫm lên một
+    bỏ qua. Gọi 1 lần ở đầu main(), SAU khi đã lấy lock (xem _acquire_eval_lock) để không giẫm lên một
     eval khác đang chạy dở. Chỉ chạy khi có thay đổi chưa-commit dưới eval/tasks (bình thường
     sạch → no-op; chỉ hard-kill mới để lại bẩn).
     """
@@ -383,58 +384,38 @@ def heal_corrupted_tasks() -> int:
         return 0                                # heal KHÔNG được làm hỏng eval
 
 
-def _pid_alive(pid: int) -> bool:
-    """True nếu tiến trình pid còn sống (signal 0 = chỉ kiểm tra, không gửi gì)."""
-    try:
-        os.kill(pid, 0)
-        return True
-    except OSError:
-        return False
-
-
-def _try_create_lock() -> bool:
-    """Tạo lock ATOMIC bằng O_CREAT|O_EXCL (kernel đảm bảo chỉ 1 tiến trình tạo được) — chống
-    TOCTOU của exists/read/write (Codex re-review #2). True nếu tạo được."""
-    try:
-        fd = os.open(str(EVAL_LOCK), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
-        os.write(fd, str(os.getpid()).encode())
-        os.close(fd)
-        return True
-    except FileExistsError:
-        return False
+# fd của lock — giữ MỞ suốt đời tiến trình ở biến module-level: flock gắn với fd,
+# đóng fd (hoặc để GC dọn) là MẤT lock. Kernel tự nhả khi tiến trình thoát.
+_lock_fd: int | None = None
 
 
 def _acquire_eval_lock() -> bool:
     """Khoá độc quyền 1-eval-1-lúc trên repo (hide/restore tại chỗ đua nhau khi 2 eval song song).
-    Atomic O_EXCL; lock cũ mà pid đã chết = stale → cướp (thử 1 lần). atexit CHỈ gỡ lock của
-    chính pid mình (không xoá nhầm lock tiến trình khác — Codex #2)."""
-    EVAL_LOCK.parent.mkdir(parents=True, exist_ok=True)
-    if not _try_create_lock():
-        try:
-            old = int((EVAL_LOCK.read_text(encoding="utf-8").strip() or "0"))
-        except Exception:
-            old = 0
-        if old and old != os.getpid() and _pid_alive(old):
-            print(f"ERROR: một eval khác (pid {old}) đang chạy trên repo này (lock {EVAL_LOCK}). "
-                  "Chờ nó xong, hoặc xoá lock nếu chắc chắn nó đã chết.")
-            return False
-        # stale (pid chết / lock rỗng) → xoá rồi thử tạo lại 1 lần
-        try:
-            EVAL_LOCK.unlink()
-        except FileNotFoundError:
-            pass
-        if not _try_create_lock():
-            print("ERROR: tranh lock với tiến trình khác — thử lại sau.")
-            return False
-    import atexit
 
-    def _release() -> None:
-        try:                            # CHỈ gỡ nếu lock vẫn là của mình
-            if EVAL_LOCK.exists() and EVAL_LOCK.read_text(encoding="utf-8").strip() == str(os.getpid()):
-                EVAL_LOCK.unlink()
-        except Exception:
-            pass
-    atexit.register(_release)
+    fcntl.flock(LOCK_EX | LOCK_NB) trên 1 fd mở thường trực: LOCK_EX = độc quyền,
+    LOCK_NB = không chờ (đang bị giữ → OSError ngay). Kernel nhả lock khi tiến trình
+    chết (kể cả SIGKILL) → KHÔNG cần pidfile, không cần dò pid sống/cướp lock stale,
+    không có race 2 tiến trình cùng unlink lock chết như bản pidfile cũ. File lock
+    tồn tại mãi trên disk — vô hại, thứ có ý nghĩa là flock trên fd chứ không phải file.
+    """
+    global _lock_fd
+    EVAL_LOCK.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(str(EVAL_LOCK), os.O_CREAT | os.O_RDWR, 0o644)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        os.close(fd)
+        try:                            # pid ghi trong file chỉ để debug "ai đang giữ"
+            holder = EVAL_LOCK.read_text(encoding="utf-8").strip() or "?"
+        except OSError:
+            holder = "?"
+        print(f"ERROR: một eval khác (pid {holder}) đang chạy trên repo này (lock {EVAL_LOCK}). "
+              "Chờ nó xong rồi chạy lại.")
+        return False
+    # Ghi pid của mình vào file (chỉ phục vụ debug — flock mới là cơ chế khoá thật).
+    os.ftruncate(fd, 0)
+    os.write(fd, str(os.getpid()).encode())
+    _lock_fd = fd
     return True
 
 
@@ -609,30 +590,29 @@ def run_pytest(task_dir: Path) -> tuple[bool, str]:
 # serialize hàm thành bytes, gửi qua IPC (inter-process communication), worker
 # deserialize và chạy. Python chỉ pickle được hàm ở MODULE LEVEL (có tên đầy đủ
 # như "eval.run.evaluate_task"), không pickle được hàm lồng (nested/lambda).
-def evaluate_task(payload: tuple) -> dict:
+def evaluate_task(payload: dict) -> dict:
     """Chạy agent trên 1 task rồi chấm điểm. Trả về result dict.
 
     Các bước (mọi thứ bọc trong finally để fixtures luôn được khôi phục):
       1. snapshot fixtures.
-      2. GIẤU file test (xoá khỏi workspace) → agent không thể đọc test để gian lận.
+      2. nếu task đánh dấu hidden: GIẤU file test (xoá khỏi workspace).
       3. chạy agent (stdout/stderr redirect ra log riêng cho gọn terminal).
-      4. trả file test lại → chấm bằng pytest độc lập.
+      4. ghi lại nội dung test GỐC từ snapshot (MỌI task) → chấm bằng pytest độc lập.
       5. restore fixtures.
     """
-    # "Giải nén" (unpack) tuple payload thành 6 biến riêng lẻ.
-    # Thứ tự phải khớp với thứ tự khi tạo tuple trong hàm main().
-    task_path, max_iters, time_budget, repeat_idx, log_dir, temperature, skill_path = payload
-
+    # payload là DICT key đặt tên (xem _build_work) — không còn tuple positional phải
+    # đếm chỉ số w[0]/w[3]/w[6] dễ lệch khi thêm field. Cùng MỘT tên time_budget_s
+    # xuyên suốt main → worker → run_agent.
     # Chuyển chuỗi đường dẫn thành Path object để dùng các method của Path.
-    # (Worker process nhận payload qua pickle — Path object có thể không serialize được
-    # nên gửi str rồi chuyển lại ở đây.)
-    task_dir = Path(task_path)
+    # (Worker process nhận payload qua pickle — gửi str rồi chuyển lại ở đây.)
+    task_dir = Path(payload["task_path"])
+    repeat_idx = payload["repeat_idx"]
+    skill_path = payload["skill_path"]
     # Lấy ID ổn định của task (ví dụ "bench/he_000").
     tid = rel_id(task_dir)
-    # Đọc metadata: thể loại và độ khó.
-    category, difficulty = read_meta(task_dir)
-    # Đọc mô tả nhiệm vụ cho agent.
-    goal = read_goal(task_dir)
+    # Đọc task.md đúng 1 lần: goal + category/difficulty + cờ hidden.
+    meta = read_task_meta(task_dir)
+    goal = meta["goal"]
 
     # Tắt log INFO (HTTP request spam của openai/httpx) trong worker → terminal sạch.
     # logging.getLogger() — lấy logger gốc (root logger).
@@ -642,33 +622,28 @@ def evaluate_task(payload: tuple) -> dict:
     # Bước 1: chụp ảnh toàn bộ file trong task_dir vào RAM.
     snap = snapshot_files(task_dir)
 
-    # ĐÂY LÀ CƠ CHẾ QUAN TRỌNG NHẤT CỦA EVAL: GIẤU TEST.
+    # ĐÂY LÀ CƠ CHẾ QUAN TRỌNG NHẤT CỦA EVAL: LUÔN CHẤM TRÊN TEST GỐC.
     #
-    # Vấn đề: Agent có thể "gian lận" bằng cách đọc nội dung file test_*.py,
-    # biết trước output mong đợi, rồi viết code hard-code đáp án thay vì thực sự
-    # giải quyết bài toán. Điểm số sẽ cao nhưng không phản ánh khả năng thực.
+    # Vấn đề 1 (hidden): Agent có thể "gian lận" bằng cách đọc nội dung test_*.py,
+    # biết trước output mong đợi, rồi hard-code đáp án. → Task đánh dấu hidden: XOÁ
+    # test khỏi workspace trong lúc agent chạy (đo khả năng implement từ SPEC).
     #
-    # Giải pháp: GIẤU file test trước khi agent chạy, chỉ trả lại sau khi agent
-    # đã nộp bài. Cách làm:
-    #   1. Đọc nội dung test vào RAM (đã có trong snap).
-    #   2. Xóa file test khỏi thư mục làm việc.
-    #   3. Agent chạy — chỉ thấy code stub và spec trong task.md, KHÔNG thấy test.
-    #   4. Sau khi agent xong → ghi lại file test.
-    #   5. Chạy pytest → điểm số THỰC SỰ.
+    # Vấn đề 2 (visible): Agent ĐƯỢC thấy và chạy test làm feedback (workflow debug
+    # tự-verify ta muốn đo) — nhưng nó cũng SỬA ĐƯỢC test, và bản cũ chấm luôn trên
+    # test đã sửa → agent có thể nới lỏng/xoá assert để tự cho mình điểm.
     #
-    # `hide = read_hide_tests(task_dir)` — đọc cờ từ task.md: có cần giấu không?
-    hide = read_hide_tests(task_dir)
+    # Giải pháp chung, KHÔNG còn bất đối xứng hidden/visible: với MỌI task, trước khi
+    # chấm ta GHI LẠI nội dung test gốc từ snapshot (RAM). Agent visible vẫn thấy và
+    # chạy test thoải mái — chỉ là không đổi được thứ dùng để chấm.
+    hide = meta["hidden"]
 
-    # Dict comprehension: tạo dict theo cú pháp {key: value for item in iterable if condition}.
-    # {f: c for f, c in snap.items() if f.name.startswith("test_") and f.suffix == ".py"}
+    # LUÔN gom test từ snapshot (kể cả khi không giấu) — đây là bản "chân lý" để chấm.
+    # Dict comprehension: {key: value for item in iterable if condition}.
     #   f.name: tên file (không có đường dẫn), ví dụ "test_solution.py".
     #   f.name.startswith("test_"): True nếu tên bắt đầu bằng "test_".
     #   f.suffix: phần mở rộng, ví dụ ".py".
-    #   Kết quả: dict chứa chỉ các file test Python.
-    # Nếu hide = False → hidden_tests = {} (dict rỗng, không giấu gì).
-    hidden_tests = ({f: c for f, c in snap.items()
-                     if f.name.startswith("test_") and f.suffix == ".py"}
-                    if hide else {})
+    test_files = {f: c for f, c in snap.items()
+                  if f.name.startswith("test_") and f.suffix == ".py"}
 
     # Khởi tạo các biến kết quả với giá trị mặc định (trường hợp xấu nhất).
     finish_reason = "agent_crash"  # lý do agent dừng
@@ -679,7 +654,7 @@ def evaluate_task(payload: tuple) -> dict:
     # Tạo đường dẫn file log cho task này.
     # `tid.replace('/', '__')` — thay dấu / bằng __ để dùng làm tên file an toàn.
     # `.r{repeat_idx}.log` — thêm chỉ số lần chạy (nếu chạy nhiều lần).
-    log_path = Path(log_dir) / f"{tid.replace('/', '__')}.r{repeat_idx}.log"
+    log_path = Path(payload["log_dir"]) / f"{tid.replace('/', '__')}.r{repeat_idx}.log"
 
     # `time.monotonic()` — ghi lại thời điểm bắt đầu (số giây từ mốc cố định).
     t0 = time.monotonic()
@@ -694,25 +669,28 @@ def evaluate_task(payload: tuple) -> dict:
         # `redirect_stderr(lf)` — chuyển hướng stderr vào file lf.
         # Dùng `with` để đảm bảo file được đóng khi ra khỏi khối, kể cả khi có lỗi.
         with open(log_path, "w", encoding="utf-8") as lf, redirect_stdout(lf), redirect_stderr(lf):
-            # Xóa file test khỏi thư mục làm việc (giấu khỏi agent).
-            # `for f in hidden_tests:` — lặp qua các KEY của dict (các Path object).
-            for f in hidden_tests:
-                # GIẤU test = XOÁ khỏi disk. test_*.py biến mất HẲN trong lúc agent chạy nên
-                # agent KHÔNG đọc được — kể cả qua run_bash/run_python (vốn không bị _safe_path
-                # chặn). [Codex review bắt: phương án "move ra backup" để lại file trên disk ở
-                # đường dẫn đoán được = LEAK mới — đã bỏ.] Nội dung gốc vẫn nằm trong snap (RAM)
-                # để trả lại bên dưới; nếu hard-kill bỏ qua finally → heal_corrupted_tasks() (git)
-                # khôi phục ở đầu run kế (phục cả test LẪN file agent đã sửa).
-                if f.exists():
-                    f.unlink()
+            # CHỈ task hidden mới xóa file test khỏi thư mục làm việc (giấu khỏi agent);
+            # task visible giữ nguyên test trên disk để agent dùng pytest làm feedback.
+            if hide:
+                # `for f in test_files:` — lặp qua các KEY của dict (các Path object).
+                for f in test_files:
+                    # GIẤU test = XOÁ khỏi disk. test_*.py biến mất HẲN trong lúc agent chạy nên
+                    # agent KHÔNG đọc được — kể cả qua run_bash/run_python (vốn không bị _safe_path
+                    # chặn). [Codex review bắt: phương án "move ra backup" để lại file trên disk ở
+                    # đường dẫn đoán được = LEAK mới — đã bỏ.] Nội dung gốc vẫn nằm trong snap (RAM)
+                    # để ghi lại bên dưới; nếu hard-kill bỏ qua finally → heal_corrupted_tasks() (git)
+                    # khôi phục ở đầu run kế (phục cả test LẪN file agent đã sửa).
+                    if f.exists():
+                        f.unlink()
 
             try:
                 # Chạy agent với task hiện tại.
                 # run_agent() là hàm chính của coding agent — nó gọi LLM, thực thi tool calls,
                 # sửa code, lặp cho đến khi xong hoặc hết turn.
                 # workspace=task_dir: agent sẽ làm việc trong thư mục task_dir.
-                res = run_agent(goal, workspace=task_dir, max_iters=max_iters,
-                                time_budget_s=time_budget, temperature=temperature,
+                res = run_agent(goal, workspace=task_dir, max_iters=payload["max_iters"],
+                                time_budget_s=payload["time_budget_s"],
+                                temperature=payload["temperature"],
                                 skill_path=skill_path)
                 # `.get("finish_reason", "unknown")` — đọc key "finish_reason" từ dict res.
                 # Nếu key không tồn tại → trả về "unknown" (tham số thứ 2 của .get()).
@@ -727,14 +705,17 @@ def evaluate_task(payload: tuple) -> dict:
                 # `{e!r}` trong f-string: !r gọi repr() trên e, in dạng debugging đầy đủ.
                 print(f"AGENT CRASHED: {e!r}")
 
-            # Trả lại file test sau khi agent đã xong — ghi nội dung GỐC từ snap (RAM) để chấm.
-            for f, content in hidden_tests.items():  # trả test lại để chấm
+            # Sau khi agent xong, với MỌI task (hidden lẫn visible): ghi lại nội dung
+            # test GỐC từ snap (RAM) trước khi chấm. Task hidden: trả test bị xoá về.
+            # Task visible: GHI ĐÈ mọi chỉnh sửa agent đã làm lên test_*.py — chặn
+            # gian lận "sửa test cho dễ pass rồi được chấm trên test đã sửa".
+            for f, content in test_files.items():
                 f.parent.mkdir(parents=True, exist_ok=True)
                 f.write_text(content, encoding="utf-8")
 
         # Trước khi chấm: dọn mọi path lạ (file/dir agent tạo, vd lời giải phụ hay
         # venv/ rò rỉ) → pytest chỉ collect đúng test gốc + edit của agent lên file gốc.
-        # Test ẩn vừa được trả lại ở trên đã nằm trong snap nên remove_extras GIỮ chúng.
+        # Test vừa được ghi lại nội dung gốc ở trên đã nằm trong snap nên remove_extras GIỮ chúng.
         remove_extras(task_dir, snap)
 
         # Chấm điểm bằng pytest.
@@ -749,8 +730,8 @@ def evaluate_task(payload: tuple) -> dict:
     # Dict literal: {key: value, key: value, ...}.
     return {
         "task": tid,                          # ID task
-        "category": category,                  # thể loại
-        "difficulty": difficulty,              # độ khó
+        "category": meta["category"],          # thể loại
+        "difficulty": meta["difficulty"],      # độ khó
         "passed": bool(passed),                # có pass không (ép kiểu bool cho chắc)
         "iters_used": iters_used,              # số turn đã dùng
         "finish_reason": finish_reason,        # lý do kết thúc
@@ -777,15 +758,21 @@ def select_tasks(all_tasks: list[Path], filters: list[str]) -> list[Path]:
     if not filters:
         return all_tasks
 
+    # CHỈ khi có filter dạng key=value mới cần metadata — lọc glob/substring chỉ so
+    # trên task id, khỏi mở task.md của TOÀN BỘ suite (600+ file) một cách vô ích.
+    need_meta = any("=" in flt for flt in filters)
+
     # `selected = []` — danh sách kết quả rỗng.
     selected = []
 
     # Duyệt qua từng task.
     for t in all_tasks:
         tid = rel_id(t)               # ID task như "bench/he_000"
-        cat, dif = read_meta(t)       # đọc metadata
-        # Tạo dict mapping tên thuộc tính → giá trị để tra cứu.
-        meta = {"category": cat, "difficulty": dif, "task": tid}
+        # Dict mapping tên thuộc tính → giá trị để tra cứu; metadata chỉ đọc khi cần.
+        meta = {"task": tid}
+        if need_meta:
+            m = read_task_meta(t)
+            meta["category"], meta["difficulty"] = m["category"], m["difficulty"]
         # `ok = True` — giả định task này khớp, sẽ đặt False nếu có filter nào không khớp.
         ok = True
 
@@ -965,8 +952,132 @@ def pass_rate(results: list) -> float:
 
 
 # ---------------------------------------------------------------------------
-# MAIN
+# MAIN — main() là pipeline tuyến tính; 3 helper dưới đây gánh từng khúc việc
 # ---------------------------------------------------------------------------
+
+def _write_config_sidecar(out_path: Path, args, ts: str) -> None:
+    """AUDITABILITY: ghi sidecar <out>.config.json → mỗi file kết quả TỰ MÔ TẢ (model,
+    sampling, giới hạn, git SHA, argv). Không có nó thì mọi so sánh A/B trong report chỉ
+    là 2 file JSONL không rõ sinh ra từ cấu hình nào (audit HIGH). Best-effort: sidecar
+    hỏng KHÔNG được làm hỏng eval — nhưng phải NÓI RA 1 dòng cảnh báo, không nuốt im
+    như `except: pass` cũ (vốn nuốt luôn cả mkdir load-bearing — đã hoist ra main).
+    """
+    try:
+        # Import ngay ĐẦU hàm (không lẫn giữa logic): get_model cần dotenv/SDK nên
+        # chỉ import ở đây, không đưa lên đầu module (giữ import eval.run nhẹ).
+        from src.agent import get_model
+        sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT,
+                             capture_output=True, text=True).stdout.strip() or "unknown"
+        cfg = {"timestamp": ts, "model": get_model(), "temperature": args.temperature,
+               "max_iters": args.max_iters, "agent_timeout": args.agent_timeout,
+               "jobs": args.jobs, "repeats": args.repeats,
+               "skill_path": str(args.skill_path) if args.skill_path else None,
+               "tasks_file": str(args.tasks_file) if args.tasks_file else None,
+               "git_sha": sha, "argv": sys.argv[1:]}
+        cfg_path = out_path.parent / (out_path.name + ".config.json")
+        # --resume CHỈ key theo (task, repeat_idx) nên có thể trộn 2 lần chạy khác CẤU HÌNH
+        # vào CÙNG 1 out file (chimera 2 model/skill). Trước khi ghi đè sidecar, nếu đang resume
+        # vào file đã có và config "đồng nhất" KHÁC lần trước → cảnh báo to (audit HIGH).
+        if args.resume and out_path.exists() and cfg_path.exists():
+            try:
+                old = json.loads(cfg_path.read_text(encoding="utf-8"))
+                keys = ("model", "temperature", "max_iters", "agent_timeout", "skill_path")
+                diff = {k: (old.get(k), cfg.get(k)) for k in keys if old.get(k) != cfg.get(k)}
+                if diff:
+                    print(f"⚠ RESUME CONFIG MISMATCH vào {out_path.name}: {diff}\n"
+                          "   → out-file sẽ TRỘN kết quả của 2 cấu hình khác nhau (không đồng nhất). "
+                          "Dùng --out riêng cho mỗi cấu hình để so sánh A/B chuẩn.")
+            except Exception:
+                # Sidecar cũ hỏng/không parse được → bỏ cảnh báo mismatch, vẫn ghi sidecar mới.
+                pass
+        cfg_path.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+    except Exception as e:  # noqa: BLE001
+        print(f"⚠ không ghi được config sidecar: {e!r} — eval vẫn chạy, "
+              "nhưng run này sẽ thiếu metadata cấu hình để đối chiếu A/B.")
+
+
+def _build_work(tasks: list[Path], done: set, args, log_dir: Path) -> list:
+    """Dựng danh sách payload cho worker: mỗi (task, repeat_idx) CHƯA có trong done.
+
+    Payload là DICT key đặt tên — evaluate_task và nhánh lỗi của _run_pool đọc cùng
+    bộ key, cùng MỘT tên time_budget_s xuyên suốt (tuple positional cũ phải đếm chỉ
+    số w[0]/w[3]/w[6], thêm field là lệch hàng loạt). Path → str vì payload đi qua
+    pickle sang process khác.
+    """
+    work = []
+    for t in tasks:
+        tid = rel_id(t)
+        # `range(args.repeats)` — dãy 0..repeats-1 (pass@k chạy mỗi task K lần).
+        for r in range(args.repeats):
+            # `(tid, r) not in done` — cặp này đã có trong --out (resume) thì bỏ qua.
+            if (tid, r) not in done:
+                work.append({
+                    "task_path": str(t),
+                    "max_iters": args.max_iters,
+                    "time_budget_s": args.agent_timeout,
+                    "repeat_idx": r,
+                    "log_dir": str(log_dir),
+                    "temperature": args.temperature,
+                    "skill_path": str(args.skill_path) if args.skill_path else None,
+                })
+    return work
+
+
+def _run_pool(work: list, out_path: Path, mode: str, jobs: int) -> list[dict]:
+    """Chạy toàn bộ work qua ProcessPool, ghi JSONL TĂNG DẦN, trả list result MỚI.
+
+    `get_context("spawn")` — mỗi worker process khởi động Python HOÀN TOÀN từ đầu
+    (không copy bộ nhớ cha như "fork"). An toàn hơn cho code có kết nối mạng
+    (OpenAI client, socket) vì tránh chia sẻ file descriptor đang mở giữa các process.
+
+    Kết quả ghi NGAY khi mỗi task xong → crash giữa chừng vẫn còn file JSONL hợp lệ,
+    --resume đọc lại được. mode "a" (append) khi --resume, "w" (ghi đè) khi chạy mới.
+    """
+    total = len(work)
+    ctx = get_context("spawn")  # mỗi worker re-import → OpenAI client riêng (an toàn fork).
+    new_results: list[dict] = []
+    n_done = 0
+
+    # `with open(...) as out_f, ProcessPoolExecutor(...) as ex:` — 2 context manager cùng lúc.
+    # Khi ra khỏi `with` → tất cả worker được dọn dẹp, file được đóng.
+    with open(out_path, mode, encoding="utf-8") as out_f, \
+            ProcessPoolExecutor(max_workers=jobs, mp_context=ctx) as ex:
+
+        # Gửi TẤT CẢ công việc vào pool ngay lập tức.
+        # `ex.submit(evaluate_task, w)` — gọi evaluate_task(w) trong worker, trả Future.
+        # Dict comprehension {future: payload} để khi future lỗi còn lấy lại payload.
+        futs = {ex.submit(evaluate_task, w): w for w in work}
+
+        # `as_completed(futs)` — iterator trả Future theo thứ tự HOÀN THÀNH (không phải
+        # submit): xử lý ngay kết quả mới nhất thay vì chờ tuần tự.
+        for fut in as_completed(futs):
+            try:
+                # `fut.result()` — giá trị trả về của evaluate_task(); worker ném
+                # exception thì re-raise ở đây.
+                r = fut.result()
+            except Exception as e:  # noqa: BLE001
+                # Worker process crash → dựng result lỗi từ CHÍNH các key của payload
+                # (cùng tên với evaluate_task — không còn w[0]/w[3]/w[6] đếm tay).
+                w = futs[fut]
+                r = {"task": rel_id(Path(w["task_path"])), "category": "?", "difficulty": "?",
+                     "passed": False, "iters_used": 0, "finish_reason": "worker_error",
+                     "duration_s": 0.0, "pytest_tail": repr(e), "repeat_idx": w["repeat_idx"],
+                     "skill_path": w["skill_path"]}
+
+            new_results.append(r)
+
+            # Ghi 1 dòng JSON (định dạng JSONL) NGAY LẬP TỨC rồi flush() — đẩy buffer
+            # xuống đĩa để crash ngay sau đó vẫn không mất dòng vừa ghi.
+            out_f.write(json.dumps(r) + "\n")
+            out_f.flush()
+
+            n_done += 1
+            mark = "PASS" if r["passed"] else "FAIL"
+            print(f"[{mark}] {r['task']} r{r['repeat_idx']} "
+                  f"({r['finish_reason']}, {r['iters_used']}it, {r['duration_s']}s) "
+                  f"[{n_done}/{total}]")
+    return new_results
+
 
 def main() -> int:
     # `argparse.ArgumentParser(description=...)` — tạo parser đọc tham số dòng lệnh.
@@ -988,7 +1099,8 @@ def main() -> int:
     # action="append" — mỗi lần dùng --filter thêm 1 giá trị vào list.
     # Ví dụ: --filter difficulty=hard --filter category=bench → args.filter = ["difficulty=hard", "category=bench"]
     ap.add_argument("--filter", action="append", default=[],
-                    help="key=value (category/difficulty/task) hoặc glob/substring; lặp được")
+                    help="key=value (category/difficulty/task) hoặc glob/substring; lặp được; "
+                         "loại trừ lẫn nhau với --tasks-file")
     ap.add_argument("--repeats", type=int, default=1, help="chạy mỗi task K lần (pass@k)")
 
     # action="store_true" — nếu flag xuất hiện → giá trị True, nếu không có → False.
@@ -1011,11 +1123,25 @@ def main() -> int:
     # Chọn task theo danh sách tường minh (mỗi dòng 1 task-id) — OR-semantics, dùng cho
     # split train/val/test của SkillOpt. Khác --filter (vốn AND nhiều điều kiện).
     ap.add_argument("--tasks-file", type=Path, default=None,
-                    help="file liệt kê task-id (mỗi dòng 1 id, vd 'bench/he_010') để chọn đúng các task đó")
+                    help="file liệt kê task-id (mỗi dòng 1 id, vd 'bench/he_010') để chọn đúng các task đó; "
+                         "loại trừ lẫn nhau với --filter")
 
     # `ap.parse_args()` — đọc sys.argv (tham số dòng lệnh thực tế) và trả về Namespace object.
     # args.jobs, args.filter, args.resume, v.v. — truy cập từng giá trị qua dấu chấm.
     args = ap.parse_args()
+
+    # `list(args.filter)` — tạo bản sao của list filters (tránh sửa list gốc của argparse).
+    filters = list(args.filter)
+    # Nếu có positional argument → thêm vào danh sách filters.
+    if args.filter_pos:
+        filters.append(args.filter_pos)
+
+    # Fail-fast: --tasks-file (OR theo danh sách id) và --filter (AND nhiều điều kiện) là
+    # 2 ngữ nghĩa chọn task khác nhau — bản cũ để --tasks-file ÂM THẦM nuốt --filter,
+    # người dùng tưởng đã lọc mà không. ap.error in usage + message rồi exit 2.
+    if args.tasks_file and filters:
+        ap.error("--tasks-file and --filter are mutually exclusive")
+
     # Fail-fast: --skill-path không tồn tại → exit ngay, đừng để worker chạy mới phát hiện.
     if args.skill_path is not None and not args.skill_path.exists():
         print(f"--skill-path not found: {args.skill_path}")
@@ -1030,7 +1156,7 @@ def main() -> int:
 
     # LOCK 1-eval-1-lúc: hide/snapshot/restore thao tác TẠI CHỖ trên eval/tasks dùng chung →
     # hai lần `python eval/run.py` chạy song song sẽ giẫm trạng thái giấu test của nhau (Codex
-    # review #4). Lấy lock độc quyền; nếu một eval khác đang giữ (pid còn sống) → từ chối.
+    # review #4). Lấy flock độc quyền; tiến trình khác đang giữ → từ chối chạy.
     if not _acquire_eval_lock():
         return 2
 
@@ -1047,17 +1173,12 @@ def main() -> int:
         # Trả về 2 = mã lỗi "usage error" (quy ước Unix).
         return 2
 
-    # `list(args.filter)` — tạo bản sao của list filters (tránh sửa list gốc của argparse).
-    filters = list(args.filter)
-    # Nếu có positional argument → thêm vào danh sách filters.
-    if args.filter_pos:
-        filters.append(args.filter_pos)
-
-    # Tìm tất cả task, rồi lọc theo filters.
+    # Tìm tất cả task, rồi lọc theo filters (đã dựng ở đầu main, trước khi lấy lock).
     all_tasks = discover_tasks(TASKS_DIR)
     tasks = select_tasks(all_tasks, filters)
-    # --tasks-file: nếu có, chọn ĐÚNG các task có id nằm trong file (OR-semantics),
-    # ghi đè --filter. Mỗi dòng 1 task-id; dòng trống / bắt đầu '#' bị bỏ qua.
+    # --tasks-file: nếu có, chọn ĐÚNG các task có id nằm trong file (OR-semantics;
+    # đã chặn dùng chung với --filter ở trên). Mỗi dòng 1 task-id; dòng trống /
+    # bắt đầu '#' bị bỏ qua.
     if args.tasks_file:
         wanted = {ln.strip() for ln in args.tasks_file.read_text(encoding="utf-8").splitlines()
                   if ln.strip() and not ln.strip().startswith("#")}
@@ -1084,38 +1205,11 @@ def main() -> int:
     # None or "abc" → "abc"; Path("/foo") or "abc" → Path("/foo").
     out_path = args.out or (RESULTS_DIR / f"run-{ts}.jsonl")
 
-    # AUDITABILITY: ghi sidecar <out>.config.json → mỗi file kết quả TỰ MÔ TẢ (model, sampling,
-    # giới hạn, git SHA, argv). Không có nó thì mọi so sánh A/B trong report chỉ là 2 file JSONL
-    # không rõ sinh ra từ cấu hình nào (audit HIGH). Bọc try để sidecar không bao giờ làm hỏng eval.
-    try:
-        from src.agent import get_model
-        _sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT,
-                              capture_output=True, text=True).stdout.strip() or "unknown"
-        _cfg = {"timestamp": ts, "model": get_model(), "temperature": args.temperature,
-                "max_iters": args.max_iters, "agent_timeout": args.agent_timeout,
-                "jobs": args.jobs, "repeats": args.repeats,
-                "skill_path": str(args.skill_path) if args.skill_path else None,
-                "tasks_file": str(args.tasks_file) if args.tasks_file else None,
-                "git_sha": _sha, "argv": sys.argv[1:]}
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        _cfg_path = out_path.parent / (out_path.name + ".config.json")
-        # --resume CHỈ key theo (task, repeat_idx) nên có thể trộn 2 lần chạy khác CẤU HÌNH
-        # vào CÙNG 1 out file (chimera 2 model/skill). Trước khi ghi đè sidecar, nếu đang resume
-        # vào file đã có và config "đồng nhất" KHÁC lần trước → cảnh báo to (audit HIGH).
-        if args.resume and out_path.exists() and _cfg_path.exists():
-            try:
-                old = json.loads(_cfg_path.read_text(encoding="utf-8"))
-                keys = ("model", "temperature", "max_iters", "agent_timeout", "skill_path")
-                diff = {k: (old.get(k), _cfg.get(k)) for k in keys if old.get(k) != _cfg.get(k)}
-                if diff:
-                    print(f"⚠ RESUME CONFIG MISMATCH vào {out_path.name}: {diff}\n"
-                          "   → out-file sẽ TRỘN kết quả của 2 cấu hình khác nhau (không đồng nhất). "
-                          "Dùng --out riêng cho mỗi cấu hình để so sánh A/B chuẩn.")
-            except Exception:
-                pass
-        _cfg_path.write_text(json.dumps(_cfg, indent=2, ensure_ascii=False), encoding="utf-8")
-    except Exception:
-        pass
+    # mkdir này LOAD-BEARING (open(out_path) bên dưới cần parent tồn tại khi --out trỏ
+    # vào dir chưa có) — nó từng nằm CHÌM trong khối sidecar best-effort, sidecar hỏng
+    # là mkdir cũng mất theo. Hoist ra đây để luôn chạy.
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_config_sidecar(out_path, args, ts)
 
     # Thư mục chứa log từng task.
     log_dir = RESULTS_DIR / "logs"
@@ -1130,93 +1224,19 @@ def main() -> int:
         done, results = load_done(out_path)
         print(f"Resume: {len(done)} (task,repeat) already done — skipping those.")
 
-    # Xây dựng danh sách công việc cần làm: (task, repeat_idx) chưa có trong done.
-    work = []
-    for t in tasks:
-        tid = rel_id(t)
-        # `range(args.repeats)` — tạo dãy số từ 0 đến repeats-1.
-        # range(3) → 0, 1, 2 (không bao gồm 3).
-        for r in range(args.repeats):
-            # `(tid, r) not in done` — kiểm tra cặp này chưa có trong set done.
-            if (tid, r) not in done:
-                # Tạo tuple payload để gửi cho worker.
-                # Dùng str(t) vì Path không pickle tốt qua process boundary.
-                work.append((str(t), args.max_iters, args.agent_timeout, r, str(log_dir),
-                             args.temperature,
-                             str(args.skill_path) if args.skill_path else None))
+    # Danh sách công việc: mọi (task, repeat_idx) chưa có trong done (payload dict).
+    work = _build_work(tasks, done, args, log_dir)
 
-    total = len(work)
     print(f"Discovered {len(all_tasks)} tasks; selected {len(tasks)}; "
-          f"{total} runs to do (repeats={args.repeats}, jobs={args.jobs}).")
+          f"{len(work)} runs to do (repeats={args.repeats}, jobs={args.jobs}).")
     print(f"Results → {out_path}   (per-task logs → {log_dir})\n")
 
-    if total:
-        # `get_context("spawn")` — tạo context với start method "spawn".
-        # spawn: mỗi worker process khởi động Python HOÀN TOÀN từ đầu (không copy bộ nhớ cha).
-        # An toàn hơn "fork" cho code có kết nối mạng (OpenAI client, socket) vì tránh
-        # chia sẻ file descriptor và kết nối đang mở giữa các process.
-        ctx = get_context("spawn")  # mỗi worker re-import → OpenAI client riêng (an toàn fork).
-        n_done = 0
-
-        # Kết quả ghi NGAY khi mỗi task xong → crash giữa chừng vẫn còn file hợp lệ,
-        # --resume đọc lại được. Chế độ "a" khi --resume (nối tiếp file cũ đã load ở
-        # load_done); ngược lại "w" để GHI ĐÈ — tránh âm thầm nối kết quả run trước
-        # vào file mặc định cùng tên (làm summary đếm trùng).
-        # mode "a" = append (nối vào cuối file), "w" = write (ghi mới/ghi đè).
+    if work:
+        # Chế độ "a" (append) khi --resume — nối tiếp file cũ đã load ở load_done;
+        # ngược lại "w" GHI ĐÈ — tránh âm thầm nối kết quả run trước vào file mặc định
+        # cùng tên (làm summary đếm trùng).
         mode = "a" if args.resume else "w"
-
-        # `with open(...) as out_f, ProcessPoolExecutor(...) as ex:` — 2 context manager cùng lúc.
-        # ProcessPoolExecutor(max_workers=args.jobs, mp_context=ctx):
-        #   max_workers=N — tạo pool N worker process.
-        #   mp_context=ctx — dùng spawn context đã tạo ở trên.
-        # Khi ra khỏi `with` → tất cả worker được dọn dẹp, file được đóng.
-        with open(out_path, mode, encoding="utf-8") as out_f, \
-                ProcessPoolExecutor(max_workers=args.jobs, mp_context=ctx) as ex:
-
-            # Gửi TẤT CẢ công việc vào pool ngay lập tức.
-            # `ex.submit(evaluate_task, w)` — gửi 1 công việc: gọi evaluate_task(w) trong worker.
-            # Trả về Future object — đại diện cho kết quả sẽ có trong tương lai.
-            # Dict comprehension: {future: payload} để sau khi future hoàn thành còn lấy lại payload.
-            futs = {ex.submit(evaluate_task, w): w for w in work}
-
-            # `as_completed(futs)` — iterator trả về Future theo thứ tự HOÀN THÀNH (không phải submit).
-            # Cơ chế: as_completed() dùng internal queue. Khi worker báo xong → future vào queue.
-            # Vòng lặp `for fut in as_completed(futs):` sẽ BLOCK (chờ) cho đến khi có future mới xong.
-            # Lợi thế: xử lý ngay kết quả mới nhất thay vì chờ tuần tự theo thứ tự submit.
-            for fut in as_completed(futs):
-                try:
-                    # `fut.result()` — lấy giá trị trả về của evaluate_task().
-                    # Nếu worker ném exception → fut.result() RE-RAISE exception đó ở đây.
-                    # BLOCK cho đến khi future hoàn thành (nhưng as_completed đã đảm bảo xong rồi).
-                    r = fut.result()
-                except Exception as e:  # noqa: BLE001
-                    # Worker process crash hoặc ném exception không bắt được → tạo result lỗi.
-                    w = futs[fut]  # lấy payload tương ứng từ dict futs
-                    r = {"task": rel_id(Path(w[0])), "category": "?", "difficulty": "?",
-                         "passed": False, "iters_used": 0, "finish_reason": "worker_error",
-                         "duration_s": 0.0, "pytest_tail": repr(e), "repeat_idx": w[3],
-                         "skill_path": w[6] if len(w) > 6 else None}
-
-                results.append(r)
-
-                # Ghi kết quả vào file JSONL NGAY LẬP TỨC (không đợi hết run).
-                # `json.dumps(r)` — chuyển dict r thành chuỗi JSON 1 dòng.
-                # json.dumps = "dump string": đầu ra là chuỗi (khác json.dump ghi vào file).
-                # `+ "\n"` — thêm ký tự xuống dòng để mỗi JSON object nằm trên 1 dòng riêng.
-                # Đây chính là định dạng JSONL (JSON Lines).
-                out_f.write(json.dumps(r) + "\n")
-
-                # `out_f.flush()` — ĐẨY dữ liệu từ buffer trong RAM xuống đĩa NGAY.
-                # Python mặc định ghi vào buffer (RAM) rồi mới flush khi buffer đầy hoặc file đóng.
-                # flush() đảm bảo nếu crash ngay sau dòng này, dòng JSON vừa ghi đã an toàn trên đĩa.
-                out_f.flush()
-
-                n_done += 1
-                # `"PASS" if r["passed"] else "FAIL"` — ternary expression.
-                mark = "PASS" if r["passed"] else "FAIL"
-                print(f"[{mark}] {r['task']} r{r['repeat_idx']} "
-                      f"({r['finish_reason']}, {r['iters_used']}it, {r['duration_s']}s) "
-                      f"[{n_done}/{total}]")
+        results += _run_pool(work, out_path, mode, args.jobs)
     else:
         print("Nothing to run (all selected runs already in --out).")
 

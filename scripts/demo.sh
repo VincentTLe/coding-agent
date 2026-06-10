@@ -17,9 +17,13 @@ TASK="${1:-Create roman.py with two functions, int_to_roman(n) and roman_to_int(
 WS="/tmp/agent_demo"
 rm -rf "$WS" && mkdir -p "$WS"   # workspace rỗng, agent tự tạo mọi file (không cần copy repo)
 
-# Kiểm vLLM trước để không chết giữa demo
-curl -s --max-time 5 http://localhost:8765/v1/models | grep -q Qwen3-14B \
-  || { echo "!! vLLM chưa chạy trên :8765 — bật: tmux attach -t vllm  (hoặc  bash scripts/start_vllm.sh)"; exit 1; }
+# Kiểm vLLM trước để không chết giữa demo. Endpoint đọc từ .env (nguồn chân lý duy nhất
+# cho port/model — đừng hardcode :8765/Qwen3-14B ở đây kẻo .env đổi là check nói dối).
+# curl -f: HTTP lỗi (4xx/5xx) → exit khác 0; chỉ cần server trả lời được /models là đủ.
+VLLM_BASE_URL="$(grep -m1 '^VLLM_BASE_URL=' .env 2>/dev/null | cut -d= -f2- || true)"
+VLLM_BASE_URL="${VLLM_BASE_URL:-http://localhost:8765/v1}"
+curl -sf --max-time 5 "$VLLM_BASE_URL/models" >/dev/null \
+  || { echo "!! vLLM chưa chạy tại $VLLM_BASE_URL — bật: tmux attach -t vllm  (hoặc  bash scripts/start_vllm.sh)"; exit 1; }
 
 echo ">>> SPEC: $TASK"
 echo ">>> workspace rỗng: $WS"

@@ -1,7 +1,7 @@
 """
 test_eval.py — Unit test thuần cho các helper đọc metadata trong eval/run.py.
 
-KHÔNG cần vLLM / network: chỉ test read_section / read_meta (parse task.md),
+KHÔNG cần vLLM / network: chỉ test read_section / read_task_meta (parse task.md),
 không gọi run_agent. task.md được viết ra tmp_path nên hoàn toàn cô lập.
 
 Giống đầu eval/run.py, ta phải thêm REPO ROOT vào sys.path TRƯỚC khi import,
@@ -20,8 +20,8 @@ sys.path.insert(0, str(ROOT))
 
 import eval.run as R  # noqa: E402
 from eval.run import (  # noqa: E402
-    read_meta,
     read_section,
+    read_task_meta,
     remove_extras,
     restore_files,
     run_pytest,
@@ -61,20 +61,20 @@ def test_read_section_no_task_md_returns_default(tmp_path):
     assert read_section(tmp_path, "Goal") == ""
 
 
-def test_read_meta_parses_category_and_difficulty(tmp_path):
-    """read_meta trả (category, difficulty) lowercase từ task.md."""
+def test_read_task_meta_parses_category_and_difficulty(tmp_path):
+    """read_task_meta trả category/difficulty lowercase từ task.md (đọc file 1 lần)."""
     _write_task(tmp_path, "## Category\nStrings\n## Difficulty\nHard\n")
-    cat, dif = read_meta(tmp_path)
-    assert cat == "strings"
-    assert dif == "hard"
+    meta = read_task_meta(tmp_path)
+    assert meta["category"] == "strings"
+    assert meta["difficulty"] == "hard"
 
 
-def test_read_meta_defaults_when_absent(tmp_path):
+def test_read_task_meta_defaults_when_absent(tmp_path):
     """Thiếu Category/Difficulty → default 'uncategorized' / 'unknown'."""
     _write_task(tmp_path, "## Goal\njust a goal\n")
-    cat, dif = read_meta(tmp_path)
-    assert cat == "uncategorized"
-    assert dif == "unknown"
+    meta = read_task_meta(tmp_path)
+    assert meta["category"] == "uncategorized"
+    assert meta["difficulty"] == "unknown"
 
 
 # ---------------------------------------------------------------------------
