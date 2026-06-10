@@ -28,3 +28,4 @@ Resume*.pdf
 # Local session/handoff logs and timestamped backups — not source.
 .agent/
 *.bak-*
+.benchmarks/
