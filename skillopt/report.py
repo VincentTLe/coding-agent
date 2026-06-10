@@ -61,7 +61,10 @@ def _load(path: Path) -> dict[str, dict]:
     for ln in path.read_text(encoding="utf-8").splitlines():
         if not ln.strip():
             continue
-        r = json.loads(ln)
+        try:                # bỏ qua dòng cuối bị cắt dở (eval bị kill giữa chừng) — như _read_jsonl
+            r = json.loads(ln)
+        except json.JSONDecodeError:
+            continue
         if r.get("repeat_idx", 0) != 0:   # chỉ pass@1 (lần đầu)
             continue
         if r.get("task") not in out:       # giữ lần đầu gặp
@@ -103,14 +106,58 @@ def compare(empty: Path, seed: Path, optimized: Path, train_traj: Path | None = 
     empty_rerun (tuỳ chọn): kết quả chạy LẠI arm empty cùng config → đo SÀN NHIỄU
     (bao nhiêu task lật chỉ do phi tất định của vLLM ở temp=0). Sàn nhiễu là thước đo
     BẮT BUỘC để biết các khác biệt giữa arm có vượt nhiễu hay không.
+
+    Cấu trúc: MỘT lượt tính (mọi con số vào biến cục bộ, mỗi thứ đúng 1 lần) → các khối
+    render tuyến tính CHỈ đọc số → MỘT chuỗi if/elif verdict → MỘT return. Trước đây
+    flips bị tính 2 lần (khối sàn nhiễu + khối verdict) và một return ẩn giữa hàm —
+    sửa một chỗ rất dễ quên chỗ kia.
     """
+    # ====== COMPUTE PASS — mỗi con số tính đúng MỘT lần =======================
     arms = {"empty": _load(empty), "seed": _load(seed), "optimized": _load(optimized)}
     rates = {name: _rate(recs) for name, recs in arms.items()}
+    sets = {n: set(a) for n, a in arms.items()}
+    diffs = {name: _by_difficulty(recs) for name, recs in arms.items()}
+    all_d = sorted({d for dd in diffs.values() for d in dd})
+    # McNemar paired vs optimized: mcn[base] = (b, c, p); b = optimized tệ hơn, c = tốt hơn.
+    mcn = {}
+    for base in ("empty", "seed"):
+        b, c = _paired(arms[base], arms["optimized"])
+        mcn[base] = (b, c, mcnemar(b, c)[1])
+    # Sàn nhiễu (nếu có empty_rerun): flips empty#1↔#2 + flips giữa các cặp arm.
+    noise = None
+    if empty_rerun is not None and empty_rerun.exists():
+        e2 = _load(empty_rerun)
+        noise = {"flips": _flips(arms["empty"], e2), "rate2": _rate(e2),
+                 "es": _flips(arms["empty"], arms["seed"]),
+                 "eo": _flips(arms["empty"], arms["optimized"]),
+                 "so": _flips(arms["seed"], arms["optimized"])}
+    # Điểm val từ trajectory (nếu có) — cho mechanism check + overfit meter.
+    seed_val = best_val = None
+    if train_traj and train_traj.exists():
+        recs = [json.loads(l) for l in train_traj.read_text().splitlines() if l.strip()]
+        init = [r for r in recs if r.get("event") == "init"]
+        done = [r for r in recs if r.get("event") == "done"]
+        if init:
+            seed_val = init[0].get("seed_val_score")
+        if done:
+            best_val = done[-1].get("best_val_score")
+    ks, ns = rates["seed"]
+    test_seed = ks / ns if ns else 0.0
+    ko, no = rates["optimized"]
+    test_opt = ko / no if no else 0.0
+    b_so, c_so, p_so = mcn["seed"]
+    d_test = test_opt - test_seed
+    best_base_name = max(("empty", "seed"), key=lambda n: (rates[n][0] / rates[n][1]) if rates[n][1] else 0)
+    kb, nb = rates[best_base_name]
+    base_best = kb / nb if nb else 0.0
+    sig = [base for base in ("empty", "seed")
+           if mcn[base][2] < 0.05 and mcn[base][1] > mcn[base][0]]  # p<.05 và improved>regressed
+
+    # ====== RENDER — các khối tuyến tính, chỉ đọc số đã tính ==================
     lines = ["# SkillOpt results (held-out test split)\n",
              "Báo cáo trên TEST (chấm 1 lần). Tối ưu chỉ dùng train+val.\n"]
     # Paired comparison CHỈ hợp lệ khi 3 arm chấm ĐÚNG cùng tập task — cảnh báo to nếu lệch
     # (Codex methodology review: _paired() âm thầm lấy giao → có thể giấu task thiếu/thừa).
-    sets = {n: set(a) for n, a in arms.items()}
     if not (sets["empty"] == sets["seed"] == sets["optimized"]):
         common = sets["empty"] & sets["seed"] & sets["optimized"]
         lines.append(f"> ⚠️ **CẢNH BÁO: 3 arm KHÔNG cùng tập task** (empty {len(sets['empty'])}, "
@@ -124,8 +171,6 @@ def compare(empty: Path, seed: Path, optimized: Path, train_traj: Path | None = 
                      f"| {name} | — | 0/0 | — |")
 
     # pass@1 theo difficulty (mỗi arm 1 cột) — cho thấy skill giúp/hại ở nhóm nào.
-    diffs = {name: _by_difficulty(recs) for name, recs in arms.items()}
-    all_d = sorted({d for dd in diffs.values() for d in dd})
     if all_d:
         lines.append("\n## pass@1 theo difficulty")
         lines.append("| difficulty | empty | seed | optimized |")
@@ -138,70 +183,45 @@ def compare(empty: Path, seed: Path, optimized: Path, train_traj: Path | None = 
             lines.append(f"| {d} | {cells[0]} | {cells[1]} | {cells[2]} |")
 
     lines.append("\n## Paired McNemar vs optimized (exact binomial)")
-    mcn = {}
     for base in ("empty", "seed"):
-        b, c = _paired(arms[base], arms["optimized"])
-        n_disc, p = mcnemar(b, c)
-        mcn[base] = (b, c, p)
+        b, c, p = mcn[base]
         lines.append(f"- optimized vs {base}: {c} tasks improved, {b} regressed "
-                     f"(n_discordant={n_disc:.0f}, exact-binomial p={p:.3f})")
+                     f"(n_discordant={b + c}, exact-binomial p={p:.3f})")
 
     # --- SÀN NHIỄU (chạy lại empty cùng config) → reframe mọi khác biệt -------
-    noise_flips = None
-    if empty_rerun is not None and empty_rerun.exists():
-        e2 = _load(empty_rerun)
-        noise_flips = _flips(arms["empty"], e2)
-        k2, n2 = _rate(e2)
+    if noise is not None:
         ke0, ne0 = rates["empty"]
-        es = _flips(arms["empty"], arms["seed"])
-        eo = _flips(arms["empty"], arms["optimized"])
-        so = _flips(arms["seed"], arms["optimized"])
+        k2, n2 = noise["rate2"]
         lines.append("\n## Run-to-run instability (empty chạy lại cùng config)")
         lines.append(f"- empty#1 {ke0/ne0:.3f} ({ke0}/{ne0}) vs empty#2 {k2/n2:.3f} ({k2}/{n2}): "
-                     f"**{noise_flips} task lật** chỉ do phi tất định (vLLM batching ở temp=0 KHÔNG "
+                     f"**{noise['flips']} task lật** chỉ do phi tất định (vLLM batching ở temp=0 KHÔNG "
                      "tất định). ⚠️ Đây là MỘT lần đo (1 draw) — chỉ ƯỚC LƯỢNG độ bất ổn run-to-run, "
                      "KHÔNG phải 'sàn nhiễu' chính thức (Codex methodology review).")
         # Diễn giải CÓ ĐIỀU KIỆN — và chỉ là HEURISTIC (không phải test thống kê chính thức).
-        max_between = max(es, eo, so)
-        if max_between <= noise_flips:
+        max_between = max(noise["es"], noise["eo"], noise["so"])
+        if max_between <= noise["flips"]:
             verdict_noise = (f"Mọi khác biệt giữa arm (≤{max_between}) CÙNG CỠ hoặc nhỏ hơn độ bất ổn "
-                             f"run-to-run ({noise_flips}) → KHÔNG kết luận được (heuristic).")
-        elif max_between <= noise_flips + 2:
-            verdict_noise = (f"Khác biệt lớn nhất ({max_between}) chỉ sát mức bất ổn ({noise_flips}) → "
+                             f"run-to-run ({noise['flips']}) → KHÔNG kết luận được (heuristic).")
+        elif max_between <= noise["flips"] + 2:
+            verdict_noise = (f"Khác biệt lớn nhất ({max_between}) chỉ sát mức bất ổn ({noise['flips']}) → "
                              "vẫn nên coi là chưa kết luận; cần nhiều run/arm để chắc.")
         else:
-            verdict_noise = (f"Khác biệt lớn nhất ({max_between}) vượt mức bất ổn ({noise_flips}) → "
+            verdict_noise = (f"Khác biệt lớn nhất ({max_between}) vượt mức bất ổn ({noise['flips']}) → "
                              "có thể là tín hiệu; đọc kèm McNemar exact bên dưới (đó mới là test).")
-        lines.append(f"- So flips giữa arm: empty–seed={es}, empty–optimized={eo}, seed–optimized={so}. "
-                     + verdict_noise)
+        lines.append(f"- So flips giữa arm: empty–seed={noise['es']}, empty–optimized={noise['eo']}, "
+                     f"seed–optimized={noise['so']}. " + verdict_noise)
 
     # --- Mechanism check + overfit meter (cần trajectory) --------------------
     # Tối ưu LUÔN xuất phát từ seed. Hai câu hỏi tách bạch:
     #   (1) Cơ chế: optimized có hơn ĐIỂM XUẤT PHÁT (seed) không, và cải thiện val có
     #       TRANSFER sang test không? (val Δ từ trajectory; test Δ = optimized−seed)
     #   (2) Triển khai: có nên chèn skill nào không? = optimized vs empty (verdict dưới).
-    seed_val = best_val = None
-    if train_traj and train_traj.exists():
-        recs = [json.loads(l) for l in train_traj.read_text().splitlines() if l.strip()]
-        init = [r for r in recs if r.get("event") == "init"]
-        done = [r for r in recs if r.get("event") == "done"]
-        if init:
-            seed_val = init[0].get("seed_val_score")
-        if done:
-            best_val = done[-1].get("best_val_score")
-    ke, ne = rates["optimized"]
-    test_opt = ke / ne if ne else 0.0
-    ks, ns = rates["seed"]
-    test_seed = ks / ns if ns else 0.0
-    b_so, c_so = _paired(arms["seed"], arms["optimized"])  # b=optimized tệ hơn, c=optimized tốt hơn
-    _, p_so = mcnemar(b_so, c_so)
     lines.append("\n## Mechanism check (optimized vs điểm xuất phát seed)")
     if seed_val is not None and best_val is not None:
         lines.append(f"- val: seed {seed_val:.3f} → best {best_val:.3f} (Δ={best_val - seed_val:+.3f}) "
-                     "— ⚠️ |val| rất nhỏ (xem manifest, ở run này = 12 task → 1 task ≈ 0.083); "
-                     "nên tín hiệu val chỉ là VÀI task, không phải bằng chứng mạnh.")
+                     "— ⚠️ |val| nhỏ (đếm task trong manifest của run) nên tín hiệu val chỉ là "
+                     "VÀI task, không phải bằng chứng mạnh.")
     # Diễn giải CÓ ĐIỀU KIỆN theo dấu(Δ) và p (không hard-code "DƯƠNG/trong nhiễu").
-    d_test = test_opt - test_seed
     direction = "DƯƠNG (optimized > seed)" if d_test > 0 else ("ÂM (optimized < seed)" if d_test < 0 else "BẰNG NHAU")
     if p_so < 0.05 and d_test > 0:
         interp = "**có ý nghĩa thống kê (p<0.05)** → edit học được transfer sang test (tín hiệu dương thật)."
@@ -217,42 +237,28 @@ def compare(empty: Path, seed: Path, optimized: Path, train_traj: Path | None = 
         lines.append(f"\n## Overfit meter\n- best val (train-side) {best_val:.3f}; optimized test "
                      f"{test_opt:.3f}; gap = {best_val - test_opt:+.3f} (lớn dương = nghi học vẹt trên val).")
 
-    # --- Verdict tự động (data-driven, không để người điền) -------------------
-    ko, no = rates["optimized"]
-    opt = ko / no if no else 0.0
-    best_base_name = max(("empty", "seed"), key=lambda n: (rates[n][0] / rates[n][1]) if rates[n][1] else 0)
-    kb, nb = rates[best_base_name]
-    base_best = kb / nb if nb else 0.0
-    sig = [base for base in ("empty", "seed")
-           if mcn[base][2] < 0.05 and mcn[base][1] > mcn[base][0]]  # p<.05 và improved>regressed
+    # ====== VERDICT — MỘT chuỗi if/elif duy nhất, rồi MỘT return ==============
+    # Sàn nhiễu ƯU TIÊN: under-powered nếu KHÔNG có McNemar significant VÀ khác biệt chính
+    # (empty↔optimized) không vượt sàn nhiễu → point-estimate không đáng tin ở N này, KHÔNG
+    # kết luận hơn/kém được dù point-estimate có chênh. Đây là sự thật mạnh hơn "null".
     lines.append("\n## Verdict (tự động)")
-    # Sàn nhiễu ƯU TIÊN: nếu mọi khác biệt giữa arm ≤ sàn nhiễu → under-powered, KHÔNG
-    # kết luận hơn/kém được, dù point-estimate có chênh. Đây là sự thật mạnh hơn "null".
-    if noise_flips is not None:
-        eo = _flips(arms["empty"], arms["optimized"])   # câu hỏi chính: skill tối ưu vs không skill
-        es = _flips(arms["empty"], arms["seed"])
-        so = _flips(arms["seed"], arms["optimized"])
-        max_between = max(eo, es, so)
-        # Under-powered nếu KHÔNG có McNemar significant VÀ khác biệt chính (empty↔optimized)
-        # không vượt sàn nhiễu → point-estimate không đáng tin ở N này.
-        if not sig and eo <= noise_flips:
-            lines.append(
-                f"- **INCONCLUSIVE (under-powered).** Khác biệt giữa arm (empty↔optimized={eo}, "
-                f"empty↔seed={es}, seed↔optimized={so}) CÙNG CỠ với độ bất ổn run-to-run "
-                f"(empty chạy lại lật {noise_flips} task), và KHÔNG McNemar exact nào đạt p<0.05. "
-                f"Point-estimate (empty {rates['empty'][0]/rates['empty'][1]:.3f} / seed "
-                f"{rates['seed'][0]/rates['seed'][1]:.3f} / optimized {opt:.3f}) là 1 mẫu nhiễu/arm ở "
-                f"N={no}. **Không có bằng chứng tin cậy rằng skill (seed hay optimized) giúp HAY hại** — "
-                "khác biệt quan sát nhỏ hơn hoặc ngang mức bất ổn đo được. Đây là kết luận trung thực; "
-                "muốn quyết: ≥3–5 run/arm (trung bình) hoặc N test lớn hơn nhiều. (Lưu ý: 'mức bất ổn' "
-                "là heuristic 1-lần-đo, không phải test thống kê — xem McNemar exact ở trên.)")
-            return "\n".join(lines) + "\n"
-    if opt > base_best and sig:
-        lines.append(f"- **Optimized cao hơn baseline** ({opt:.3f} vs {best_base_name} {base_best:.3f}) "
+    if noise is not None and not sig and noise["eo"] <= noise["flips"]:
+        lines.append(
+            f"- **INCONCLUSIVE (under-powered).** Khác biệt giữa arm (empty↔optimized={noise['eo']}, "
+            f"empty↔seed={noise['es']}, seed↔optimized={noise['so']}) CÙNG CỠ với độ bất ổn run-to-run "
+            f"(empty chạy lại lật {noise['flips']} task), và KHÔNG McNemar exact nào đạt p<0.05. "
+            f"Point-estimate (empty {rates['empty'][0]/rates['empty'][1]:.3f} / seed "
+            f"{test_seed:.3f} / optimized {test_opt:.3f}) là 1 mẫu nhiễu/arm ở "
+            f"N={no}. **Không có bằng chứng tin cậy rằng skill (seed hay optimized) giúp HAY hại** — "
+            "khác biệt quan sát nhỏ hơn hoặc ngang mức bất ổn đo được. Đây là kết luận trung thực; "
+            "muốn quyết: ≥3–5 run/arm (trung bình) hoặc N test lớn hơn nhiều. (Lưu ý: 'mức bất ổn' "
+            "là heuristic 1-lần-đo, không phải test thống kê — xem McNemar exact ở trên.)")
+    elif test_opt > base_best and sig:
+        lines.append(f"- **Optimized cao hơn baseline** ({test_opt:.3f} vs {best_base_name} {base_best:.3f}) "
                      f"VÀ có ý nghĩa thống kê theo McNemar (p<0.05) so với: {', '.join(sig)}. "
                      "Tín hiệu dương — nhưng vẫn đọc CI + #task (N nhỏ thì khiêm tốn khi kết luận).")
-    elif opt > base_best:
-        lines.append(f"- Optimized nhỉnh hơn baseline ({opt:.3f} vs {best_base_name} {base_best:.3f}) "
+    elif test_opt > base_best:
+        lines.append(f"- Optimized nhỉnh hơn baseline ({test_opt:.3f} vs {best_base_name} {base_best:.3f}) "
                      "NHƯNG McNemar KHÔNG đạt p<0.05 → khác biệt nằm trong nhiễu. "
                      "**Honest:** chưa đủ bằng chứng skill tối ưu vượt baseline trên test.")
     else:
@@ -260,7 +266,7 @@ def compare(empty: Path, seed: Path, optimized: Path, train_traj: Path | None = 
                 f"{test_opt:.3f} > {test_seed:.3f}) — edit học được transfer sang test; "
                 if test_opt > test_seed else
                 "Và optimized cũng không vượt seed trên test — cơ chế không transfer; ")
-        lines.append(f"- **Null/negative (triển khai):** optimized ({opt:.3f}) KHÔNG vượt baseline "
+        lines.append(f"- **Null/negative (triển khai):** optimized ({test_opt:.3f}) KHÔNG vượt baseline "
                      f"tốt nhất ({best_base_name} {base_best:.3f}). {mech}"
                      "nhưng kết luận triển khai trung thực: trên slice coding-only + N test này, "
                      "base model đóng băng đã gần trần — chèn skill (seed hay optimized) không "

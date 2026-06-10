@@ -119,15 +119,20 @@ def _format_rejected(buffer: list[dict]) -> str:
                      for b in buffer[-6:])
 
 
-def _slow_update(prev_skill: str, curr_skill: str, sample_file: Path, *, jobs: int,
-                 scratch: Path, cache: dict) -> str:
+def _slow_update(prev_skill: str, curr_skill: str, train_file: Path, *, jobs: int,
+                 scratch: Path, cache: dict, trace: list | None = None) -> str:
     """Ranh giới epoch: so prev vs curr trên train → 4 nhóm → nội dung slow-update.
 
     Dùng split_name "train" để TÁI DÙNG cache rollout của các step (prev/curr skill hầu
     như đã được chấm trên train rồi) → slow-update gần như miễn phí, không re-roll thừa.
     """
-    _, prev_cases = _rollout(prev_skill, "train", sample_file, jobs=jobs, scratch=scratch, cache=cache)
-    _, curr_cases = _rollout(curr_skill, "train", sample_file, jobs=jobs, scratch=scratch, cache=cache)
+    prev_score, prev_cases = _rollout(prev_skill, "train", train_file, jobs=jobs, scratch=scratch, cache=cache)
+    curr_score, curr_cases = _rollout(curr_skill, "train", train_file, jobs=jobs, scratch=scratch, cache=cache)
+    if prev_score is None or curr_score is None:
+        # None = LỖI HẠ TẦNG (giao thức chung của _rollout) — bucketing trên cases rỗng sẽ
+        # ra summary "0 ở mọi nhóm" trông như đã hội tụ. Raise để try/except ở ranh giới
+        # epoch log slow_update_error và bỏ qua sạch sẽ (như mọi call site khác tôn trọng None).
+        raise RuntimeError("slow-update rollout failed")
     pp = {c["task"]: c["passed"] for c in prev_cases}
     buckets = {"regressed": [], "persistent_fail": [], "improved": [], "stable_success": []}
     for c in curr_cases:
@@ -136,13 +141,7 @@ def _slow_update(prev_skill: str, curr_skill: str, sample_file: Path, *, jobs: i
                "regressed" if prev_ok else "persistent_fail")
         buckets[key].append(c["task"])
     summary = "; ".join(f"{k}={len(v)}" for k, v in buckets.items())
-    user = (f"CURRENT SKILL:\n{curr_skill}\n\nAcross this epoch, comparing previous vs current "
-            f"skill on the same tasks: {summary}. REGRESSIONS are highest priority. Write a SHORT "
-            f"'executive strategy' block (durable, long-horizon guidance) to stabilize the skill — "
-            f"prose only, no edit JSON.")
-    content = olm._call("You write SkillOpt's epoch-level executive-strategy field.", user,
-                        max_tokens=512) or summary
-    return content.strip()
+    return olm.slow_update_strategy(curr_skill, summary, trace=trace)
 
 
 def gate_decision(cand_score: float, current_score: float, best_score: float) -> str:
@@ -161,16 +160,16 @@ def gate_decision(cand_score: float, current_score: float, best_score: float) ->
 
 
 def optimize(seed_path: Path, splits_dir: Path, run_dir: Path, *, epochs: int, steps: int,
-             L: int, jobs: int, slow_samples: int,
+             L: int, jobs: int,
              max_minutes: float | None = None, smoke: bool = False) -> dict:
     """Chạy vòng lặp SkillOpt. Trả summary + ghi best_skill.md + trajectory.jsonl.
 
     max_minutes: ngân sách wall-clock — chạm ngưỡng thì DỪNG SẠCH ở ranh giới step (đã
     checkpoint best_skill.md + trajectory.jsonl sau mỗi step), summary có stopped_early=True.
-    smoke: cấu hình nhanh (1 epoch / 1 step / slow_samples=2) để verify end-to-end.
+    smoke: cấu hình nhanh (1 epoch / 1 step) để verify end-to-end.
     """
     if smoke:
-        epochs, steps, slow_samples = 1, 1, 2
+        epochs, steps = 1, 1
     run_dir.mkdir(parents=True, exist_ok=True)
     deadline = (time.monotonic() + max_minutes * 60) if max_minutes else None
     scratch = REPO / "eval" / "results" / "skillopt" / run_dir.name
@@ -201,8 +200,6 @@ def optimize(seed_path: Path, splits_dir: Path, run_dir: Path, *, epochs: int, s
 
     stopped = False
     for epoch in range(epochs):
-        if stopped:
-            break
         epoch_start_skill = current
         rejected: list[dict] = []   # buffer reset mỗi epoch
         for step in range(steps):
@@ -216,10 +213,12 @@ def optimize(seed_path: Path, splits_dir: Path, run_dir: Path, *, epochs: int, s
                 continue
             fails = [c for c in cases if not c["passed"]]
             succ = [c for c in cases if c["passed"]]
-            fe = olm.reflect(current, fails, "failure", _format_rejected(rejected), L)
-            se = olm.reflect(current, succ, "success", "", L)
-            clipped = olm.clip(current, olm.merge(current, fe, se), L)
-            opt_calls = olm.drain_trace()      # AUDITABILITY: response thô của optimizer step này
+            # AUDITABILITY: trace tạo MỚI mỗi step, truyền tường minh xuống mọi lượt gọi
+            # optimizer — list chết cùng scope step nên KHÔNG thể rò sang step sau.
+            opt_calls: list[dict] = []
+            fe = olm.reflect(current, fails, "failure", _format_rejected(rejected), L, trace=opt_calls)
+            se = olm.reflect(current, succ, "success", "", L, trace=opt_calls)
+            clipped = olm.clip(current, olm.merge(current, fe, se, trace=opt_calls), L, trace=opt_calls)
             cand, reports = apply_edits(current, clipped)
             cand_score, _ = _rollout(cand, "val", val_f, jobs=jobs, scratch=scratch, cache=cache)
             if cand_score is None:             # val rollout hỏng → KHÔNG gate trên điểm ảo
@@ -250,38 +249,48 @@ def optimize(seed_path: Path, splits_dir: Path, run_dir: Path, *, epochs: int, s
             (steps_dir / f"e{epoch}_s{step}_{decision}.md").write_text(cand, encoding="utf-8")
             (run_dir / "current_skill.md").write_text(current, encoding="utf-8")
 
-        # --- epoch boundary: slow / executive-strategy update (≥ epoch 1 meaningful) ---
-        # Bỏ qua nếu vừa dừng giữa epoch vì hết ngân sách (khỏi chạy thêm rollout).
-        if not stopped and (epoch >= 1 or epochs == 1):
-            if deadline and time.monotonic() > deadline:
-                # Hết ngân sách ngay trước slow-update → KHÔNG chạy thêm rollout, dừng SẠCH.
-                stopped = True
-                log({"event": "stopped", "reason": "max_minutes_at_epoch_boundary", "epoch": epoch})
-            else:
-                try:
-                    slow = _slow_update(epoch_start_skill, current, train_f, jobs=jobs,
-                                        scratch=scratch, cache=cache)
-                    slow_calls = olm.drain_trace()   # drain NGAY (không để step epoch sau dính trace cũ — Codex #8)
-                    cand = replace_slow_update_field(current, slow)
-                    cand_score, _ = _rollout(cand, "val", val_f, jobs=jobs, scratch=scratch, cache=cache)
-                    if cand_score is None:       # rollout hỏng → bỏ slow-update, giữ current
-                        log({"event": "slow_update", "epoch": epoch, "cand_score": None,
-                             "accepted": False, "reason": "rollout_failed", "optimizer_calls": slow_calls})
-                    else:
-                        accepted = cand_score >= current_score   # slow-update: không tệ đi thì giữ
-                        if accepted:
-                            current, current_score = cand, cand_score
-                            (run_dir / "current_skill.md").write_text(current, encoding="utf-8")  # chốt state ở epoch boundary
-                            if cand_score > best_score:
-                                best, best_score = cand, cand_score
-                                (run_dir / "best_skill.md").write_text(best, encoding="utf-8")
-                        log({"event": "slow_update", "epoch": epoch, "cand_score": cand_score,
-                             "accepted": accepted, "slow_field": slow[:300], "optimizer_calls": slow_calls})
-                except Exception as e:  # noqa: BLE001 — slow-update KHÔNG được giết run dài
-                    # drain để optimizer call của _slow_update (nếu đã gọi trước khi raise) KHÔNG
-                    # rò sang step epoch sau (Codex re-review #6).
-                    log({"event": "slow_update_error", "epoch": epoch, "error": repr(e)[:300],
-                         "optimizer_calls": olm.drain_trace()})
+        # --- epoch boundary: slow / executive-strategy update (guard clauses, hết nesting) ---
+        if stopped:   # vừa dừng giữa epoch vì hết ngân sách → khỏi chạy thêm rollout
+            break
+        # Bỏ epoch 0 khi epochs > 1: field slow-update bị ranh giới SAU ghi đè TOÀN BỘ
+        # (replace_slow_update_field) nên field viết từ cặp seed-vs-epoch0 (tín hiệu yếu nhất)
+        # chỉ sống đúng 1 epoch rồi bị thay — không đáng tốn rollout; epochs==1 thì đây là
+        # ranh giới DUY NHẤT, không chạy thì cả run không có slow-update nào.
+        if epoch == 0 and epochs > 1:
+            continue
+        if deadline and time.monotonic() > deadline:
+            # Hết ngân sách ngay trước slow-update → KHÔNG chạy thêm rollout, dừng SẠCH.
+            log({"event": "stopped", "reason": "max_minutes_at_epoch_boundary", "epoch": epoch})
+            stopped = True
+            break
+        # Trace CỤC BỘ cho ranh giới này — list chết cùng scope nên call optimizer không bao
+        # giờ rò sang step epoch sau, kể cả khi raise giữa chừng. (Hai bug cũ Codex #8 và
+        # Codex re-review #6 đều do giao thức drain global bắt caller PHẢI NHỚ drain đúng
+        # chỗ; kênh tường minh làm việc quên trở thành bất khả.)
+        slow_trace: list[dict] = []
+        try:
+            slow = _slow_update(epoch_start_skill, current, train_f, jobs=jobs,
+                                scratch=scratch, cache=cache, trace=slow_trace)
+            cand = replace_slow_update_field(current, slow)
+            cand_score, _ = _rollout(cand, "val", val_f, jobs=jobs, scratch=scratch, cache=cache)
+            if cand_score is None:       # rollout hỏng → bỏ slow-update, giữ current
+                log({"event": "slow_update", "epoch": epoch, "cand_score": None,
+                     "accepted": False, "reason": "rollout_failed", "optimizer_calls": slow_trace})
+                continue
+            accepted = cand_score >= current_score   # slow-update: không tệ đi thì giữ
+            if accepted:
+                current, current_score = cand, cand_score
+                (run_dir / "current_skill.md").write_text(current, encoding="utf-8")  # chốt state ở epoch boundary
+                if cand_score > best_score:
+                    best, best_score = cand, cand_score
+                    (run_dir / "best_skill.md").write_text(best, encoding="utf-8")
+            log({"event": "slow_update", "epoch": epoch, "cand_score": cand_score,
+                 "accepted": accepted, "slow_field": slow[:300], "optimizer_calls": slow_trace})
+        except Exception as e:  # noqa: BLE001 — slow-update KHÔNG được giết run dài
+            # slow_trace là list cục bộ: call đã ghi TRƯỚC khi raise vẫn nằm trong đó để log
+            # đầy đủ, và không có state nào sống sót sang epoch sau (Codex re-review #6).
+            log({"event": "slow_update_error", "epoch": epoch, "error": repr(e)[:300],
+                 "optimizer_calls": slow_trace})
 
     summary = {"epochs": epochs, "steps_per_epoch": steps, "L": L, "jobs": jobs,
                "seed_val_score": seed_score, "best_val_score": best_score,
@@ -300,13 +309,11 @@ if __name__ == "__main__":
     ap.add_argument("--steps", type=int, default=3, help="steps per epoch")
     ap.add_argument("--L", type=int, default=4, help="edit budget (textual learning rate)")
     ap.add_argument("--jobs", type=int, default=8, help="parallel rollouts (set to vLLM-saturating value)")
-    ap.add_argument("--slow-samples", type=int, default=16)
     ap.add_argument("--max-minutes", type=float, default=None,
                     help="ngân sách wall-clock: chạm ngưỡng thì dừng sạch ở ranh giới step")
     ap.add_argument("--smoke", action="store_true",
-                    help="cấu hình nhanh (1 epoch/1 step/slow_samples=2) verify end-to-end")
+                    help="cấu hình nhanh (1 epoch/1 step) verify end-to-end")
     a = ap.parse_args()
     s = optimize(a.seed, a.splits, a.run_dir, epochs=a.epochs, steps=a.steps, L=a.L,
-                 jobs=a.jobs, slow_samples=a.slow_samples,
-                 max_minutes=a.max_minutes, smoke=a.smoke)
+                 jobs=a.jobs, max_minutes=a.max_minutes, smoke=a.smoke)
     print(json.dumps(s, indent=2))

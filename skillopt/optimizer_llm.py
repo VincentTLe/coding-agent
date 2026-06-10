@@ -12,6 +12,8 @@ sửa cho skill dưới dạng JSON edit (append/insert_after/replace/delete).
                 LLM + fallback nối thẳng nếu LLM hỏng).
   - clip():     nếu số edit > L thì xếp hạng giữ top-L (1 lần gọi) — đây là "learning
                 rate" giới hạn bước; fallback cắt L cái đầu.
+  - slow_update_strategy(): ranh giới epoch → viết field "executive strategy" từ tóm tắt
+                4 nhóm (loop.py lo bucketing); fallback trả chính tóm tắt.
 Model local 14B trả JSON không phải lúc nào cũng chuẩn → mọi hàm có FALLBACK an toàn
 (không bao giờ raise vào loop). Cấu trúc prompt phỏng theo microsoft/SkillOpt (MIT)
 `gradient/`+`optimizer/` (analyst_error/analyst_success/merge/ranking), viết gọn lại.
@@ -34,22 +36,21 @@ def _optimizer_model() -> str:
     return os.environ.get("AGENT_OPTIMIZER_MODEL") or get_model()
 
 
-# AUDITABILITY: buffer ghi lại từng lượt gọi optimizer (label + response thô, đã cắt ngắn).
-# loop.py drain sau mỗi step và ghi vào trajectory → khi 1 step ra 0 edit, ta phân biệt được
-# "model trả rác" vs "JSON-extract trượt" vs "sanitize loại hết" (audit auditability HIGH).
-# Chỉ giữ response (prompt chứa cả skill 16KB → bloat; skill đã snapshot riêng mỗi step).
-_CALL_TRACE: list[dict] = []
+# AUDITABILITY: mỗi lượt gọi optimizer ghi (label + response thô, đã cắt ngắn) vào `trace` —
+# một list do CALLER tạo và truyền tường minh (loop.py tạo list MỚI mỗi step / mỗi ranh giới
+# epoch rồi ghi thẳng vào trajectory). Trước đây là global _CALL_TRACE + drain_trace() — giao
+# thức "nhớ mà drain" đó đã gây 2 bug rò trace giữa các step; kênh tường minh thì list chết
+# cùng scope của step, quên là BẤT KHẢ. Khi trace ra 0 edit, vẫn phân biệt được "model trả
+# rác" vs "JSON-extract trượt" vs "sanitize loại hết". Chỉ giữ response (prompt chứa cả skill
+# 16KB → bloat; skill đã snapshot riêng mỗi step).
 
 
-def drain_trace() -> list[dict]:
-    """Trả về và XÓA buffer trace optimizer (loop.py gọi sau mỗi step để ghi log)."""
-    out = list(_CALL_TRACE)
-    _CALL_TRACE.clear()
-    return out
+def _call(system: str, user: str, *, max_tokens: int = 2048, temperature: float = 0.0,
+          trace: list | None = None) -> str:
+    """Gọi optimizer LLM 1 lượt (non-stream), trả về text. Lỗi mạng → chuỗi rỗng.
 
-
-def _call(system: str, user: str, *, max_tokens: int = 2048, temperature: float = 0.0) -> str:
-    """Gọi optimizer LLM 1 lượt (non-stream), trả về text. Lỗi mạng → chuỗi rỗng."""
+    trace: list của caller để ghi audit (label + response/error) — None thì không ghi.
+    """
     label = system.split(":")[0][:48] if system else "call"   # nhãn ngắn suy từ system prompt
     try:
         resp = get_client().chat.completions.create(
@@ -61,12 +62,14 @@ def _call(system: str, user: str, *, max_tokens: int = 2048, temperature: float 
         )
         text = resp.choices[0].message.content if resp.choices else None
         text = text or ""
-        _CALL_TRACE.append({"label": label, "response": text[:1500], "error": None})
+        if trace is not None:
+            trace.append({"label": label, "response": text[:1500], "error": None})
         return text
     except Exception as e:  # noqa: BLE001 — optimizer không bao giờ được giết vòng lặp
         # LỖI giờ được GHI LẠI (không nuốt im lặng): endpoint chết / model sai sẽ lộ trong
         # trajectory thay vì biến run thành no-op vô hình giống "đã hội tụ".
-        _CALL_TRACE.append({"label": label, "response": "", "error": repr(e)[:200]})
+        if trace is not None:
+            trace.append({"label": label, "response": "", "error": repr(e)[:200]})
         return ""  # rỗng → caller dùng fallback
 
 
@@ -157,7 +160,8 @@ _OP_SCHEMA = (
 )
 
 
-def reflect(skill: str, cases: list[dict], kind: str, rejected_summary: str, L: int) -> list[dict]:
+def reflect(skill: str, cases: list[dict], kind: str, rejected_summary: str, L: int,
+            *, trace: list | None = None) -> list[dict]:
     """Đề xuất ≤L edit từ một batch ca (kind='failure' hoặc 'success')."""
     if not cases:
         return []
@@ -176,11 +180,12 @@ def reflect(skill: str, cases: list[dict], kind: str, rejected_summary: str, L: 
             f"Propose at most {L} edits. {_OP_SCHEMA}")
     edits = _sanitize_edits(_extract_json(_call(
         "You are SkillOpt's optimizer: you improve a coding agent's skill document from evidence.",
-        user)).get("edits", []))
+        user, trace=trace)).get("edits", []))
     return edits[:L]
 
 
-def merge(skill: str, fail_edits: list[dict], success_edits: list[dict]) -> list[dict]:
+def merge(skill: str, fail_edits: list[dict], success_edits: list[dict],
+          *, trace: list | None = None) -> list[dict]:
     """Gộp edit 2 kênh, ƯU TIÊN failure, khử trùng/giải mâu thuẫn. Fallback: nối thẳng."""
     if not fail_edits and not success_edits:
         return []
@@ -191,11 +196,11 @@ def merge(skill: str, fail_edits: list[dict], success_edits: list[dict]) -> list
             f"non-contradictory list. Failure-driven edits take PRIORITY over success-driven "
             f"ones when they conflict.\n{json.dumps(pool, ensure_ascii=False)}\n\n{_OP_SCHEMA}")
     merged = _sanitize_edits(_extract_json(_call(
-        "You merge skill edits, prioritizing failure fixes.", user)).get("edits", []))
+        "You merge skill edits, prioritizing failure fixes.", user, trace=trace)).get("edits", []))
     return merged or (fail_edits + success_edits)  # fallback: failure-first concat
 
 
-def clip(skill: str, edits: list[dict], L: int) -> list[dict]:
+def clip(skill: str, edits: list[dict], L: int, *, trace: list | None = None) -> list[dict]:
     """Giới hạn về L edit (learning rate). >L → xếp hạng giữ top-L; fallback cắt L đầu."""
     if len(edits) <= L:
         return edits  # dưới ngân sách → không cần gọi LLM (tiết kiệm)
@@ -203,7 +208,8 @@ def clip(skill: str, edits: list[dict], L: int) -> list[dict]:
                          for i, e in enumerate(edits))
     user = (f"CURRENT SKILL:\n{skill}\n\nSelect the {L} most useful edits below. Return STRICT "
             f'JSON {{"selected": [indices]}} (0-based, priority order).\n{numbered}')
-    sel = _extract_json(_call("You rank skill edits by expected utility.", user)).get("selected", [])
+    sel = _extract_json(_call("You rank skill edits by expected utility.", user,
+                              trace=trace)).get("selected", [])
     chosen, seen = [], set()
     for idx in sel if isinstance(sel, list) else []:
         if isinstance(idx, int) and 0 <= idx < len(edits) and idx not in seen:
@@ -212,3 +218,18 @@ def clip(skill: str, edits: list[dict], L: int) -> list[dict]:
         if len(chosen) >= L:
             break
     return chosen or edits[:L]  # fallback: cắt L cái đầu
+
+
+def slow_update_strategy(skill: str, summary: str, *, trace: list | None = None) -> str:
+    """Viết "executive strategy" cho ranh giới epoch từ tóm tắt 4 nhóm (loop._slow_update lo
+    phần bucketing). Là API CÔNG KHAI để loop.py khỏi gọi thẳng _call (private) — prompt
+    epoch-level sống cùng các prompt optimizer khác trong file này. LLM hỏng → fallback trả
+    chính summary (đảm bảo field slow-update luôn có nội dung thật, không bao giờ rỗng).
+    """
+    user = (f"CURRENT SKILL:\n{skill}\n\nAcross this epoch, comparing previous vs current "
+            f"skill on the same tasks: {summary}. REGRESSIONS are highest priority. Write a SHORT "
+            f"'executive strategy' block (durable, long-horizon guidance) to stabilize the skill — "
+            f"prose only, no edit JSON.")
+    content = _call("You write SkillOpt's epoch-level executive-strategy field.", user,
+                    max_tokens=512, trace=trace) or summary
+    return content.strip()
