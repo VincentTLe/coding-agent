@@ -50,8 +50,8 @@ python -m src.agent "Fix the failing tests in demo_repo/"
 - [`src/agent.py`](../src/agent.py) — the production ReAct loop (`run_agent`): time
   budget, API-error handling, the "nudge" when the model answers without acting,
   and careful `finish_reason` bookkeeping. Lesson 3 is this loop with the extras stripped off.
-- [`src/tools.py`](../src/tools.py) — the 10 tools (`read_file`, `write_file`,
+- [`src/tools.py`](../src/tools.py) — the 11 tools (`read_file`, `write_file`,
   `run_bash`, `apply_patch`, `multi_edit`, `grep_files`, `glob_files`, `list_dir`,
-  `run_python`, `spawn_subagent`), plus `_safe_path`, the `TOOLS` / `TOOL_SCHEMAS`
-  registry, and the `execute_tool(name, json_args, workspace)` dispatcher.
+  `run_python`, `spawn_subagent`, `finish`), plus `_safe_path`, the `TOOLS` /
+  `TOOL_SCHEMAS` registry, and the `execute_tool(name, json_args, workspace)` dispatcher.
 - [`src/prompts.py`](../src/prompts.py) — the single system prompt the agent runs with.

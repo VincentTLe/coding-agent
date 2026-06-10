@@ -3,11 +3,12 @@ agent.py — ReAct-style coding agent that uses tools to complete a task.
 
 WHAT THIS FILE DOES
   Takes a natural-language goal (e.g. "Fix the failing tests in demo_repo/"),
-  calls an LLM that may invoke any of the 10 tools defined in src/tools.py
+  calls an LLM that may invoke any of the 11 tools defined in src/tools.py
   (read_file, write_file, apply_patch, multi_edit, grep_files, glob_files,
-  list_dir, run_bash, run_python, spawn_subagent), keeps looping until the
-  model is satisfied (returns content with no more tool_calls), or we hit
-  `max_iters` and give up.
+  list_dir, run_bash, run_python, spawn_subagent, finish), and keeps looping.
+  Termination: model gọi finish(), hoặc trả lời không tool_calls SAU KHI đã
+  hành động; trả lời chay TRƯỚC KHI hành động bị nudge tối đa 2 lần rồi tính
+  là no_action; hết `max_iters` hoặc time budget thì dừng với lý do tương ứng.
 
 KEY DIFFERENCE FROM 01_chat.py
   01_chat.py only had `messages` + `content`. Here we ALSO have:
@@ -26,7 +27,7 @@ THE REACT LOOP (the heart of every modern coding agent — Claude/Codex use this
 WHEN DONE
   cd ~/code/coding-agent && source .venv/bin/activate
   python -m src.agent "Fix the failing tests in demo_repo/"
-  (Or use examples/05_agent_loop.py for the prettier demo CLI.)
+  (Or use cli/solve.py — the human-facing one-shot CLI; cli/chat.py is the REPL.)
 """
 
 # `from __future__ import annotations` là dòng đặc biệt giúp Python 3.9 hiểu
@@ -885,7 +886,9 @@ def run_agent(goal: str, workspace: Path, max_iters: int = 15,
 
 # ---------------------------------------------------------------------------
 # ENTRY POINT — `python -m src.agent "goal"`
-# (Để gọn, examples/05_agent_loop.py là CLI wrapper "đẹp hơn" cho demo)
+# Đây là entry NỘI BỘ, load-bearing: spawn_subagent (tools.py) gọi đúng lệnh
+# `python -m src.agent` để chạy child agent. CLI cho người dùng là cli/solve.py
+# (one-shot) và cli/chat.py (REPL) — đừng thêm tính năng "đẹp" vào đây.
 # ---------------------------------------------------------------------------
 
 # `if __name__ == "__main__":` — điều kiện đặc biệt trong Python.
@@ -921,9 +924,10 @@ if __name__ == "__main__":
     # `parser.add_argument("--workspace", default="demo_repo", help=...)` — tham số tùy chọn.
     # "--workspace" bắt đầu bằng -- → tùy chọn (có thể bỏ qua, dùng default).
     # `default="demo_repo"` = nếu không truyền --workspace, mặc định là "demo_repo".
-    # --workspace: thư mục sandbox agent được phép đọc/ghi. Default demo_repo/ —
-    # agent không "đi lạc" sang sửa src/agent.py của chính mình (self-modification
-    # là Phase 4, chưa phải bây giờ).
+    # --workspace: thư mục các FILE TOOL được phép đọc/ghi (qua _safe_path).
+    # Lưu ý trung thực: run_bash/run_python KHÔNG bị chặn bởi workspace — chúng
+    # vẫn với tới đường dẫn tuyệt đối. Default demo_repo/ chỉ chống tai nạn
+    # đường dẫn, không chống self-modification qua bash. Xem TRUST MODEL ở tools.py.
     parser.add_argument("--workspace", default="demo_repo",
                         help="sandbox directory the agent may read/write (default: demo_repo)")
 

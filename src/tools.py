@@ -13,8 +13,20 @@ This file has three concerns kept side by side on purpose:
   2. The OpenAI schema for each (what the model sees).
   3. A single dispatch function `execute_tool()` (the glue).
 
-Design note: adding a tool = append the function to TOOLS and its JSON schema
-to TOOL_SCHEMAS — agent.py needs no changes (extensible registry pattern).
+Design note: adding an ordinary tool = append the function to TOOLS and its
+JSON schema to TOOL_SCHEMAS — agent.py needs no changes (extensible registry
+pattern). One exception: `finish` is special-cased by name in run_agent to
+terminate the loop.
+
+TRUST MODEL (đọc kỹ trước khi claim "sandbox" ở bất cứ đâu):
+  - 7 tool nhận đường dẫn (read_file, write_file, apply_patch, multi_edit,
+    grep_files, glob_files, list_dir) đi qua `_safe_path` — sandbox này chống
+    TAI NẠN đường dẫn của model (path traversal, ghi nhầm ra ngoài workspace).
+  - 3 tool thực thi (run_bash, run_python, spawn_subagent) là FULL-TRUST local
+    execution: chỉ bị giới hạn cwd + timeout. Chúng có toàn quyền của user —
+    đọc $HOME, gọi mạng, sửa chính src/ của agent qua đường dẫn tuyệt đối.
+  - Nói cách khác: sandbox bảo vệ khỏi model VỤNG, không bảo vệ khỏi model
+    (hoặc prompt) ÁC Ý. Cô lập thật sự cần container/bwrap — chưa làm ở đây.
 """
 
 # `from __future__ import annotations` — câu lệnh đặc biệt cho Python, bật
@@ -196,10 +208,14 @@ def write_file(path: str, content: str, *, workspace: Path) -> str:
 
 
 def run_bash(command: str, timeout: int = 600, *, workspace: Path) -> str:
-    """Run a shell command inside the workspace, capturing stdout+stderr.
+    """Run a shell command with cwd=workspace, capturing stdout+stderr.
 
     Default timeout 600s (10 phút) — đủ cho pytest, pip install, build nhỏ.
     Nếu cần lâu hơn, model có thể tự pass `timeout` lớn hơn (có trong JSON schema).
+
+    TRUST: tool này KHÔNG bị _safe_path sandbox — `cwd` chỉ đặt thư mục làm
+    việc mặc định, không ngăn lệnh chạm vào đường dẫn tuyệt đối, $HOME, hay
+    mạng. Xem TRUST MODEL ở docstring đầu file.
     """
     # `log.info(...)` — ghi một dòng log cấp INFO.
     # f-string: {command} được thay bằng nội dung biến command.
@@ -218,8 +234,10 @@ def run_bash(command: str, timeout: int = 600, *, workspace: Path) -> str:
         # `shell=True` — truyền command cho shell (/bin/sh) thay vì chạy trực tiếp.
         #   Cần thiết để hỗ trợ: pipe (|), redirect (>), && (và), || (hoặc),
         #   biến môi trường ($VAR), wildcard (*.py)...
-        #   Trade-off: tiềm ẩn shell injection nếu `command` đến từ input không
-        #   tin cậy, nhưng ở đây model đang bị sandbox bởi workspace rồi.
+        #   Trade-off CÓ THẬT: command của model chạy với toàn quyền user.
+        #   `cwd=workspace` KHÔNG phải sandbox — model vẫn với tới được đường
+        #   dẫn tuyệt đối, $HOME, mạng. Chấp nhận vì đây là máy local của
+        #   mình + workload là eval tasks; KHÔNG claim "sandboxed bash" ở docs.
         #
         # `cwd=workspace` — đặt "current working directory" cho subprocess.
         #   Khi subprocess chạy `ls`, nó list file trong workspace, không phải
@@ -585,8 +603,8 @@ def glob_files(pattern: str, path: str = ".", *, workspace: Path) -> str:
       - `**` match nhiều segment (cần `pathlib` Python 3.5+)
       - `?` match 1 char
       - `[abc]` character class
-      Lưu ý: glob KHÔNG match file ẩn (bắt đầu bằng `.`) trừ khi pattern
-      explicit có `.` đầu.
+      Lưu ý: khác `glob` module, `pathlib.Path.glob` CÓ match file ẩn —
+      `*.py` match cả `.hidden.py`, và `**/*.py` đi vào cả `.git/`.
 
     OUTPUT: relative path đến workspace, 1/line, truncated tại 50.
     """
@@ -767,8 +785,10 @@ def run_python(code: str, timeout: int = 60, *, workspace: Path) -> str:
     try:
         # Chạy Python interpreter với flag `-c code` — tương đương gõ:
         #   python -c "print('hello')"  trên terminal
-        # Truyền list args (không phải shell=True) = SAFE khỏi shell injection.
-        # `code` được pass thẳng vào Python interpreter, không qua shell parsing.
+        # Truyền list args (không phải shell=True) = không qua shell parsing,
+        # nên không có shell injection. NHƯNG bản thân `code` vẫn là Python
+        # chạy full quyền user (đọc/ghi mọi nơi, gọi mạng) — chỉ cwd + timeout
+        # giới hạn nó. Xem TRUST MODEL ở docstring đầu file.
         #
         # `sys.executable` — biến trong module `sys`, chứa đường dẫn tuyệt đối
         # đến Python interpreter hiện tại. Ví dụ: "/home/user/.venv/bin/python3".

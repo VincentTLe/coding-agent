@@ -72,7 +72,7 @@ Built-from-scratch AI coding agent dùng Qwen3-14B local qua vLLM. Không framew
 2. **vLLM** chạy **Qwen3-14B** trên GPU, stream về từng token (thinking + content + tool_calls).
 3. Khi model gọi tool, `cli/chat.py` chạy tool qua `src/tools.py` (truyền `workspace` xuống), append result vào `messages`, loop lại.
 
-### Tools — 10 tools, 4 nhóm
+### Tools — 11 tools, 5 nhóm
 
 Tất cả định nghĩa trong `src/tools.py` (hàm + JSON schema + dispatcher). Model chọn tool đúng theo nhóm.
 
@@ -88,8 +88,9 @@ Tất cả định nghĩa trong `src/tools.py` (hàm + JSON schema + dispatcher)
 | **EXECUTION** | `run_bash` | chạy shell command (pytest, git, pip…), timeout 600s |
 | | `run_python` | chạy snippet Python nhanh, timeout 60s |
 | **DELEGATION** | `spawn_subagent` | chạy 1 agent con trong subprocess (timeout 300s, max_iters 8) |
+| **COMPLETION** | `finish` | tín hiệu kết thúc tường minh — run_agent bắt theo tên để dừng vòng lặp |
 
-> **Sandbox**: mọi file op bị giới hạn trong workspace dir (default CLI là `demo_repo/`). `_safe_path(path, workspace)` trong `tools.py` chặn path-traversal (`../`) — agent không đọc/ghi ra ngoài workspace. Workspace nay là **tham số tường minh** truyền qua `run_agent(goal, workspace, ...)` và `execute_tool(name, args, workspace)` — KHÔNG còn global `WORKSPACE` / `set_workspace`.
+> **Sandbox (trust model trung thực)**: 7 tool nhận đường dẫn bị giới hạn trong workspace dir (default CLI là `demo_repo/`) — `_safe_path(path, workspace)` trong `tools.py` chặn path-traversal (`../`). Workspace là **tham số tường minh** truyền qua `run_agent(goal, workspace, ...)` và `execute_tool(name, args, workspace)` — KHÔNG còn global `WORKSPACE` / `set_workspace`. **Nhưng** 3 tool thực thi (`run_bash`, `run_python`, `spawn_subagent`) chạy với toàn quyền user, chỉ giới hạn cwd + timeout — sandbox chống *tai nạn đường dẫn*, không chống lệnh ác ý. Cô lập thật cần container/bwrap (chưa làm).
 
 ### Context compaction
 
@@ -120,7 +121,7 @@ coding-agent/
 │   │   │                      Cũng là entry one-shot: python -m src.agent "task" --workspace dir
 │   │   Imports: src.tools, src.prompts, openai, dotenv (client lazy qua get_client())
 │   │   Imported by: cli/solve.py, eval/run.py
-│   ├── tools.py               10 tools + JSON schemas + dispatcher + sandbox
+│   ├── tools.py               11 tools + JSON schemas + dispatcher + sandbox
 │   │   Imports: stdlib only
 │   │   Imported by: src.agent, cli/chat.py
 │   └── prompts.py             SYSTEM_PROMPT (1 string)
@@ -367,7 +368,7 @@ Anh muốn hiểu sâu thì đọc theo order này:
 
 1. **`examples/01_chat.py` → `04_sandbox_safety.py`** — thang dạy học: chat (không tool) → 1 tool → ReAct loop → sandbox. Đọc theo số thứ tự.
 2. **`src/prompts.py`** — 1 string SYSTEM_PROMPT.
-3. **`src/tools.py`** — 10 tools (4 nhóm) + JSON schemas + dispatcher + sandbox (`_safe_path(path, workspace)`). Đọc comments Việt theo từng phần.
+3. **`src/tools.py`** — 11 tools (5 nhóm) + JSON schemas + dispatcher + sandbox (`_safe_path(path, workspace)`). Đọc comments Việt theo từng phần.
 4. **`src/agent.py`** — ReAct loop bản KHÔNG streaming, `run_agent(goal, workspace, ...)`. Hiểu xong examples + tools + agent là biết hết core.
 5. **`cli/chat.py`** — REPL streaming, thêm: stream chunks, thinking display, JSON sanitization, thinking toggle, context compaction (`estimate_tokens` / `compact_messages`).
 6. **`eval/run.py`** — benchmark harness: chấm 627 task song song, hidden-test scoring, guardrail `no_action`.
@@ -379,7 +380,7 @@ Mỗi file đã có **inline Vietnamese comments** giải thích từng section.
 
 ## 7. ROADMAP
 
-- **Phase 1** (now → May 29) — basic agent ✅ + 10 tools ✅ + context compaction ✅ + checkpoint 2026-05-20 + final 2026-05-29
+- **Phase 1** (now → May 29) — basic agent ✅ + 11 tools ✅ + context compaction ✅ + checkpoint 2026-05-20 + final 2026-05-29
 - **Phase 2** (Jun) — Reflexion loop + persistent `MEMORY.md`
 - **Phase 3** (Jul-Aug) — LoRA fine-tuning Qwen3-14B trên agent traces (Unsloth + DPO)
 - **Phase 4** (Aug+) — agent generate new tools cho chính mình, edit own prompts (self-improvement)

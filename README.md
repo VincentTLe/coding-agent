@@ -4,7 +4,7 @@
 
 🇻🇳 Tiếng Việt: [README.vi.md](README.vi.md)
 
-This is a coding agent built from first principles: no LangChain, no LangGraph, no CrewAI. The ReAct loop, the tool layer, the sandbox, and the context management are all hand-written against the raw OpenAI-compatible chat-completions API. The model runs locally — **Qwen3-14B served by vLLM** on a single NVIDIA A6000 — and is given **11 tools** to operate inside a **sandboxed workspace**. The interesting part is reliability: the agent runs `pytest`, reads the failures, patches the source, and re-runs until the suite is green, and the interactive REPL survives long sessions through **token-budget context compaction**. A **627-task benchmark harness** measures all of this with honest, hidden-test scoring.
+This is a coding agent built from first principles: no LangChain, no LangGraph, no CrewAI. The ReAct loop, the tool layer, the sandbox, and the context management are all hand-written against the raw OpenAI-compatible chat-completions API. The model runs locally — **Qwen3-14B served by vLLM** on a single NVIDIA A6000 — and is given **11 tools**; the file tools are confined to a workspace by a **path-traversal guard** (see *Sandbox and safety* for the honest threat model). The interesting part is reliability: the agent runs `pytest`, reads the failures, patches the source, and re-runs until the suite is green, and the interactive REPL survives long sessions through **token-budget context compaction**. A **627-task benchmark harness** measures all of this with honest, hidden-test scoring.
 
 Built as Math/Stat 361 undergraduate research at Knox College (advisor: Prof. Andrew Leahy).
 
@@ -95,7 +95,8 @@ A subtle but important detail: the summary boundary must land on a user-role mes
 
 ## Sandbox and safety
 
-- **`_safe_path(path, workspace)`** resolves every requested path against the workspace directory passed in and refuses anything that escapes it — a CWE-22 path-traversal defense. The workspace is an explicit parameter threaded through `run_agent(goal, workspace, ...)` and `execute_tool(name, args, workspace)` — there is no global workspace state. The agent cannot read or write outside its workspace (the CLI default is `demo_repo/`).
+- **`_safe_path(path, workspace)`** resolves every requested path against the workspace directory passed in and refuses anything that escapes it — a CWE-22 path-traversal defense. The workspace is an explicit parameter threaded through `run_agent(goal, workspace, ...)` and `execute_tool(name, args, workspace)` — there is no global workspace state. The seven path-taking tools (`read_file`, `write_file`, `apply_patch`, `multi_edit`, `grep_files`, `glob_files`, `list_dir`) cannot read or write outside the workspace (the CLI default is `demo_repo/`).
+- **Threat model and limitations.** The sandbox protects against model *accidents* on file paths, not against arbitrary code: the three execution tools (`run_bash`, `run_python`, `spawn_subagent`) run with the invoking user's full privileges, constrained only by `cwd` and a timeout. A command like `cat ~/.ssh/id_rsa` or an absolute-path write is not blocked. This is a deliberate trade-off for a local research agent on the owner's own machine; true isolation would require a container/bwrap layer, which this project does not claim to have.
 - **Errors are returned, not raised.** `execute_tool()` catches exceptions and bad arguments and returns them to the model as `ERROR: ...` strings, so a failed tool call becomes feedback the agent can recover from instead of a crash.
 - **Edits are safe by construction.** `apply_patch` refuses to edit on zero or multiple matches; `multi_edit` validates all edits before writing, so the file on disk is never left partially modified.
 

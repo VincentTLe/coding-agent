@@ -120,6 +120,9 @@ The coding agent built in this project must log each step it takes — tool invo
   Extend an existing file when reasonable.
 - **The sandbox (`_safe_path` in `src/tools.py`) is critical.** Every file
   operation must go through it. Never bypass, relax, or route around it.
+  Honest scope: it confines the 7 path-taking tools only — `run_bash` /
+  `run_python` / `spawn_subagent` are full-trust local execution (cwd +
+  timeout, nothing more). Never describe the exec tools as "sandboxed".
 - **Never commit Claude attribution.** Do NOT write "Co-Authored-By: Claude" or
   "Generated with Claude Code" (or any equivalent) in commits or PRs.
 

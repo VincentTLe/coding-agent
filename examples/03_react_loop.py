@@ -49,7 +49,7 @@ from openai.types.chat import ChatCompletionMessageParam
 
 # Mượn ĐÚNG dispatcher + schema THẬT của repo. Ta KHÔNG tự viết lại tool —
 # chỉ lọc ra vài tool cho gọn (lesson này dạy VÒNG LẶP, không phải tool).
-#   TOOL_SCHEMAS: list schema JSON của cả 10 tool.
+#   TOOL_SCHEMAS: list schema JSON của cả 11 tool (gồm finish).
 #   execute_tool(name, json_args, workspace): chạy 1 tool, luôn trả string.
 from src.tools import TOOL_SCHEMAS, execute_tool
 
@@ -68,7 +68,7 @@ client = OpenAI(base_url=BASE_URL, api_key=API_KEY)
 # ===================================================================
 # SECTION 2 — CHỌN MỘT TẬP NHỎ TOOL
 # ===================================================================
-# agent.py đưa cho model cả 10 tool. Để học vòng lặp, 3 tool là đủ và dễ theo
+# agent.py đưa cho model cả 11 tool. Để học vòng lặp, 3 tool là đủ và dễ theo
 # dõi: liệt kê (list_dir), đọc (read_file), ghi (write_file). Ta LỌC TOOL_SCHEMAS
 # THẬT theo tên thay vì chép tay — đảm bảo schema khớp với hàm trong src/tools.py.
 ALLOWED = {"list_dir", "read_file", "write_file"}
