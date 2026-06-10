@@ -380,11 +380,14 @@ def _setup_logging() -> None:
 #                           nếu không truyền vào thì mặc định là 15
 #   - time_budget_s: float | None = None — ngân sách thời gian (giây), None = không giới hạn
 #   - temperature: float | None = None — độ "sáng tạo" của model; None = dùng mặc định
+#   - client: OpenAI | None = None — SEAM cho test: truyền client giả (scripted
+#     responses) để test mọi bất biến của loop offline. None = get_client() thật.
 # `-> dict` = hàm trả về một dictionary (từ điển key→value).
 def run_agent(goal: str, workspace: Path, max_iters: int = 15,
               time_budget_s: float | None = None,
               temperature: float | None = None,
-              skill_path: Path | str | None = None) -> dict:
+              skill_path: Path | str | None = None,
+              client: OpenAI | None = None) -> dict:
     """Run the ReAct loop until the model stops calling tools, or max_iters.
 
     ReAct = Reasoning + Acting interleaved. Each iteration:
@@ -422,10 +425,11 @@ def run_agent(goal: str, workspace: Path, max_iters: int = 15,
     # cprint/log.info bên dưới để output hiện ra.
     _setup_logging()
 
-    # `client = get_client()` — gọi hàm get_client() và lưu kết quả vào biến client.
-    # Dấu = là gán: biến client bây giờ chứa OpenAI client object.
-    # Dựng client lười + đọc tên model lười (không có gì xảy ra lúc import module).
-    client = get_client()
+    # Client: dùng cái caller truyền vào (test bơm FakeClient ở đây), không có
+    # thì dựng client thật — lười, không có gì xảy ra lúc import module.
+    # Đây là seam DUY NHẤT cần cho việc test loop: mọi thứ khác giữ nguyên.
+    if client is None:
+        client = get_client()
 
     # `model = get_model()` — đọc tên model từ biến môi trường.
     # Ví dụ: model = "Qwen/Qwen2.5-Coder-7B-Instruct"
@@ -500,6 +504,28 @@ def run_agent(goal: str, workspace: Path, max_iters: int = 15,
     # Biến `i` lần lượt nhận giá trị 1, 2, 3, ..., max_iters (số turn hiện tại).
     # Vòng lặp giới hạn `max_iters` turn — safety net để agent không loop vô tận.
     # Mỗi turn = 1 round-trip với model + thực thi tool nếu có.
+    # create_kwargs LOOP-INVARIANT: model/tools/tool_choice/max_tokens/temperature
+    # không đổi giữa các turn — dựng MỘT lần ở đây thay vì mỗi turn. `messages`
+    # nằm trong dict theo THAM CHIẾU (reference): mọi messages.append() bên trong
+    # vòng lặp tự động được API call tiếp theo nhìn thấy, không cần dựng lại dict.
+    # type:ignore: TOOL_SCHEMAS là list[dict] (xem tools.py), không exact match
+    # OpenAI TypedDict — runtime hợp lệ vì dict shape khớp schema API mong đợi.
+    create_kwargs = dict(
+        model=model,
+        messages=messages,
+        tools=TOOL_SCHEMAS,
+        tool_choice="auto",
+        max_tokens=load_model_config().max_tokens,
+    )
+    # Chỉ thêm key "temperature" khi caller truyền giá trị cụ thể — API không
+    # nhận temperature=None (muốn default thì PHẢI vắng key).
+    # temperature=None → dùng default của model (REPL). Eval truyền 0.0 để decode
+    # tham lam (greedy): tool-call ổn định + kết quả TÁI LẬP được (pass@1 chuẩn).
+    # Ở temp mặc định (~0.6), thỉnh thoảng turn-1 model trả prose thay vì gọi
+    # write_file → task fail oan; greedy gần như loại bỏ hành vi đó.
+    if temperature is not None:
+        create_kwargs["temperature"] = temperature
+
     for i in range(1, max_iters + 1):
         # Hết ngân sách thời gian (nếu eval truyền vào) → dừng gọn. Chỉ check GIỮA
         # các turn: không ngắt được 1 tool đang chạy dở, nhưng mỗi tool đã có timeout
@@ -543,32 +569,6 @@ def run_agent(goal: str, workspace: Path, max_iters: int = 15,
         # khả năng "kết thúc" bằng cách trả về content trần)
         # -----------------------------------------------------------------------
 
-        # `create_kwargs = dict(...)` — tạo dictionary chứa các tham số cho API call.
-        # `dict(key=value, ...)` = cách tạo dictionary bằng hàm dict() với keyword args.
-        # Tương đương với {"model": model, "messages": messages, ...}
-        # Tại sao dùng biến riêng thay vì truyền thẳng vào create()? Vì ta cần
-        # thêm "temperature" có điều kiện (chỉ khi temperature != None) — dễ hơn
-        # khi có dict riêng để .update() hoặc thêm key.
-        #
-        # CÁC THAM SỐ CHO API:
-        #   model=model           — tên model cần gọi (đọc từ .env)
-        #   messages=messages     — lịch sử hội thoại (system + user + mọi turn trước)
-        #   tools=TOOL_SCHEMAS    — danh sách JSON schema mô tả 10 tools;
-        #                           model đọc đây để biết có thể gọi tool gì,
-        #                           với tham số gì, và tham số đó có nghĩa gì.
-        #   tool_choice="auto"    — "auto" = model tự quyết định có gọi tool không.
-        #                           Các lựa chọn khác:
-        #                             "none"     = cấm gọi tool (chỉ trả content)
-        #                             "required" = ép phải gọi tool (dùng khi muốn
-        #                                          force structured output)
-        #                           "auto" phù hợp nhất vì cần model tự biết khi
-        #                           nào xong để dừng.
-        #   max_tokens=2048       — giới hạn số token trong 1 lần trả lời.
-        #                           1 token ≈ 0.75 từ tiếng Anh.
-        # type:ignore: TOOL_SCHEMAS là list[dict] (xem tools.py), không exact
-        # match OpenAI TypedDict ChatCompletionToolUnionParam. Runtime hợp lệ vì
-        # dict shape khớp schema OpenAI mong đợi.
-        #
         # Bọc try/except quanh CHỈ lời gọi API: nếu vLLM rớt mạng, trả 5xx, hay
         # context vượt quá window (400), exception sẽ bubble ra ngoài và giết
         # cả run_agent — eval/run.py sẽ tính nguyên task là crash. Bắt ở đây để
@@ -577,26 +577,6 @@ def run_agent(goal: str, workspace: Path, max_iters: int = 15,
         # HỢP LỆ (mọi assistant-tool_calls trước đó đã có đủ tool message ghép
         # cặp). Vì ta return TRƯỚC khi append assistant message mới, list không
         # bao giờ bị bỏ lại với 1 assistant.tool_calls "mồ côi" không có kết quả.
-        # temperature=None → dùng default của model (REPL). Eval truyền 0.0 để
-        # decode tham lam (greedy): tool-call ổn định + kết quả TÁI LẬP được (pass@1
-        # chuẩn). Ở temp mặc định (~0.6), thỉnh thoảng turn-1 model trả prose thay
-        # vì gọi write_file → task fail oan; greedy gần như loại bỏ hành vi đó.
-        create_kwargs = dict(
-            model=model,
-            messages=messages,
-            tools=TOOL_SCHEMAS,
-            tool_choice="auto",
-            max_tokens=load_model_config().max_tokens,
-        )
-
-        # `if temperature is not None:` — chỉ thêm key "temperature" vào dict
-        # khi caller truyền giá trị cụ thể (không phải None).
-        # Tại sao? Vì khi gửi temperature=None lên API sẽ bị lỗi — API muốn
-        # hoặc không có key này, hoặc có key với giá trị hợp lệ (số thực 0.0-2.0).
-        if temperature is not None:
-            # `create_kwargs["temperature"] = temperature` — thêm key mới vào dict.
-            # dict["key"] = value thêm hoặc cập nhật key trong dictionary.
-            create_kwargs["temperature"] = temperature
 
         # `try:` ... `except OpenAIError as e:` — cấu trúc xử lý lỗi (exception handling).
         # `try:` = "thử chạy đoạn code này".
@@ -763,27 +743,29 @@ def run_agent(goal: str, workspace: Path, max_iters: int = 15,
             return {"finish_reason": "no_action", "iters_used": i}
 
         # -----------------------------------------------------------------------
-        # BƯỚC 5.5: NẾU ĐÂY LÀ TURN CUỐI (i == max_iters) MÀ MODEL VẪN GỌI TOOL,
-        # KHÔNG chạy tool nữa. Lý do: kết quả tool ở turn cuối sẽ KHÔNG bao giờ
-        # được gửi lại cho model (vòng lặp kết thúc ngay sau), nên chạy chúng chỉ
-        # phí công — tệ hơn, có thể là write_file/apply_patch làm thay đổi đĩa mà
-        # model không kịp verify. Dừng tại đây và rơi xuống cảnh báo max_iters.
+        # BƯỚC 5.5: PHÁT HIỆN finish MỘT LẦN DUY NHẤT cho cả turn.
+        # Cờ này dùng cho CẢ quyết định turn-cuối bên dưới LẪN lối ra "finished"
+        # sau khi chạy tool. (Trước đây check finish viết ở 2 nơi với 2 idiom
+        # khác nhau — drift chỉ chờ xảy ra; 1 nguồn sự thật an toàn hơn.)
         # -----------------------------------------------------------------------
+        finish_called = any(
+            getattr(tc, "function", None) and tc.function.name == "finish"
+            for tc in msg.tool_calls
+        )
 
-        # `if i == max_iters:` — `==` là so sánh BẰNG (khác với = là gán).
-        # Nếu đây là turn cuối cùng được phép → dừng, không chạy tool nữa.
-        if i == max_iters:
-            # Turn cuối mà model GỌI finish() ngay tại đây = nó ĐÃ tuyên bố xong, không
-            # phải bị cụt vì hết turn. Phân loại "finished" (đừng để rơi xuống "max_iters").
-            # Quan trọng vì optimizer của SkillOpt keys luật khắc phục theo finish_reason —
-            # nhầm finished→max_iters sẽ đánh lừa nó. (Tool result của turn cuối dù sao cũng
-            # không được gửi lại cho model nên return luôn là đúng.)
-            if any(getattr(tc, "function", None) and tc.function.name == "finish"
-                   for tc in msg.tool_calls):
-                cprint(Color.FINISH, "\nAgent called finish() on the final turn — task complete.")
-                return {"finish_reason": "finished", "iters_used": i}
-            # `break` — thoát khỏi vòng lặp for ngay lập tức.
-            # Không chạy thêm bất kỳ lần lặp nào. Code tiếp tục sau dấu } của for.
+        # Turn cuối (i == max_iters) mà model vẫn gọi tool THƯỜNG (không finish):
+        # KHÔNG chạy tool nữa — kết quả sẽ không bao giờ được gửi lại cho model,
+        # và write_file/apply_patch có thể đổi đĩa mà model không kịp verify.
+        # `messages.pop()` gỡ assistant message vừa append ở trên (tool_calls
+        # của nó chưa hề được chạy) — giữ BẤT BIẾN ghép cặp tool_calls ↔
+        # role:"tool" đúng ở MỌI điểm thoát, không chỉ tại mỗi API call (trace
+        # dùng làm training data Phase-3 không được chứa orphan tool_calls).
+        # Quan trọng cho SkillOpt: finish trên turn cuối vẫn phân loại "finished"
+        # (model ĐÃ tuyên bố xong, không phải bị cụt vì hết turn) — nó RƠI XUỐNG
+        # đường thực thi bình thường vì finish là pure-function: chạy, append
+        # role:"tool", return "finished" ở dưới. Một đường thoát duy nhất.
+        if i == max_iters and not finish_called:
+            messages.pop()
             break
 
         # -----------------------------------------------------------------------
@@ -796,10 +778,8 @@ def run_agent(goal: str, workspace: Path, max_iters: int = 15,
         # `= True` gán giá trị True cho biến made_tool_call.
         made_tool_call = True
 
-        # finish_called: model có gọi tool "finish" trong turn này không. finish là
-        # tín hiệu "task xong" → sau khi chạy hết tool_calls của turn, nếu cờ này
-        # bật ta kết thúc loop với finish_reason="finished".
-        finish_called = False
+        # (finish_called đã được tính MỘT lần ở BƯỚC 5.5 phía trên — nếu cờ bật,
+        # ta vẫn chạy đủ mọi tool_call của turn rồi mới return "finished" bên dưới.)
 
         # `for tc in msg.tool_calls:` — vòng lặp for lồng nhau (nested loop).
         # Lặp qua từng tool call trong list msg.tool_calls.
@@ -854,11 +834,6 @@ def run_agent(goal: str, workspace: Path, max_iters: int = 15,
                 "content": result,
             })
 
-            # Nếu tool vừa chạy là "finish", model tuyên bố đã xong. Đánh dấu cờ để
-            # kết thúc loop SAU khi append đủ kết quả cho mọi tool_call của turn (giữ
-            # bất biến: mỗi tool_call có đúng 1 message role:"tool" tương ứng).
-            if tc.function.name == "finish":  # type: ignore[union-attr]
-                finish_called = True
         # Hết for — loop sang turn tiếp theo, model sẽ "thấy" tool results vừa append.
         # Vòng lặp for bên trong (for tc in msg.tool_calls) kết thúc.
         # Vòng lặp for bên ngoài (for i in range(...)) tiếp tục turn i+1.
@@ -876,9 +851,9 @@ def run_agent(goal: str, workspace: Path, max_iters: int = 15,
     # vô tận — không hẳn là bug, nhưng dấu hiệu task quá khó hoặc model bị kẹt.
     #
     # Tại sao rơi xuống đây thay vì return bên trong vòng lặp?
-    #   Vì ở BƯỚC 5.5, khi i == max_iters và model vẫn gọi tool, ta `break` thoát
-    #   khỏi vòng lặp for. Code tiếp tục chạy các dòng SAU vòng lặp for — tức là
-    #   dòng cprint và return bên dưới này.
+    #   Vì ở BƯỚC 5.5, khi i == max_iters và model vẫn gọi tool thường (không
+    #   finish), ta pop assistant message mồ côi rồi `break` thoát vòng for.
+    #   Code tiếp tục chạy các dòng SAU vòng lặp — dòng cprint và return này.
     cprint(Color.WARN, f"\nAgent hit max_iters={max_iters} without finishing.")
     # Trả về "max_iters" — đã hết số lượt cho phép.
     return {"finish_reason": "max_iters", "iters_used": max_iters}

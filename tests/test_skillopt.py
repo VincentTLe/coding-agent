@@ -135,13 +135,11 @@ def test_skill_hash_stable_and_distinct():
 
 
 def test_gate_accepts_only_strictly_greater():
-    # The validation gate keeps a candidate only if it STRICTLY beats current (ties reject).
-    def gate(cand: float, current: float, best: float) -> str:
-        if cand > best and cand > current:
-            return "accept_new_best"
-        if cand > current:
-            return "accept"
-        return "reject"
+    # The validation gate keeps a candidate only if it STRICTLY beats current
+    # (ties reject). This imports the REAL decision rule from loop.py — an
+    # earlier version of this test asserted against a local re-implementation,
+    # which could never fail no matter what optimize() did.
+    from skillopt.loop import gate_decision as gate
 
     assert gate(0.6, 0.5, 0.5) == "accept_new_best"
     assert gate(0.5, 0.5, 0.7) == "reject"   # tie → reject

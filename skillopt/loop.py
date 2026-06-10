@@ -145,6 +145,21 @@ def _slow_update(prev_skill: str, curr_skill: str, sample_file: Path, *, jobs: i
     return content.strip()
 
 
+def gate_decision(cand_score: float, current_score: float, best_score: float) -> str:
+    """Luật quyết định THUẦN của validation gate: strict >, hòa thì reject.
+
+    Trả về "accept_new_best" | "accept" | "reject". Tách thành hàm riêng để
+    test được CHÍNH luật mà toàn bộ kết quả SkillOpt dựa lên — trước đây
+    tests/test_skillopt.py test một BẢN COPY của luật này (đổi > thành >=
+    trong optimize() thì test vẫn xanh, tức là test không bảo vệ gì cả).
+    """
+    if cand_score > current_score:
+        if cand_score > best_score:
+            return "accept_new_best"
+        return "accept"
+    return "reject"
+
+
 def optimize(seed_path: Path, splits_dir: Path, run_dir: Path, *, epochs: int, steps: int,
              L: int, jobs: int, slow_samples: int,
              max_minutes: float | None = None, smoke: bool = False) -> dict:
@@ -213,12 +228,14 @@ def optimize(seed_path: Path, splits_dir: Path, run_dir: Path, *, epochs: int, s
                      "optimizer_calls": opt_calls})
                 continue
 
-            decision = "reject"
-            if cand_score > current_score:           # strict >, ties reject
-                current, current_score, decision = cand, cand_score, "accept"
-                if cand_score > best_score:
-                    best, best_score, decision = cand, cand_score, "accept_new_best"
-                    (run_dir / "best_skill.md").write_text(best, encoding="utf-8")
+            # Luật accept/reject sống trong gate_decision() (hàm thuần, có test
+            # thật trỏ vào) — ở đây chỉ còn side effects theo quyết định đó.
+            decision = gate_decision(cand_score, current_score, best_score)
+            if decision == "accept_new_best":
+                best, best_score = cand, cand_score
+                (run_dir / "best_skill.md").write_text(best, encoding="utf-8")
+            if decision in ("accept", "accept_new_best"):
+                current, current_score = cand, cand_score
             else:
                 rejected.append({"edits": clipped, "drop": cand_score - current_score})
 
