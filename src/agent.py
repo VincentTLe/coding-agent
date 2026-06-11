@@ -216,7 +216,9 @@ class ModelConfig:
     model: str
     api_key: str = "not-needed"
     max_tokens: int = 2048
-    temperature: float = 0.0
+    # (KHÔNG có field temperature: sampling do CALLER quyết — eval truyền 0.0
+    # tường minh cho greedy/tái lập, REPL để None = default của model. Một
+    # field config không ai đọc là lời hứa suông — đã xóa 2026-06-10.)
     context_window: int = 32768
 
 
@@ -225,7 +227,7 @@ def load_model_config() -> ModelConfig:
     """Active model config from models.json (by id), falling back to .env.
 
     models.json: {"default": "<id>", "models": {"<id>": {base_url, model,
-    api_key_env?, max_tokens?, temperature?, context_window?}}}. Active id =
+    api_key_env?, max_tokens?, context_window?}}}. Active id =
     $AGENT_MODEL or the file's "default". The API key is read from the env var
     named by api_key_env (default VLLM_API_KEY) so no secret lives in the JSON.
     """
@@ -241,7 +243,6 @@ def load_model_config() -> ModelConfig:
             model=entry["model"],
             api_key=api_key,
             max_tokens=entry.get("max_tokens", 2048),
-            temperature=entry.get("temperature", 0.0),
             context_window=entry.get("context_window", 32768),
         )
     # Fallback: legacy .env behaviour (identical to before models.json existed).
