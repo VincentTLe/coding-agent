@@ -369,6 +369,99 @@ def _setup_logging() -> None:
 # ---------------------------------------------------------------------------
 # THE AGENT LOOP — trái tim của hệ thống
 # ---------------------------------------------------------------------------
+# execute_turn — cơ chế "chạy trọn một lượt tool_calls" DÙNG CHUNG
+# ---------------------------------------------------------------------------
+
+def execute_turn(tool_calls: list[dict], messages: list, workspace: Path,
+                 *, on_call=None, on_result=None) -> bool:
+    """Chạy trọn một lượt tool_calls, giữ bất biến ghép cặp — dùng CHUNG bởi
+    run_agent (eval/solve) và cli/chat.py (REPL).
+
+    Trước đây REPL tự cài lại khối này và 2 bản đã drift theo 3 hướng: REPL có
+    JSON-repair mà eval không (args hỏng nằm lại history → vLLM 400 turn sau,
+    chết cả run eval); eval biết finish mà REPL lờ đi; chỉ REPL chống Ctrl+C
+    làm đứt cặp. "Một lượt agent diễn ra thế nào" giờ có ĐÚNG MỘT câu trả lời.
+
+    tool_calls: list dict ĐÃ CHUẨN HÓA {"id", "name", "arguments"} — caller tự
+    chuyển từ SDK object (run_agent) / streaming fragments (chat.py) về dạng này.
+    PRE: messages[-1] là assistant message mang đúng các tool_calls này.
+
+    Hành vi:
+      1. Validate JSON arguments TRƯỚC khi chạy. Args hỏng (model emit Python
+         triple-quote trong JSON...) → KHÔNG chạy tool; sửa bản copy trong
+         messages[-1] thành "{}" (history hợp lệ — turn sau không 400) + trả
+         error message hướng dẫn retry. Error giữ ENGLISH-ONLY: Qwen3 instruct
+         tuned trên English, trộn Vietnamese giảm tỉ lệ retry thành công.
+      2. Chạy từng tool qua execute_tool, append ĐÚNG 1 role:"tool" mỗi call
+         với tool_call_id khớp (bất biến ghép cặp của API).
+      3. Ctrl+C giữa một tool dài: điền placeholder cho call đó VÀ mọi call
+         còn lại (pairing vẫn đủ) rồi mới re-raise — caller quyết số phận
+         (REPL: break turn, sống tiếp; eval: thoát nhưng history hợp lệ).
+
+    on_call(name, args) / on_result(result): hook in ra màn hình — mặc định
+    là style của run_agent ([tool]/[tool result]); REPL truyền style riêng (▶/↳).
+    Returns: True nếu lượt này có gọi tool finish.
+    """
+    if on_call is None:
+        def on_call(name, args):
+            cprint(Color.TOOL, f"[tool] {name}({args})")
+    if on_result is None:
+        def on_result(result):
+            # Cắt preview 500 chars khi in — model vẫn nhận FULL qua messages.
+            preview = result if len(result) < 500 else result[:500] + "...[truncated]"
+            cprint(Color.RESULT, f"[tool result]\n{preview}")
+
+    finish_called = any(tc["name"] == "finish" for tc in tool_calls)
+    interrupted: KeyboardInterrupt | None = None
+
+    for tc in tool_calls:
+        on_call(tc["name"], tc["arguments"])
+
+        # Validate JSON trước — execute_tool cũng tự bắt JSON hỏng, nhưng chỉ
+        # validate ở đây mới SỬA ĐƯỢC bản args nằm trong history (điểm sống còn).
+        bad_json: str | None = None
+        if tc["arguments"]:
+            try:
+                json.loads(tc["arguments"])
+            except json.JSONDecodeError as e:
+                bad_json = str(e)
+
+        if interrupted is not None:
+            # Đã bị Ctrl+C ở tool trước — không chạy nữa, chỉ điền placeholder
+            # để tool_call này không thành mồ côi.
+            result = "[skipped: user interrupted tool execution]"
+        elif bad_json is not None:
+            # Sửa args trong assistant message vừa append: "{}" parse được →
+            # history không làm vLLM 400 ở turn sau. Tool result vẫn nói rõ lỗi.
+            for entry in messages[-1].get("tool_calls", []):
+                if entry.get("id") == tc["id"]:
+                    entry["function"]["arguments"] = "{}"
+            result = (
+                f"ERROR: invalid JSON in arguments: {bad_json}\n"
+                "Retry with valid JSON. Escape newlines as \\n and double-quotes as \\\". "
+                "Do NOT use Python triple-quote (\"\"\") inside JSON strings."
+            )
+        else:
+            try:
+                result = execute_tool(tc["name"], tc["arguments"], workspace)
+            except KeyboardInterrupt as e:
+                interrupted = e
+                result = "[interrupted: user cancelled tool execution]"
+
+        on_result(result)
+        messages.append({
+            "role": "tool",
+            "tool_call_id": tc["id"],
+            "content": result,
+        })
+
+    if interrupted is not None:
+        # Re-raise SAU khi mọi tool_call đã có result — pairing nguyên vẹn.
+        raise interrupted
+    return finish_called
+
+
+# ---------------------------------------------------------------------------
 
 # `def run_agent(goal: str, workspace: Path, max_iters: int = 15,`
 # `              time_budget_s: float | None = None,`
@@ -782,62 +875,20 @@ def run_agent(goal: str, workspace: Path, max_iters: int = 15,
         # (finish_called đã được tính MỘT lần ở BƯỚC 5.5 phía trên — nếu cờ bật,
         # ta vẫn chạy đủ mọi tool_call của turn rồi mới return "finished" bên dưới.)
 
-        # `for tc in msg.tool_calls:` — vòng lặp for lồng nhau (nested loop).
-        # Lặp qua từng tool call trong list msg.tool_calls.
-        # Biến `tc` (tool call) lần lượt nhận mỗi phần tử trong list.
-        # Model có thể yêu cầu nhiều tool cùng lúc (parallel calls) → cần xử lý
-        # từng cái.
-        for tc in msg.tool_calls:
-            # type:ignore: msg.tool_calls có thể chứa ChatCompletionMessageCustomToolCall
-            # (không có .function). Hiện model chỉ emit function calls (Hermes parser)
-            # nên runtime ổn — Pylance khó tính.
-
-            # `tc.function.name` — đọc tên function cần gọi.
-            # `tc.function.arguments` — đọc chuỗi JSON chứa các tham số.
-            # Ví dụ: tc.function.name = "write_file"
-            #        tc.function.arguments = '{"path": "hello.py", "content": "print(1)"}'
-            # Log tên tool + arguments TRƯỚC khi chạy → debug được tool nào hang.
-            cprint(Color.TOOL, f"[tool] {tc.function.name}({tc.function.arguments})")  # type: ignore[union-attr]
-
-            # `execute_tool(tc.function.name, tc.function.arguments, workspace)`
-            # Gọi hàm execute_tool từ src/tools.py với 3 tham số:
-            #   1. tên tool (string)
-            #   2. tham số JSON (string chứa JSON)
-            #   3. workspace (Path — thư mục sandbox)
-            # execute_tool tự parse JSON args + dispatch theo name. Nó luôn trả
-            # về string (kể cả khi có lỗi — string bắt đầu bằng "ERROR:").
-            # `workspace` truyền tường minh xuống dispatcher (không còn global).
-            result = execute_tool(tc.function.name, tc.function.arguments, workspace)  # type: ignore[union-attr]
-
-            # `len(result) < 500` — so sánh độ dài chuỗi với 500.
-            # `len(result)` = số ký tự trong chuỗi result.
-            # Cắt bớt khi log để khỏi spam terminal. Model vẫn nhận FULL kết quả
-            # qua append messages bên dưới.
-            # `result if len(result) < 500 else result[:500] + "...[truncated]"`
-            # Đây là TERNARY EXPRESSION (biểu thức ba ngôi) của Python:
-            #   <giá_trị_nếu_đúng> if <điều_kiện> else <giá_trị_nếu_sai>
-            # Nếu chuỗi ngắn hơn 500 ký tự → dùng nguyên. Nếu dài hơn → cắt 500 đầu.
-            # `result[:500]` = slice (cắt) list/string: lấy từ đầu đến index 500 (không gồm 500).
-            preview = result if len(result) < 500 else result[:500] + "...[truncated]"
-            cprint(Color.RESULT, f"[tool result]\n{preview}")
-
-            # Append tool result theo format chuẩn OpenAI:
-            #   role: "tool"
-            #   tool_call_id: phải khớp với tc.id để API biết kết quả này thuộc call nào
-            #   content: chuỗi kết quả (model đọc chuỗi này ở turn sau)
-            # `tc.id` = ID duy nhất của tool call này — ví dụ "call_abc123".
-            # API yêu cầu mỗi tool result message phải có tool_call_id khớp với
-            # một tool_calls[].id trong assistant message trước đó. Đây là cách
-            # API biết kết quả nào thuộc về lời gọi tool nào (khi có parallel calls).
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tc.id,
-                "content": result,
-            })
-
-        # Hết for — loop sang turn tiếp theo, model sẽ "thấy" tool results vừa append.
-        # Vòng lặp for bên trong (for tc in msg.tool_calls) kết thúc.
-        # Vòng lặp for bên ngoài (for i in range(...)) tiếp tục turn i+1.
+        # Chuẩn hóa SDK objects → dict {"id","name","arguments"} rồi giao TRỌN
+        # lượt cho execute_turn (định nghĩa phía trên) — cùng MỘT khối cơ chế
+        # với REPL cli/chat.py: validate/repair JSON args → chạy execute_tool →
+        # append đúng 1 role:"tool" mỗi call (bất biến ghép cặp). Lợi ích mới
+        # cho eval: args JSON hỏng được thay "{}" trong history nên turn sau
+        # không 400, model nhận error hướng dẫn retry thay vì chết cả run.
+        # type:ignore: msg.tool_calls có thể chứa CustomToolCall không có
+        # .function — model hiện chỉ emit function calls (Hermes parser).
+        calls = [{"id": tc.id,
+                  "name": tc.function.name,        # type: ignore[union-attr]
+                  "arguments": tc.function.arguments}  # type: ignore[union-attr]
+                 for tc in msg.tool_calls]
+        execute_turn(calls, messages, workspace)
+        # Hết lượt tool — loop sang turn tiếp, model sẽ "thấy" results vừa append.
 
         # Model đã gọi finish() → kết thúc sạch. Đã append đủ tool result ở trên nên
         # messages hợp lệ. Phân loại "finished" (KHÔNG phải no_action — model ĐÃ hành

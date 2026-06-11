@@ -261,3 +261,54 @@ def test_loop_empty_choices_is_api_error(tmp_path):
     fc = FakeClient(["empty"])
     out = run_agent("t", tmp_path, client=fc)
     assert out == {"finish_reason": "api_error", "iters_used": 1}
+
+
+def test_loop_bad_json_args_repaired_in_history(tmp_path):
+    """JSON-repair (trước đây chỉ REPL có) giờ tới được run_agent qua
+    execute_turn: args hỏng → tool KHÔNG chạy, bản args trong history được
+    thay "{}" (turn sau không 400), model nhận ERROR hướng dẫn retry."""
+    bad_args = '{"path": "a.txt", "content": """boom"""}'  # triple-quote = JSON hỏng
+    fc = FakeClient([
+        _Msg(tool_calls=[_ToolCall("write_file", bad_args, id="call_bad")]),
+        _Msg(content="done"),
+    ])
+    out = run_agent("t", tmp_path, client=fc)
+    assert out == {"finish_reason": "finished", "iters_used": 2}
+    assert not (tmp_path / "a.txt").exists(), "args hỏng thì tool không được chạy"
+    asst = [m for m in fc.seen_messages
+            if isinstance(m, dict) and m.get("role") == "assistant" and m.get("tool_calls")]
+    assert asst[0]["tool_calls"][0]["function"]["arguments"] == "{}", \
+        "history phải được sanitize để turn sau không 400"
+    tool_msgs = [m for m in fc.seen_messages
+                 if isinstance(m, dict) and m.get("role") == "tool"]
+    assert tool_msgs[0]["content"].startswith("ERROR: invalid JSON")
+    _assert_pairing(fc.seen_messages)
+
+
+def test_execute_turn_keyboard_interrupt_keeps_pairing(tmp_path, monkeypatch):
+    """Ctrl+C giữa tool dài: execute_turn điền placeholder cho MỌI call còn lại
+    (pairing nguyên vẹn) RỒI MỚI re-raise — REPL break turn, eval thoát sạch."""
+    import pytest
+
+    from src import agent as A
+
+    def _boom(name, arguments, workspace):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(A, "execute_tool", _boom)
+    calls = [
+        {"id": "call_1", "name": "write_file", "arguments": '{"path": "a", "content": "x"}'},
+        {"id": "call_2", "name": "write_file", "arguments": '{"path": "b", "content": "y"}'},
+    ]
+    messages = [{"role": "assistant", "content": None, "tool_calls": [
+        {"id": c["id"], "type": "function",
+         "function": {"name": c["name"], "arguments": c["arguments"]}}
+        for c in calls
+    ]}]
+    with pytest.raises(KeyboardInterrupt):
+        A.execute_turn(calls, messages, tmp_path)
+    tool_msgs = [m for m in messages if m.get("role") == "tool"]
+    assert [m["tool_call_id"] for m in tool_msgs] == ["call_1", "call_2"], \
+        "cả 2 call phải có result (call bị ngắt + call bị skip)"
+    assert "interrupted" in tool_msgs[0]["content"]
+    assert "skipped" in tool_msgs[1]["content"]

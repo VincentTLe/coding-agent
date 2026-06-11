@@ -47,13 +47,6 @@ from __future__ import annotations
 # `--workspace /tmp` và biến nó thành `args.workspace = "/tmp"`.
 import argparse
 
-# `json` — thư viện chuẩn để làm việc với định dạng JSON.
-# JSON (JavaScript Object Notation) là cách biểu diễn dữ liệu dạng văn bản,
-# ví dụ: {"name": "Alice", "age": 30}
-# json.dumps() → chuyển dict Python thành chuỗi JSON (serialization).
-# json.loads() → chuyển chuỗi JSON thành dict Python (deserialization).
-import json
-
 # `logging` — thư viện chuẩn để in thông báo debug/info/warning ra console
 # hoặc file. Khác print() ở chỗ: có level (DEBUG/INFO/WARNING/ERROR) và
 # có thể bật/tắt theo level.
@@ -82,8 +75,9 @@ from openai import OpenAI
 
 # Tái dùng tools + prompt y nguyên — không duplicate.
 # `TOOL_SCHEMAS` là list mô tả các tool (hàm) mà model có thể gọi.
-# `execute_tool` là hàm thực thi tool khi model yêu cầu.
-from src.tools import TOOL_SCHEMAS, execute_tool
+# (execute_tool không import trực tiếp nữa — việc THỰC THI tool của REPL đi
+# qua src.agent.execute_turn, cùng cơ chế với run_agent.)
+from src.tools import TOOL_SCHEMAS
 
 # `SYSTEM_PROMPT` là chuỗi văn bản định nghĩa "nhân cách" và quy tắc của agent.
 # Luôn được đặt là message đầu tiên với role="system".
@@ -97,7 +91,7 @@ from src.prompts import SYSTEM_PROMPT
 #   - get_model()     : tên model từ cùng nguồn cấu hình.
 #   - load_model_config(): ModelConfig (context_window, max_tokens...) từ
 #                       models.json, fallback .env — load_dotenv gọi bên trong.
-from src.agent import Color, get_client, get_model, load_model_config
+from src.agent import Color, execute_turn, get_client, get_model, load_model_config
 # Compaction: CƠ CHẾ sống ở src/compaction.py (module sâu, có unit test);
 # file này chỉ giữ CHÍNH SÁCH (ngưỡng auto-trigger tính từ models.json).
 from src.compaction import KEEP_RECENT_MESSAGES, compact_messages, estimate_tokens
@@ -669,122 +663,60 @@ def chat(workspace: Path, max_tool_turns: int = 15) -> None:
                     messages.pop()
                 break
 
-            # --- Validate JSON args TRƯỚC KHI append vào history ---
-            # Nếu model emit bad JSON (vd Python triple-quote `"""..."""`),
-            # vLLM sẽ trả 400 ở turn sau vì history chứa tool_call args không
-            # parse được. Mark broken để:
-            #   (a) Thay arguments bằng "{}" trong history → vLLM happy.
-            #   (b) Trả error message rõ cho model retry với JSON đúng.
-            for tc in tool_calls:
-                try:
-                    if tc["arguments"]:
-                        # `json.loads(chuỗi)` — JSON DESERIALIZATION.
-                        # JSON là định dạng dữ liệu dạng văn bản, ví dụ: '{"path": "/etc/hosts"}'
-                        # `json.loads()` chuyển chuỗi JSON thành dict/list Python.
-                        # Nếu chuỗi không hợp lệ JSON → ném `json.JSONDecodeError`.
-                        # Ở đây ta chỉ kiểm tra (không dùng kết quả), nên không gán vào biến.
-                        json.loads(tc["arguments"])
-                except json.JSONDecodeError as e:
-                    # `json.JSONDecodeError` — loại exception cụ thể khi JSON parse fail.
-                    # `tc["_bad_json"] = True` — thêm key "_bad_json" vào dict tc.
-                    # Dấu `_` đầu tên key là quy ước "key nội bộ, không phải data thật".
-                    tc["_bad_json"] = True
-                    tc["_bad_json_error"] = str(e)
-
             # --- Build assistant message để append vào history ---
-            # Phải giữ NGUYÊN `tool_calls` field cho turn sau, giống agent.py
-            # (xem comment dài về model_dump trong agent.py line 154-163).
-            # `asst_msg: dict = {...}` — khai báo type hint cho biến cục bộ.
+            # Giữ NGUYÊN tool_calls field cho turn sau (giống run_agent — xem
+            # comment về model_dump trong agent.py). Args để RAW kể cả khi JSON
+            # hỏng: execute_turn bên dưới sẽ validate và sanitize bản trong
+            # history thành "{}" nếu không parse được.
             asst_msg: dict = {"role": "assistant", "content": content_buf or None}
-            # `content_buf or None` — nếu content_buf rỗng (""), dùng None.
-            # API yêu cầu content là None (không phải "") khi chỉ có tool_calls.
-
+            # `content_buf or None` — API yêu cầu content là None (không phải "")
+            # khi message chỉ có tool_calls.
             if tool_calls:
-                # `asst_msg["tool_calls"] = [...]` — gán list vào key mới.
-                # List comprehension tạo list các dict từ `tool_calls`:
-                # `[{...} for tc in tool_calls]` — với mỗi tc trong tool_calls, tạo dict.
                 asst_msg["tool_calls"] = [
                     {
                         "id": tc["id"],
                         "type": "function",
-                        "function": {
-                            "name": tc["name"],
-                            # Bad JSON → "{}" để history hợp lệ. Tool result vẫn nói lỗi.
-                            # CONDITIONAL EXPRESSION: nếu có _bad_json → "{}", ngược lại → arguments gốc.
-                            "arguments": "{}" if tc.get("_bad_json") else tc["arguments"],
-                        },
+                        "function": {"name": tc["name"], "arguments": tc["arguments"]},
                     }
                     for tc in tool_calls
                 ]
-            # `messages.append(asst_msg)` — thêm assistant message vào history.
-            # Sau bước này, history có dạng: [..., user_msg, assistant_msg]
             messages.append(asst_msg)
 
-            # --- Nếu model không gọi tool → câu trả lời cuối, ra ngoài inner loop ---
-            # `if not tool_calls:` — tool_calls là list rỗng [] → falsy → `not []` = True.
+            # --- Model không gọi tool → câu trả lời cuối, thoát inner loop ---
             if not tool_calls:
-                break  # Thoát inner for loop, quay lại outer while để nhận input tiếp.
-
-            # --- Thực thi từng tool call, append result vào history ---
-            # INVARIANT: asst_msg vừa append có N tool_calls. API yêu cầu MỖI
-            # tool_call phải có đúng 1 role=tool result với matching id ở phía
-            # sau. Nếu thiếu (vd Ctrl+C giữa execute_tool của tool dài như
-            # run_tests), tool_call thành orphan → vLLM 400 ở turn sau. Vì vậy
-            # ta dùng `interrupted` flag: khi user ngắt, vẫn append placeholder
-            # result cho MỌI tool còn lại để giữ pairing hợp lệ, rồi mới break.
-            interrupted = False
-            for tc in tool_calls:
-                args_str = tc["arguments"]
-                # Cắt args dài cho gọn khi in (model vẫn nhận full qua history).
-                # `len(args_str) <= 200` — nếu ngắn hơn 200 chars → in nguyên.
-                # `args_str[:200] + "...[truncated]"` — cắt 200 chars + thêm hậu tố.
-                args_preview = args_str if len(args_str) <= 200 else args_str[:200] + "...[truncated]"
-                print(f"{Color.TOOL}▶ {tc['name']}({args_preview}){Color.RESET}")
-
-                if interrupted:
-                    # Đã bị Ctrl+C ở tool trước — không chạy nữa, chỉ điền
-                    # placeholder để tool_call này không bị orphan.
-                    result = "[skipped: user interrupted tool execution]"
-                elif tc.get("_bad_json"):
-                    # Không gọi execute_tool — args không parse được.
-                    # Error message này được gửi NGƯỢC lại model. Giữ ENGLISH-ONLY
-                    # vì Qwen3 instruct tuned trên English; trộn Vietnamese giảm
-                    # tỉ lệ retry thành công (em đã quan sát qua demo trước).
-                    result = (
-                        f"ERROR: invalid JSON in arguments: {tc['_bad_json_error']}\n"
-                        "Retry with valid JSON. Escape newlines as \\n and double-quotes as \\\". "
-                        "Do NOT use Python triple-quote (\"\"\") inside JSON strings."
-                    )
-                else:
-                    try:
-                        # `execute_tool(name, args_str, workspace)` — thực thi tool.
-                        # Hàm này được import từ src/tools.py. Trả về chuỗi kết quả.
-                        result = execute_tool(tc["name"], args_str, workspace)
-                    except KeyboardInterrupt:
-                        # Ctrl+C giữa 1 tool dài. Đánh dấu interrupted để các tool
-                        # còn lại chỉ điền placeholder (giữ pairing), không crash REPL.
-                        print(f"\n{Color.WARN}[interrupted]{Color.RESET}")
-                        interrupted = True
-                        result = "[interrupted: user cancelled tool execution]"
-
-                # In preview của kết quả (500 chars đầu).
-                result_preview = result if len(result) <= 500 else result[:500] + "...[truncated]"
-                print(f"{Color.RESULT}  ↳ {result_preview}{Color.RESET}")
-
-                # role=tool message — tool_call_id PHẢI khớp với tc.id để API
-                # link result với call. Sai id → API reject conversation.
-                # `messages.append({...})` — thêm tool result vào history.
-                # Sau bước này: [..., user, assistant(tool_calls), tool_result, ...]
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc["id"],
-                    "content": result,
-                })
-
-            # Nếu user đã ngắt giữa tool execution → kết thúc turn này (history
-            # vẫn hợp lệ vì mọi tool_call đã có result). Không chạy stream tiếp.
-            if interrupted:
                 break
+
+            # --- Thực thi lượt tool: execute_turn (src/agent.py) ---
+            # CÙNG một cơ chế với run_agent: validate/repair JSON args → chạy
+            # execute_tool → append đủ role:"tool" mỗi call (bất biến ghép cặp,
+            # kể cả khi Ctrl+C giữa chừng). Trước đây khối này được REPL tự cài
+            # lại và đã drift khỏi run_agent — giờ "một lượt agent diễn ra thế
+            # nào" chỉ còn MỘT câu trả lời. REPL chỉ truyền style in riêng (▶/↳).
+            try:
+                finish_called = execute_turn(
+                    tool_calls, messages, workspace,
+                    on_call=lambda name, args: print(
+                        f"{Color.TOOL}▶ {name}("
+                        f"{args if len(args) <= 200 else args[:200] + '...[truncated]'}"
+                        f"){Color.RESET}"),
+                    on_result=lambda result: print(
+                        f"{Color.RESULT}  ↳ "
+                        f"{result if len(result) <= 500 else result[:500] + '...[truncated]'}"
+                        f"{Color.RESET}"),
+                )
+            except KeyboardInterrupt:
+                # execute_turn đã điền placeholder đủ cặp cho mọi tool_call rồi
+                # mới re-raise — history hợp lệ. Chỉ dừng turn này, REPL sống tiếp.
+                print(f"\n{Color.WARN}[interrupted]{Color.RESET}")
+                break
+
+            # --- Model gọi finish() = tuyên bố hoàn thành → dừng inner loop ---
+            # Giống run_agent phân loại "finished". Trước đây REPL LỜ finish:
+            # model gọi xong vẫn bị stream thêm turn nữa (lãng phí + khó hiểu).
+            if finish_called:
+                print(f"{Color.FINISH}✓ finish() — agent tuyên bố hoàn thành.{Color.RESET}")
+                break
+
             # Loop sang turn tiếp theo — model sẽ "thấy" tool results vừa append.
             # Python tiếp tục lên đầu `for _turn in range(...)` và lặp tiếp.
 
