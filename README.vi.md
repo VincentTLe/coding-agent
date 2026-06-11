@@ -370,7 +370,7 @@ Anh muốn hiểu sâu thì đọc theo order này:
 2. **`src/prompts.py`** — 1 string SYSTEM_PROMPT.
 3. **`src/tools.py`** — 11 tools (5 nhóm) + JSON schemas + dispatcher + sandbox (`_safe_path(path, workspace)`). Đọc comments Việt theo từng phần.
 4. **`src/agent.py`** — ReAct loop bản KHÔNG streaming, `run_agent(goal, workspace, ...)`. Hiểu xong examples + tools + agent là biết hết core.
-5. **`cli/chat.py`** — REPL streaming, thêm: stream chunks, thinking display, JSON sanitization, thinking toggle, context compaction (`estimate_tokens` / `compact_messages`).
+5. **`cli/chat.py`** — REPL streaming, thêm: stream chunks, thinking display, JSON sanitization, thinking toggle; context compaction giờ import từ `src/compaction.py` (cơ chế + test ở đó, chat.py giữ ngưỡng trigger).
 6. **`eval/run.py`** — benchmark harness: chấm 627 task song song, hidden-test scoring, guardrail `no_action`.
 7. **`scripts/start_vllm.sh`** — biết vLLM bật bằng flag gì.
 

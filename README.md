@@ -158,6 +158,7 @@ coding-agent/
 ├── src/                    the agent library (importable, no side effects)
 │   ├── agent.py            ReAct loop — run_agent(goal, workspace, ...)
 │   ├── tools.py            11 tools + JSON schemas + dispatcher + sandbox
+│   ├── compaction.py       context compaction (estimate + summarize old turns)
 │   └── prompts.py          system prompt
 ├── examples/               teaching ladder: 01→04, read to learn (not to run)
 ├── tests/                  pytest unit tests (sandbox, tools, dispatcher)

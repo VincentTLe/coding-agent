@@ -46,10 +46,11 @@ This file adds project-specific context and three project-specific rules.
   `examples/` is now a **teaching ladder** (read to learn, not the runtime):
   `01_chat.py` → `02_one_tool.py` → `03_react_loop.py` → `04_sandbox_safety.py`.
   `tests/` holds pytest unit tests (sandbox, tools, dispatcher).
-- **Context compaction** (in `cli/chat.py`): auto-summarizes history at
-  `COMPACT_THRESHOLD_TOKENS = 24000` (~75% of the 32K window), keeping the last
-  `KEEP_RECENT_MESSAGES = 10` verbatim. Helpers: `estimate_tokens()`,
-  `compact_messages()`. Slash commands include `/compact` (summarize now) and
+- **Context compaction**: mechanism lives in `src/compaction.py`
+  (`estimate_tokens()`, `compact_messages()`, `KEEP_RECENT_MESSAGES = 10`,
+  unit-tested in `tests/test_compaction.py`); the trigger policy lives in
+  `cli/chat.py` (`COMPACT_THRESHOLD_TOKENS` = 75% of the models.json context
+  window). Slash commands include `/compact` (summarize now) and
   `/tokens` (show current estimate).
 - **Benchmark** in `eval/`: `python eval/run.py` runs the agent over **627 tasks**
   (163 HumanEval+, 424 sanitized MBPP, 37 curated hard tasks, 3 legacy demos) and
