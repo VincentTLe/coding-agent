@@ -266,22 +266,33 @@ def test_loop_empty_choices_is_api_error(tmp_path):
 def test_loop_bad_json_args_repaired_in_history(tmp_path):
     """JSON-repair (trước đây chỉ REPL có) giờ tới được run_agent qua
     execute_turn: args hỏng → tool KHÔNG chạy, bản args trong history được
-    thay "{}" (turn sau không 400), model nhận ERROR hướng dẫn retry."""
-    bad_args = '{"path": "a.txt", "content": """boom"""}'  # triple-quote = JSON hỏng
+    thay "{}" (turn sau không 400), model nhận ERROR hướng dẫn retry.
+
+    Bad call đặt ở VỊ TRÍ THỨ HAI của turn 2-call — regression có thật do
+    review độc lập bắt: sanitize qua messages[-1] bên trong loop chỉ sửa được
+    call #1 (sau call #1, messages[-1] là tool result chứ không phải assistant
+    message nữa). Bản đầu của test này dùng 1 call nên không bắt được."""
+    bad_args = '{"path": "b.txt", "content": """boom"""}'  # triple-quote = JSON hỏng
     fc = FakeClient([
-        _Msg(tool_calls=[_ToolCall("write_file", bad_args, id="call_bad")]),
+        _Msg(tool_calls=[
+            _write_call(id="call_ok"),                         # call #1: hợp lệ
+            _ToolCall("write_file", bad_args, id="call_bad"),  # call #2: JSON hỏng
+        ]),
         _Msg(content="done"),
     ])
     out = run_agent("t", tmp_path, client=fc)
     assert out == {"finish_reason": "finished", "iters_used": 2}
-    assert not (tmp_path / "a.txt").exists(), "args hỏng thì tool không được chạy"
+    assert (tmp_path / "a.txt").exists(), "call hợp lệ vẫn phải chạy"
+    assert not (tmp_path / "b.txt").exists(), "args hỏng thì tool không được chạy"
     asst = [m for m in fc.seen_messages
             if isinstance(m, dict) and m.get("role") == "assistant" and m.get("tool_calls")]
-    assert asst[0]["tool_calls"][0]["function"]["arguments"] == "{}", \
-        "history phải được sanitize để turn sau không 400"
+    tcs = asst[0]["tool_calls"]
+    assert tcs[0]["function"]["arguments"] != "{}", "call hợp lệ không bị đụng"
+    assert tcs[1]["function"]["arguments"] == "{}", \
+        "call #2+ cũng phải được sanitize (asst_msg chốt trước loop)"
     tool_msgs = [m for m in fc.seen_messages
                  if isinstance(m, dict) and m.get("role") == "tool"]
-    assert tool_msgs[0]["content"].startswith("ERROR: invalid JSON")
+    assert tool_msgs[1]["content"].startswith("ERROR: invalid JSON")
     _assert_pairing(fc.seen_messages)
 
 

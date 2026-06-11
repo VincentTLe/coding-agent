@@ -415,6 +415,12 @@ def execute_turn(tool_calls: list[dict], messages: list, workspace: Path,
     finish_called = any(tc["name"] == "finish" for tc in tool_calls)
     interrupted: KeyboardInterrupt | None = None
 
+    # Chốt tham chiếu assistant message NGAY BÂY GIỜ — bên trong vòng lặp,
+    # messages[-1] không còn là nó nữa (mỗi call append 1 role:"tool" vào cuối).
+    # Bug thật do review độc lập bắt được: sanitize qua messages[-1] TRONG loop
+    # → chỉ call #1 được sửa, args hỏng của call #2+ vẫn nằm lại history.
+    asst_msg = messages[-1]
+
     for tc in tool_calls:
         on_call(tc["name"], tc["arguments"])
 
@@ -432,9 +438,9 @@ def execute_turn(tool_calls: list[dict], messages: list, workspace: Path,
             # để tool_call này không thành mồ côi.
             result = "[skipped: user interrupted tool execution]"
         elif bad_json is not None:
-            # Sửa args trong assistant message vừa append: "{}" parse được →
-            # history không làm vLLM 400 ở turn sau. Tool result vẫn nói rõ lỗi.
-            for entry in messages[-1].get("tool_calls", []):
+            # Sửa args trong assistant message (asst_msg chốt TRƯỚC loop):
+            # "{}" parse được → history không 400 turn sau. Result vẫn nói rõ lỗi.
+            for entry in asst_msg.get("tool_calls", []):
                 if entry.get("id") == tc["id"]:
                     entry["function"]["arguments"] = "{}"
             result = (
